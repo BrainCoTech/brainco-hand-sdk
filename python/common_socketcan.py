@@ -14,6 +14,8 @@ from common_imports import logger
 
 # CAN constants
 CAN_EFF_FLAG = 0x80000000
+CAN_RTR_FLAG = 0x40000000
+CAN_ERR_FLAG = 0x20000000
 CAN_EFF_MASK = 0x1FFFFFFF
 CAN_SFF_MASK = 0x000007FF
 CAN_RAW = 1
@@ -271,10 +273,16 @@ def _socketcan_read_message() -> Optional[Tuple[int, bytes]]:
             data = _sock.recv(CANFD_MTU)
             if len(data) == CANFD_MTU:
                 can_id, length, _flags, _rsvd, payload = struct.unpack(CANFD_FRAME_FMT, data)
+                # Skip error frames and remote frames
+                if can_id & (CAN_ERR_FLAG | CAN_RTR_FLAG):
+                    return None
                 can_id = can_id & CAN_EFF_MASK
                 return can_id, payload[:length]
             if len(data) == CAN_MTU:
                 can_id, length, payload = struct.unpack(CAN_FRAME_FMT, data)
+                # Skip error frames and remote frames
+                if can_id & (CAN_ERR_FLAG | CAN_RTR_FLAG):
+                    return None
                 can_id = can_id & CAN_EFF_MASK
                 return can_id, payload[:length]
         else:
@@ -282,6 +290,9 @@ def _socketcan_read_message() -> Optional[Tuple[int, bytes]]:
             if len(data) != CAN_MTU:
                 return None
             can_id, length, payload = struct.unpack(CAN_FRAME_FMT, data)
+            # Skip error frames and remote frames
+            if can_id & (CAN_ERR_FLAG | CAN_RTR_FLAG):
+                return None
             can_id = can_id & CAN_EFF_MASK
             return can_id, payload[:length]
         return None

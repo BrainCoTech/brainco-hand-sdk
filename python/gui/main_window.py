@@ -13,20 +13,22 @@ from .i18n import get_i18n, tr
 from .styles import COLORS
 from .connection_panel import ConnectionPanel
 from .motor_control_panel import MotorControlPanel
-from .touch_sensor_panel import TouchSensorPanel
-from .pressure_touch_panel import PressureTouchPanel
+from .motor_control_panel_revo3 import V3MotorControlPanel
+from .motor_config_panel_revo3 import V3MotorConfigPanel
+from .universal_touch_panel import UniversalTouchPanel
 from .data_collector_panel import DataCollectorPanel
 from .system_config_panel import SystemConfigPanel
 from .action_sequence_panel import ActionSequencePanel
 from .timing_test_panel import TimingTestPanel
 from .dfu_panel import DfuPanel
+from .teaching_panel import TeachingPanel
 from .shared_data import SharedDataManager
 
 # Add parent directory to path for SDK import
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from common_imports import sdk, has_touch, uses_pressure_touch_api, is_protobuf_device
+from common_imports import sdk, has_touch, is_protobuf_device, uses_revo3_motor_api
 
 
 class DfuOverlay(QWidget):
@@ -49,7 +51,7 @@ class DfuOverlay(QWidget):
         font.setPointSize(24)
         font.setBold(True)
         painter.setFont(font)
-        painter.drawText(self.rect(), Qt.AlignCenter, "⚠️ 固件升级中，请勿操作...")
+        painter.drawText(self.rect(), Qt.AlignCenter, "⚠ 固件升级中，请勿操作...")
     
     def show_overlay(self, parent_widget):
         """Show overlay covering the parent widget"""
@@ -65,7 +67,7 @@ class DfuOverlay(QWidget):
 class MainWindow(QMainWindow):
     """Modern Main Window"""
     
-    def __init__(self):
+    def __init__(self, revo3_modbus=False):
         super().__init__()
         self.i18n = get_i18n()
         self.i18n.language_changed.connect(self._on_language_changed)
@@ -73,6 +75,7 @@ class MainWindow(QMainWindow):
         self.device = None
         self.slave_id = 1
         self.protocol = None
+        self.revo3_modbus = revo3_modbus
         
         # Shared data manager for all panels
         self.shared_data = SharedDataManager()
@@ -80,12 +83,22 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu()
         self._setup_statusbar()
-        self._update_texts()
+
+        # Apply saved language preference on startup
+        if self.i18n.current_language == "zh":
+            self.lang_btn.setText("🌐 中")
+            self.lang_zh_action.setChecked(True)
+            self._on_language_changed("zh")
+        else:
+            self._update_texts()
         
         # Set window properties
-        self.setWindowTitle("Stark SDK")
-        self.resize(1400, 900)
+        title = "Stark SDK"
+        if revo3_modbus:
+            title += " (Revo3 Modbus)"
+        self.setWindowTitle(title)
         self.setMinimumSize(1000, 700)
+        self.showMaximized()
     
     def _setup_ui(self):
         """Setup modern UI"""
@@ -98,45 +111,102 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(16)
         
         # Connection panel at top
-        self.connection_panel = ConnectionPanel()
+        self.connection_panel = ConnectionPanel(revo3_modbus=self.revo3_modbus)
         self.connection_panel.connected.connect(self._on_connected)
+        self.connection_panel.about_to_disconnect.connect(self._on_about_to_disconnect)
         self.connection_panel.disconnected.connect(self._on_disconnected)
         main_layout.addWidget(self.connection_panel)
         
         # Tab widget for main content
         self.tabs = QTabWidget()
-        self.tabs.setDocumentMode(True)
+        self.tabs.setUsesScrollButtons(True)
+        self.tabs.setElideMode(Qt.ElideNone)
+        self.tabs.setDocumentMode(False)  # We use custom pane borders now instead of document mode
+        self.tabs.setStyleSheet("""
+            QTabBar::tab {
+                font-size: 13px;
+                font-weight: bold;
+                padding: 10px 18px;
+                margin-right: 2px;
+                border: 1px solid #cfd4d9;
+                border-bottom: none;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                background-color: #e9ecef;
+                color: #495057;
+            }
+            QTabBar::tab:selected {
+                background-color: #ffffff;
+                border: 2px solid #5D9CEC;
+                border-bottom: 2px solid #ffffff;
+                color: #5D9CEC;
+            }
+            QTabBar::tab:hover:!selected {
+                background-color: #f8f9fa;
+            }
+            QTabWidget::pane {
+                border: 2px solid #5D9CEC;
+                border-radius: 6px;
+                border-top-left-radius: 0px;
+                border-top-right-radius: 6px;
+                top: -2px;
+                background-color: #ffffff;
+            }
+        """)
         self.tabs.currentChanged.connect(self._on_tab_changed)
         main_layout.addWidget(self.tabs, 1)
         
         # Create panels - ordered by usage frequency
         # Common operations
         self.motor_panel = MotorControlPanel()
-        self.tabs.addTab(self.motor_panel, "🎮 Motor Control")
+        self.tabs.addTab(self.motor_panel, "🎮 " + tr("motor_control"))
+
+        # V3 motor panel (hidden by default, shown for Revo3 devices)
+        self.motor_panel_v3 = V3MotorControlPanel()
+        self.tabs.addTab(self.motor_panel_v3, "🎮 " + tr("motor_control_v3"))
+        self.tabs.setTabVisible(self.tabs.indexOf(self.motor_panel_v3), False)
         
-        # Capacitive touch panel (Revo1/Revo2 Touch)
-        self.touch_panel = TouchSensorPanel()
-        self.tabs.addTab(self.touch_panel, "👆 Touch Sensor")
+        # V3 Motor Config Panel
+        self.config_panel_v3 = V3MotorConfigPanel()
+        self.tabs.addTab(self.config_panel_v3, "⚙ " + tr("v3_motor_config"))
+        self.tabs.setTabVisible(self.tabs.indexOf(self.config_panel_v3), False)
         
-        # Pressure touch panel (Revo2 Touch Pressure / Modulus)
-        self.pressure_touch_panel = PressureTouchPanel()
-        self.tabs.addTab(self.pressure_touch_panel, "🔴 Pressure Touch")
+        # Unified Touch Sensor Panel
+        self.touch_panel = UniversalTouchPanel()
+        self.tabs.addTab(self.touch_panel, "👆 " + tr("touch_sensor"))
         
         # Testing & debugging
         self.timing_panel = TimingTestPanel()
-        self.tabs.addTab(self.timing_panel, "⏱️ Timing Test")
+        self.tabs.addTab(self.timing_panel, "\u23f1 " + tr("timing_test"))
         
         self.action_panel = ActionSequencePanel()
-        self.tabs.addTab(self.action_panel, "🎬 Actions")
+        self.tabs.addTab(self.action_panel, "🎬 " + tr("action_sequence"))
         
         # System maintenance
+        # Teaching mode panel (hidden by default, shown for Revo3 devices)
+        self.teaching_panel = TeachingPanel()
+        self.tabs.addTab(self.teaching_panel, "🎓 " + tr("teaching_mode"))
+        self.tabs.setTabVisible(self.tabs.indexOf(self.teaching_panel), False)
+        
         self.dfu_panel = DfuPanel()
         self.dfu_panel.dfu_started.connect(self._on_dfu_started)
         self.dfu_panel.dfu_finished.connect(self._on_dfu_finished)
-        self.tabs.addTab(self.dfu_panel, "🔄 DFU Upgrade")
+        self.tabs.addTab(self.dfu_panel, "🔄 " + tr("dfu_upgrade"))
         
         self.config_panel = SystemConfigPanel()
-        self.tabs.addTab(self.config_panel, "⚙️ Settings")
+        self.tabs.addTab(self.config_panel, "\u2699 " + tr("system_config"))
+        
+        # Pre-configure tab visibility for revo3_modbus mode
+        if self.revo3_modbus:
+            # Show V3 motor & teaching panel, hide V1/V2 motor panel
+            self.tabs.setTabVisible(self.tabs.indexOf(self.motor_panel), False)
+            self.tabs.setTabVisible(self.tabs.indexOf(self.motor_panel_v3), True)
+            self.tabs.setTabVisible(self.tabs.indexOf(self.teaching_panel), True)
+            self.tabs.setTabVisible(self.tabs.indexOf(self.config_panel_v3), True)
+            # Hide action sequence (not supported on Revo3)
+            self.tabs.setTabVisible(self.tabs.indexOf(self.action_panel), False)
+            # Default to V3 motor tab
+            self.tabs.setCurrentIndex(self.tabs.indexOf(self.motor_panel_v3))
         
         # Data collector panel (not in tabs, opened from menu)
         self.collector_panel = DataCollectorPanel()
@@ -227,6 +297,15 @@ class MainWindow(QMainWindow):
         # Sync motor control sliders when switching to motor panel
         if current_widget == self.motor_panel:
             self.motor_panel.sync_sliders_to_current()
+        
+        # Dynamic frequency: give full bandwidth to active tab's data
+        if hasattr(self, 'shared_data') and self.shared_data and self.shared_data.data_collector:
+            if current_widget == self.touch_panel:
+                self.shared_data.data_collector.update_motor_frequency(0)    # disable motor
+                self.shared_data.data_collector.update_touch_frequency(20)   # 20Hz touch
+            else:
+                self.shared_data.data_collector.update_motor_frequency(200)  # 200Hz motor
+                self.shared_data.data_collector.update_touch_frequency(0)    # disable touch
     
     def _toggle_language(self):
         """Toggle between English and Chinese"""
@@ -249,13 +328,42 @@ class MainWindow(QMainWindow):
         # Update panels
         self.connection_panel.update_texts()
         self.motor_panel.update_texts()
+        self.motor_panel_v3.update_texts()
+        self.config_panel_v3.update_texts()
         self.touch_panel.update_texts()
-        self.pressure_touch_panel.update_texts()
         self.collector_panel.update_texts()
         self.action_panel.update_texts()
         self.timing_panel.update_texts()
+        self.teaching_panel.update_texts()
         self.dfu_panel.update_texts()
         self.config_panel.update_texts()
+
+        # Update tab names
+        tab_names = [
+            (self.motor_panel, "🎮 " + tr("motor_control")),
+            (self.motor_panel_v3, "🎮 " + tr("motor_control_v3")),
+            (self.config_panel_v3, "⚙ " + tr("v3_motor_config")),
+            (self.touch_panel, "👆 " + tr("touch_sensor")),
+            (self.timing_panel, "\u23f1 " + tr("timing_test")),
+            (self.action_panel, "🎬 " + tr("action_sequence")),
+            (self.teaching_panel, "🎓 " + tr("teaching_mode")),
+            (self.dfu_panel, "🔄 " + tr("dfu_upgrade")),
+            (self.config_panel, "\u2699 " + tr("system_config")),
+        ]
+        for panel, name in tab_names:
+            idx = self.tabs.indexOf(panel)
+            if idx >= 0:
+                self.tabs.setTabText(idx, name)
+
+        # Update menus
+        self.file_menu.setTitle(tr("menu_file"))
+        self.exit_action.setText(tr("menu_exit"))
+        self.help_menu.setTitle(tr("menu_help"))
+        self.about_action.setText(tr("menu_about"))
+    
+    def _on_about_to_disconnect(self):
+        """Stop DataCollector before serial port is closed"""
+        self.shared_data.stop()
     
     def _on_connected(self, device, slave_id, device_info, protocol):
         """Device connected"""
@@ -269,38 +377,61 @@ class MainWindow(QMainWindow):
         # Enable tabs
         self.tabs.setEnabled(True)
         
+        # Block tab signals while adjusting visibility to prevent auto-switching
+        self.tabs.blockSignals(True)
+        
         # Determine protocol-based visibility
         is_ethercat = (protocol == "EtherCAT")
         
         # Show/hide tabs based on device capability
         touch_tab_index = self.tabs.indexOf(self.touch_panel)
-        pressure_touch_tab_index = self.tabs.indexOf(self.pressure_touch_panel)
         action_tab_index = self.tabs.indexOf(self.action_panel)
         dfu_tab_index = self.tabs.indexOf(self.dfu_panel)
         config_tab_index = self.tabs.indexOf(self.config_panel)
         
         # Determine if device has touch and what type
         has_touch_sensor = has_touch(hw_type)
-        is_pressure = uses_pressure_touch_api(hw_type)
+        # removed is_pressure
         is_protobuf = is_protobuf_device(hw_type)
+        is_revo3 = uses_revo3_motor_api(hw_type) if hw_type else False
         
-        # Show appropriate touch panel
+        # Show unified touch panel for devices with touch
         if touch_tab_index >= 0:
-            # Capacitive touch: show for touch devices that are NOT pressure
-            self.tabs.setTabVisible(touch_tab_index, has_touch_sensor and not is_pressure)
-        if pressure_touch_tab_index >= 0:
-            # Pressure touch: show only for pressure touch devices
-            self.tabs.setTabVisible(pressure_touch_tab_index, has_touch_sensor and is_pressure)
+            self.tabs.setTabVisible(touch_tab_index, has_touch_sensor)
         
-        # Hide Action Sequence panel for Protobuf devices (not supported) and EtherCAT
+        # Hide Action Sequence panel for Protobuf devices (not supported), EtherCAT, and Revo3
         if action_tab_index >= 0:
-            self.tabs.setTabVisible(action_tab_index, not is_protobuf and not is_ethercat)
+            self.tabs.setTabVisible(action_tab_index, not is_protobuf and not is_ethercat and not is_revo3)
         
         # Hide DFU and Settings panels for EtherCAT (not applicable via GUI)
         if dfu_tab_index >= 0:
             self.tabs.setTabVisible(dfu_tab_index, not is_ethercat)
         if config_tab_index >= 0:
             self.tabs.setTabVisible(config_tab_index, not is_ethercat)
+        
+        # Show V3 motor panel for Revo3, V1/V2 panel for others
+        motor_tab_index = self.tabs.indexOf(self.motor_panel)
+        motor_v3_tab_index = self.tabs.indexOf(self.motor_panel_v3)
+        if motor_tab_index >= 0:
+            self.tabs.setTabVisible(motor_tab_index, not is_revo3)
+        if motor_v3_tab_index >= 0:
+            self.tabs.setTabVisible(motor_v3_tab_index, is_revo3)
+        
+        # Show Teaching & Config panel for Revo3 only
+        teaching_tab_index = self.tabs.indexOf(self.teaching_panel)
+        if teaching_tab_index >= 0:
+            self.tabs.setTabVisible(teaching_tab_index, is_revo3)
+            
+        config_v3_tab_index = self.tabs.indexOf(self.config_panel_v3)
+        if config_v3_tab_index >= 0:
+            self.tabs.setTabVisible(config_v3_tab_index, is_revo3)
+
+        # Show Timing Test panel only for V1/V2, or V3 NEW protocol.
+        # V3 legacy protocol does NOT support single-joint control APIs used by this panel.
+        timing_tab_index = self.tabs.indexOf(self.timing_panel)
+        is_revo3_new = is_revo3 and True
+        if timing_tab_index >= 0:
+            self.tabs.setTabVisible(timing_tab_index, not is_revo3 or is_revo3_new)
         
         # Setup shared data manager
         self.shared_data.set_device(device, slave_id, device_info)
@@ -309,8 +440,11 @@ class MainWindow(QMainWindow):
         
         # Pass device and shared_data to panels
         self.motor_panel.set_device(device, slave_id, device_info, self.shared_data)
+        if is_revo3:
+            self.motor_panel_v3.set_device(device, slave_id, device_info, self.shared_data)
+            self.config_panel_v3.set_device(device, slave_id, device_info, protocol, self.shared_data)
+            self.teaching_panel.set_device(device, slave_id, device_info, self.shared_data)
         self.touch_panel.set_device(device, slave_id, device_info, self.shared_data)
-        self.pressure_touch_panel.set_device(device, slave_id, device_info, self.shared_data)
         self.collector_panel.set_device(device, slave_id, device_info, self.shared_data)
         self.action_panel.set_device(device, slave_id, device_info, self.shared_data)
         self.timing_panel.set_device(device, slave_id, device_info, self.shared_data)
@@ -337,6 +471,12 @@ class MainWindow(QMainWindow):
         else:
             self.device_info_label.setText(f"ID:{slave_id}")
             self.statusbar.showMessage(f"Connected via {protocol}")
+        
+        # Switch to the motor panel and restore tab signals
+        target = motor_v3_tab_index if is_revo3 else motor_tab_index
+        if target >= 0:
+            self.tabs.setCurrentIndex(target)
+        self.tabs.blockSignals(False)
     
     def _on_disconnected(self):
         """Device disconnected"""
@@ -345,34 +485,47 @@ class MainWindow(QMainWindow):
             self.shared_data.connection_lost.disconnect(self._on_connection_lost)
         except RuntimeError:
             pass  # Signal was not connected
-        
+
         # Disconnect slave_id_changed signal
         try:
             self.config_panel.slave_id_changed.disconnect(self._on_slave_id_changed)
         except RuntimeError:
             pass  # Signal was not connected
-        
-        # Stop shared data manager
+
+        # Stop shared data manager BEFORE serial port is closed
+        # (DataCollector holds Arc ref to ctx, must stop first to release it)
         self.shared_data.stop()
         self.shared_data.clear_device()
-        
+
         self.device = None
         self.slave_id = 1
         self.protocol = None
-        
+
         # Clear device from panels (stops timers)
         self.motor_panel.clear_device()
+        self.motor_panel_v3.clear_device()
+        self.config_panel_v3.clear_device()
+        self.teaching_panel.clear_device()
         self.touch_panel.clear_device()
-        self.pressure_touch_panel.clear_device()
         self.collector_panel.clear_device()
-        
+
         # Show all tabs again (will be filtered on next connect)
-        for panel in [self.touch_panel, self.pressure_touch_panel,
-                      self.action_panel, self.dfu_panel, self.config_panel]:
+        for panel in [self.touch_panel,
+                      self.collector_panel, self.action_panel, self.timing_panel,
+                      self.dfu_panel, self.config_panel]:
             idx = self.tabs.indexOf(panel)
             if idx >= 0:
                 self.tabs.setTabVisible(idx, True)
-        
+        # Hide V3-only panels by default
+        for panel in [self.motor_panel_v3, self.teaching_panel, self.config_panel_v3]:
+            idx = self.tabs.indexOf(panel)
+            if idx >= 0:
+                self.tabs.setTabVisible(idx, False)
+        # Show V1/V2 motor panel by default
+        v12_idx = self.tabs.indexOf(self.motor_panel)
+        if v12_idx >= 0:
+            self.tabs.setTabVisible(v12_idx, True)
+
         # Update status bar
         self.device_info_label.setText("")
         self.statusbar.showMessage(tr("status_disconnected"))
@@ -382,7 +535,7 @@ class MainWindow(QMainWindow):
         print("[MainWindow] Connection lost detected")
         
         # Show warning in status bar
-        self.statusbar.showMessage("⚠️ 连接丢失 - 设备可能已断开")
+        self.statusbar.showMessage("⚠ 连接丢失 - 设备可能已断开")
         
         # Trigger disconnect cleanup via connection panel
         self.connection_panel._on_disconnect()
@@ -415,7 +568,6 @@ class MainWindow(QMainWindow):
         # Stop timers in panels to avoid conflicts during DFU
         self.motor_panel.clear_device()
         self.touch_panel.clear_device()
-        self.pressure_touch_panel.clear_device()
         
         # Disable all tabs except DFU
         dfu_index = self.tabs.indexOf(self.dfu_panel)
@@ -428,7 +580,7 @@ class MainWindow(QMainWindow):
         self.connection_panel.disconnect_btn.setEnabled(False)
         self.connection_panel.auto_detect_btn.setEnabled(False)
         
-        self.statusbar.showMessage("⚠️ DFU 升级中，请勿断开连接...")
+        self.statusbar.showMessage("⚠ DFU 升级中，请勿断开连接...")
     
     def _on_dfu_finished(self, success):
         """DFU upgrade finished - unlock UI and auto-reconnect"""
@@ -497,6 +649,7 @@ class MainWindow(QMainWindow):
 <li>Revo1 Basic / Touch</li>
 <li>Revo1 Advanced / AdvancedTouch</li>
 <li>Revo2 Basic / Touch</li>
+<li>Revo3 Basic / Touch / Vision Touch</li>
 </ul>
 
 <p style="color: #7f8c8d;">© 2015-2026 BrainCo Inc.</p>
@@ -513,19 +666,25 @@ class MainWindow(QMainWindow):
         """Handle window close - cleanup resources"""
         # Stop shared data manager first (this stops the data collector thread)
         self.shared_data.stop()
-        
+
+        # Brief delay to ensure DataCollector thread fully releases ctx Arc ref
+        import time
+        time.sleep(0.1)
+
         # Clear device from panels (stops timers)
         self.motor_panel.clear_device()
+        self.motor_panel_v3.clear_device()
+        self.config_panel_v3.clear_device()
+        self.teaching_panel.clear_device()
         self.touch_panel.clear_device()
-        self.pressure_touch_panel.clear_device()
         self.collector_panel.clear_device()
-        
+
         # Disconnect device if connected - use sync close to avoid event loop issues
         if self.connection_panel.ctx:
             try:
                 ctx = self.connection_panel.ctx
                 protocol = self.connection_panel.protocol
-                
+
                 # Use sync close for CAN protocols, async for others
                 if protocol in ["CAN 2.0", "CANFD"]:
                     if hasattr(sdk, 'close_zqwl'):
@@ -551,8 +710,8 @@ class MainWindow(QMainWindow):
                         loop.close()
             except Exception as e:
                 print(f"Error closing device on exit: {e}")
-            
+
             self.connection_panel.ctx = None
-        
+
         self.device = None
         event.accept()

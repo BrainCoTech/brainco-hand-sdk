@@ -432,7 +432,7 @@ async def auto_detect_and_init():
     """Auto-detect device and initialize"""
     logger.info("Auto-detecting devices...")
 
-    devices = await sdk.auto_detect(scan_all=True)
+    devices = await sdk.auto_detect(scan_all=False)
 
     if not devices:
         logger.error("No devices found")

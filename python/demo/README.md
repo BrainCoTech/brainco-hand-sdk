@@ -28,6 +28,7 @@ python hand_demo.py 0            # Run all demos
 python hand_monitor.py           # Auto-select mode
 python hand_monitor.py motor     # Motor data (100Hz)
 python hand_monitor.py touch     # Motor + touch
+python hand_monitor.py array_pressure  # ArrayPressure 3D force + torque
 
 # Firmware upgrade
 python hand_dfu.py firmware.bin
@@ -109,6 +110,7 @@ python hand_demo.py -Z 127
 | `touch` | + Capacitive touch | 100Hz + 10Hz | Touch versions |
 | `summary` | + Pressure summary | 100Hz + 10Hz | Pressure versions |
 | `detailed` | + Pressure per sensor | 100Hz + 10Hz | Pressure versions |
+| `array_pressure` | + 3D force + torque (Fx,Fy,Fz,Mx,My) | 10Hz | ArrayPressure |
 
 ## CAN Adapter Guide
 

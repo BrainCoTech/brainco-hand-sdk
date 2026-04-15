@@ -127,12 +127,16 @@ int get_current_time_ms(void);
  * Derived from StarkHardwareType:
  * - REVO1_TOUCH, REVO1_ADVANCED_TOUCH, REVO2_TOUCH -> Capacitive
  * - REVO2_TOUCH_PRESSURE -> Pressure (Modulus)
+ * - REVO2_TOUCH_FORCE3D -> Force3D
+ * - REVO2_TOUCH_ARRAY_PRESSURE -> ArrayPressure
  * - Others -> None
  */
 typedef enum {
-  TOUCH_TYPE_NONE = 0,       // No touch sensor
-  TOUCH_TYPE_CAPACITIVE = 1, // Capacitive touch (Revo1 Touch, Revo2 Touch)
-  TOUCH_TYPE_PRESSURE = 2    // Pressure touch / Modulus (Revo2 only)
+  TOUCH_TYPE_NONE = 0,           // No touch sensor
+  TOUCH_TYPE_CAPACITIVE = 1,     // Capacitive touch (Revo1 Touch, Revo2 Touch)
+  TOUCH_TYPE_PRESSURE = 2,       // Pressure touch / Modulus (Revo2 only)
+  TOUCH_TYPE_FORCE3D = 3,        // Force3D touch (Revo2 Force3D)
+  TOUCH_TYPE_ARRAY_PRESSURE = 4  // ArrayPressure touch (Revo2 ArrayPressure)
 } TouchSensorType;
 
 /**
@@ -270,6 +274,30 @@ bool init_socketcan_device_builtin(DeviceContext* ctx, const char* iface, uint8_
  * @return true if successful, false if error or help requested
  */
 bool parse_args_and_init(DeviceContext* ctx, int argc, const char* argv[], int* arg_idx);
+
+/**
+ * @brief Initialize Revo3 device via Modbus auto-detection
+ * Uses auto_detect_modbus_revo3 for fast initialization (5Mbps, slave_id 1).
+ * Much faster than generic auto_detect_and_init which scans all protocols.
+ * 
+ * @param ctx Output: Device context to fill
+ * @param port Serial port path (NULL for auto-detect all ports)
+ * @return true if successful
+ */
+bool init_revo3(DeviceContext* ctx, const char* port);
+
+/**
+ * @brief Parse command line arguments and initialize Revo3 device (simplified)
+ * Uses init_revo3 (auto_detect_modbus_revo3) by default for fast detection.
+ * Supports: auto-detect (default), <port> (specific port), -m (manual Modbus)
+ * 
+ * @param ctx Output: Device context to fill
+ * @param argc Argument count
+ * @param argv Argument values
+ * @param arg_idx Output: Index of next argument after init options
+ * @return true if successful, false if error or help requested
+ */
+bool parse_args_and_init_revo3(DeviceContext* ctx, int argc, const char* argv[], int* arg_idx);
 
 /**
  * @brief Print common initialization usage

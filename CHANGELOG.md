@@ -1,6 +1,37 @@
 # BrainCo RevoHand SDK Examples Changelog
 
-> This changelog is for external customers and integration developers. For SDK internal implementation details, please contact BrainCo technical support.
+## v1.4.0 (2026/04/15)
+
+### 🚀 Revo3 Support
+- Full support for Revo3 devices
+- Motor control modes: position, velocity, current, MIT impedance, damping
+- MIT impedance debug tools: tracking, plotting, trajectory generation
+
+### 🚀 Revo2 ArrayPressTouch Device Support
+- 3D force + torque (Fx, Fy, Fz, Mx, My) data collection via `ArrayPressureTouchDataBuffer`
+- C++ demos: `hand_demo` and `hand_monitor` with `array_pressure` mode
+- Python GUI: 2D vector compass visualization for force/torque data
+
+### 🎨 Python GUI
+- Revo3 motor control, config, and teaching mode panels
+- Touch panels: heatmap visualization, force/pressure/Revo3 support
+- Timing test with Revo2/Revo3 workers and dynamic frequency switching
+- i18n support (EN/ZH)
+
+### 🔧 SDK & API Changes
+- New hardware types: `Revo2TouchForce3D`, `Revo2TouchArrayPressure`, `Revo3Ultra/Pro/Basic` (hw_type 10-27)
+- New API: `uses_revo3_motor_api()`, `uses_revo3_touch_api()`, `uses_array_pressure_touch_api()`
+
+### 🐛 Bug Fixes
+- Fix CAN error frame handling and auto-detect protocol dispatch
+- Add `CAN_ERR_FLAG` check in SocketCAN `recv_can`/`recv_canfd`
+
+### 📚 Documentation & Project Structure
+- Archive deprecated `linux/` and `windows/` folders to `archive/`
+- Add comprehensive Revo3 Python API documentation and joint mapping
+- Add `install_whl.sh` script for Python wheel installation
+
+---
 
 ## v1.1.9 (2026/03/03)
 

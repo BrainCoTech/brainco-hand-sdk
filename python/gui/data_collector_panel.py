@@ -17,11 +17,11 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QTimer, QThread, QObject, Signal
 
 from .i18n import tr
-from .constants import MOTOR_COUNT, TOUCH_COUNT
+from .constants import MOTOR_COUNT, TOUCH_COUNT, REVO3_MOTOR_COUNT
 
 # Add parent directory to path for SDK import
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from common_imports import sdk
+from common_imports import sdk, uses_revo3_motor_api
 
 if TYPE_CHECKING:
     from .shared_data import SharedDataManager
@@ -33,7 +33,7 @@ class CollectorWorker(QObject):
     log_message = Signal(str)
     finished = Signal(bool, str)  # success, message
     
-    def __init__(self, device, slave_id, device_info, save_path, duration, freq, collect_motor, collect_touch):
+    def __init__(self, device, slave_id, device_info, save_path, duration, freq, collect_motor, collect_touch, is_revo3=False):
         super().__init__()
         self.device = device
         self.slave_id = slave_id
@@ -43,9 +43,11 @@ class CollectorWorker(QObject):
         self.freq = freq
         self.collect_motor = collect_motor
         self.collect_touch = collect_touch
+        self.is_revo3 = is_revo3
         self.is_running = True
         
         self.motor_buffer = None
+        self.v3_motor_buffer = None
         self.touch_buffer = None
         self.data_collector = None
     
@@ -74,28 +76,41 @@ class CollectorWorker(QObject):
             
             # Create buffers
             buffer_size = self.duration * motor_freq * 2  # 2x for safety
-            self.motor_buffer = sdk.MotorStatusBuffer(max_size=buffer_size)
             
-            has_touch = self.collect_touch and self.device_info and self.device_info.is_touch()
-            if has_touch:
-                self.touch_buffer = sdk.TouchStatusBuffer(max_size=buffer_size)
-                self.data_collector = sdk.DataCollector.new_capacitive(
+            if self.is_revo3:
+                # Revo3: 23 motors, float values, V3 touch sensor
+                self.v3_motor_buffer = sdk.V3MotorStatusBuffer(max_size=buffer_size)
+                self.data_collector = sdk.DataCollector.new_v3_basic(
                     self.device,
-                    self.motor_buffer,
-                    self.touch_buffer,
+                    self.v3_motor_buffer,
                     slave_id=self.slave_id,
                     motor_frequency=motor_freq,
-                    touch_frequency=touch_freq,
                     enable_stats=False
                 )
             else:
-                self.data_collector = sdk.DataCollector.new_basic(
-                    self.device,
-                    self.motor_buffer,
-                    slave_id=self.slave_id,
-                    motor_frequency=motor_freq,
-                    enable_stats=False
-                )
+                # Revo1/Revo2: 6 motors
+                self.motor_buffer = sdk.MotorStatusBuffer(max_size=buffer_size)
+                
+                has_touch = self.collect_touch and self.device_info and self.device_info.is_touch()
+                if has_touch:
+                    self.touch_buffer = sdk.TouchStatusBuffer(max_size=buffer_size)
+                    self.data_collector = sdk.DataCollector.new_capacitive(
+                        self.device,
+                        self.motor_buffer,
+                        self.touch_buffer,
+                        slave_id=self.slave_id,
+                        motor_frequency=motor_freq,
+                        touch_frequency=touch_freq,
+                        enable_stats=False
+                    )
+                else:
+                    self.data_collector = sdk.DataCollector.new_basic(
+                        self.device,
+                        self.motor_buffer,
+                        slave_id=self.slave_id,
+                        motor_frequency=motor_freq,
+                        enable_stats=False
+                    )
             
             # Start collection
             self.data_collector.start()
@@ -111,7 +126,8 @@ class CollectorWorker(QObject):
                     break
                 
                 # Report progress
-                current_count = self.motor_buffer.len()
+                buf = self.v3_motor_buffer if self.is_revo3 else self.motor_buffer
+                current_count = buf.len() if buf else 0
                 self.progress.emit(current_count, total_samples, elapsed)
                 
                 time.sleep(0.5)  # Update every 500ms
@@ -122,9 +138,11 @@ class CollectorWorker(QObject):
             self.log_message.emit("DataCollector stopped")
             
             # Write data to CSV
+            has_touch = not self.is_revo3 and self.collect_touch and self.device_info and self.device_info.is_touch()
             self._write_csv(filename, has_touch)
             
-            final_count = self.motor_buffer.len()
+            buf = self.v3_motor_buffer if self.is_revo3 else self.motor_buffer
+            final_count = buf.len() if buf else 0
             self.finished.emit(True, f"Collection completed, {final_count} records")
             
         except Exception as e:
@@ -142,7 +160,11 @@ class CollectorWorker(QObject):
         """Write collected data to CSV"""
         self.log_message.emit("Writing CSV...")
         
-        # Get all data from buffers
+        if self.is_revo3:
+            self._write_csv_v3(filename)
+            return
+        
+        # Revo1/Revo2 path
         if not self.motor_buffer:
             self.log_message.emit("No motor buffer available")
             return
@@ -197,6 +219,53 @@ class CollectorWorker(QObject):
                 f.write(",".join(row) + "\n")
         
         self.log_message.emit(f"CSV write completed: {len(motor_data)} rows")
+    
+    def _write_csv_v3(self, filename):
+        """Write V3 (Revo3) motor data to CSV - 23 motors with float values"""
+        if not self.v3_motor_buffer:
+            self.log_message.emit("No V3 motor buffer available")
+            return
+        motor_data = self.v3_motor_buffer.pop_all()
+        
+        n = REVO3_MOTOR_COUNT
+        with open(filename, 'w') as f:
+            # Header: index, status_0..22, pos_0..22, vel_0..22, cur_0..22, err_0..22
+            headers = ["index"]
+            for i in range(n):
+                headers.append(f"status_{i}")
+            for i in range(n):
+                headers.append(f"pos_{i}")
+            for i in range(n):
+                headers.append(f"vel_{i}")
+            for i in range(n):
+                headers.append(f"cur_{i}")
+            for i in range(n):
+                headers.append(f"err_{i}")
+            f.write(",".join(headers) + "\n")
+            
+            for idx, motor in enumerate(motor_data):
+                row = [str(idx)]
+                
+                statuses = list(motor.statuses) if motor.statuses else [0] * n
+                positions = list(motor.positions) if motor.positions else [0.0] * n
+                velocities = list(motor.velocities) if motor.velocities else [0.0] * n
+                currents = list(motor.currents) if motor.currents else [0.0] * n
+                errors = list(motor.errors) if motor.errors else [0] * n
+                
+                for i in range(n):
+                    row.append(str(statuses[i] if i < len(statuses) else 0))
+                for i in range(n):
+                    row.append(f"{positions[i]:.4f}" if i < len(positions) else "0.0000")
+                for i in range(n):
+                    row.append(f"{velocities[i]:.4f}" if i < len(velocities) else "0.0000")
+                for i in range(n):
+                    row.append(f"{currents[i]:.4f}" if i < len(currents) else "0.0000")
+                for i in range(n):
+                    row.append(str(errors[i] if i < len(errors) else 0))
+                
+                f.write(",".join(row) + "\n")
+        
+        self.log_message.emit(f"CSV write completed: {len(motor_data)} rows (V3, {n} motors)")
 
 
 class DataCollectorPanel(QWidget):
@@ -209,6 +278,7 @@ class DataCollectorPanel(QWidget):
         super().__init__()
         self.shared_data: Optional['SharedDataManager'] = None
         self.is_collecting = False
+        self._is_revo3 = False
         self.worker: Optional[CollectorWorker] = None
         self._thread: Optional[QThread] = None
         
@@ -361,7 +431,15 @@ class DataCollectorPanel(QWidget):
         """Set device - uses SharedDataManager for device state"""
         self.shared_data = shared_data
         
+        # Detect V3 device
+        self._is_revo3 = False
+        if device_info:
+            hw_type = getattr(device_info, 'hardware_type', None)
+            if hw_type and uses_revo3_motor_api(hw_type):
+                self._is_revo3 = True
+        
         # Enable/disable touch based on device capability
+        # All Revo3 variants have full-palm touch sensors
         if device_info and device_info.is_touch():
             self.touch_check.setEnabled(True)
         else:
@@ -387,6 +465,7 @@ class DataCollectorPanel(QWidget):
                 pass
         
         self.shared_data = None
+        self._is_revo3 = False
     
     def _browse_path(self):
         """Browse path"""
@@ -421,7 +500,8 @@ class DataCollectorPanel(QWidget):
             self.duration_spin.value(),
             50,  # Default frequency (will be adjusted by worker)
             self.motor_check.isChecked(),
-            self.touch_check.isChecked()
+            self.touch_check.isChecked(),
+            is_revo3=getattr(self, '_is_revo3', False)
         )
         self.worker.moveToThread(self._thread)
         

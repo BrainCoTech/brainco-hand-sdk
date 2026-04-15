@@ -2,14 +2,19 @@
 """
 Stark SDK GUI - Modern Control Interface
 Supports all protocols and device types
+
+Usage:
+    python main.py                                # Auto-detect
+    python main.py --revo3-modbus                 # Only detect Revo3 Modbus
 """
 
+import argparse
 import signal
 import sys
-import warnings
 from pathlib import Path
 
 # Suppress pyqtgraph disconnect warnings (PySide6 compatibility issue)
+import warnings
 warnings.filterwarnings("ignore", message="Failed to disconnect.*", category=RuntimeWarning)
 
 # Add parent directory to path
@@ -25,6 +30,14 @@ from gui.styles import DARK_THEME
 
 def main():
     """Main entry point"""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Stark SDK GUI")
+    parser.add_argument("--revo3-modbus", action="store_true",
+                        help="Only detect Revo3 Modbus devices (hides other protocols)")
+    args = parser.parse_args()
+
+
+
     # Enable high DPI scaling
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
@@ -42,7 +55,7 @@ def main():
     # app.setStyleSheet(DARK_THEME)
     
     # Create and show main window
-    window = MainWindow()
+    window = MainWindow(revo3_modbus=args.revo3_modbus)
     window.show()
     
     sys.exit(app.exec())

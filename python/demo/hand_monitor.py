@@ -28,7 +28,7 @@ import argparse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common_imports import (
     sdk, check_sdk, get_hw_type_name, logger,
-    has_touch, has_pressure_touch, uses_revo1_touch_api
+    has_touch, is_pressure_touch, uses_revo1_touch_api
 )
 from common_init import (
     DeviceContext, parse_args_and_init, cleanup_context, print_init_usage
@@ -276,19 +276,108 @@ async def monitor_pressure_detailed(ctx, slave_id: int, shutdown_event, duration
         traceback.print_exc()
 
 
+async def monitor_array_pressure(ctx, slave_id: int, shutdown_event, duration: int = 30):
+    """Monitor ArrayPressure touch data (3D force + torque per finger)"""
+    import numpy as np
+
+    print("\n[ArrayPressure Monitor] Press Ctrl+C to stop\n")
+    print(f"Duration: {duration} seconds\n")
+    print("Data: 5 fingers × (Fx, Fy, Fz, Mx, My) — raw ×100 scaled")
+    print("  Force:  Fx,Fy ∈ [-30,30]N  Fz ∈ [0,30]N")
+    print("  Torque: Mx,My ∈ [-0.05,0.05]N·m\n")
+
+    finger_names = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
+
+    try:
+        motor_buffer = sdk.MotorStatusBuffer(max_size=10000)
+        touch_buffer = sdk.ArrayPressureTouchDataBuffer(max_size=1000)
+
+        collector = sdk.DataCollector.new_array_pressure(
+            ctx=ctx,
+            motor_buffer=motor_buffer,
+            array_pressure_touch_buffer=touch_buffer,
+            slave_id=slave_id,
+            motor_frequency=0,
+            touch_frequency=10,
+            enable_stats=True
+        )
+
+        collector.start()
+        logger.info("DataCollector started (10Hz ArrayPressure touch)")
+
+        for i in range(duration):
+            await asyncio.sleep(1)
+            if shutdown_event.is_set():
+                break
+
+            touch_data_list = touch_buffer.pop_all()
+            if not touch_data_list:
+                print(f"[{i+1:2d}s] No data")
+                continue
+
+            latest = touch_data_list[-1]
+            raw = list(latest.data)
+            if len(raw) < 25:
+                print(f"[{i+1:2d}s] Incomplete data ({len(raw)} regs)")
+                continue
+
+            # Parse status
+            status = latest.status
+            sensor_bits = status.sensor_status if hasattr(status, 'sensor_status') else 0
+            warmup = status.warmup_done if hasattr(status, 'warmup_done') else False
+
+            sensor_str = " ".join(
+                f"{name}{'✓' if not ((sensor_bits >> idx) & 1) else '✗'}"
+                for idx, name in enumerate(finger_names)
+            )
+            warmup_str = "Ready" if warmup else "Warming up..."
+            print(f"[{i+1:2d}s]")
+            print(f"  Sensors: {sensor_str} | {warmup_str}")
+
+            # Parse per-finger data
+            for finger_idx, name in enumerate(finger_names):
+                base = finger_idx * 5
+                raw_slice = np.array(raw[base:base + 5], dtype=np.uint16).view(np.int16)
+                fx = float(raw_slice[0]) / 100.0
+                fy = float(raw_slice[1]) / 100.0
+                fz = float(raw_slice[2]) / 100.0
+                mx = float(raw_slice[3]) / 100.0
+                my = float(raw_slice[4]) / 100.0
+                print(f"  {name:6s}: Fx={fx:+7.2f}N  Fy={fy:+7.2f}N  Fz={fz:+7.2f}N  "
+                      f"Mx={mx:+6.3f}N·m  My={my:+6.3f}N·m")
+
+        collector.stop()
+        collector.wait()
+        logger.info("DataCollector stopped")
+
+    except Exception as e:
+        logger.error(f"ArrayPressure monitor error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _is_array_pressure(hw_type) -> bool:
+    """Check if device is ArrayPressure type"""
+    if sdk is None:
+        return False
+    return hw_type == sdk.StarkHardwareType.Revo2TouchArrayPressure
+
+
 def print_usage():
     print("Usage: python hand_monitor.py [options] [mode]")
     print("\nModes:")
-    print("  motor     - Motor data only (100Hz)")
-    print("  touch     - Motor + capacitive touch (100Hz + 10Hz)")
-    print("  summary   - Motor + pressure summary (100Hz + 10Hz)")
-    print("  detailed  - Motor + pressure detailed (100Hz + 10Hz)")
+    print("  motor           - Motor data only (100Hz)")
+    print("  touch           - Motor + capacitive touch (100Hz + 10Hz)")
+    print("  summary         - Motor + pressure summary (100Hz + 10Hz)")
+    print("  detailed        - Motor + pressure detailed (100Hz + 10Hz)")
+    print("  array_pressure  - ArrayPressure 3D force + torque (10Hz)")
     print("\nOptions:")
     print("  --duration N        Collection duration in seconds (default: 30)")
     print_init_usage("python hand_monitor.py")
     print("\nExamples:")
     print("  python hand_monitor.py motor")
     print("  python hand_monitor.py touch --duration 60")
+    print("  python hand_monitor.py array_pressure")
     print("  python hand_monitor.py -s can0 1 motor")
     print("  python hand_monitor.py -z 2 touch")
 
@@ -302,7 +391,7 @@ async def main():
     # Create extra parser for monitor-specific args
     extra_parser = argparse.ArgumentParser(add_help=False)
     extra_parser.add_argument('mode', nargs='?', default=None,
-                             choices=['motor', 'touch', 'summary', 'detailed'],
+                             choices=['motor', 'touch', 'summary', 'detailed', 'array_pressure'],
                              help='Monitor mode')
     extra_parser.add_argument('--duration', type=int, default=30,
                              help='Collection duration (seconds)')
@@ -319,8 +408,10 @@ async def main():
 
     # Auto-select mode if not specified
     if mode is None:
-        if has_pressure_touch(device_ctx.hw_type):
-            mode = "summary"
+        if _is_array_pressure(device_ctx.hw_type):
+            mode = "array_pressure"
+        elif is_pressure_touch(device_ctx.hw_type):
+            mode = "detailed"
         elif has_touch(device_ctx.hw_type):
             mode = "touch"
         else:
@@ -340,6 +431,8 @@ async def main():
             await monitor_pressure_summary(device_ctx.ctx, device_ctx.slave_id, shutdown_event, duration)
         elif mode == "detailed":
             await monitor_pressure_detailed(device_ctx.ctx, device_ctx.slave_id, shutdown_event, duration)
+        elif mode == "array_pressure":
+            await monitor_array_pressure(device_ctx.ctx, device_ctx.slave_id, shutdown_event, duration)
     finally:
         await cleanup_context(device_ctx)
         logger.info("Monitor stopped")

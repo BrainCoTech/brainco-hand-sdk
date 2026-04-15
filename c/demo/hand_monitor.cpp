@@ -55,6 +55,7 @@ typedef enum {
     MODE_SUMMARY,
     MODE_DETAILED,
     MODE_DUAL,
+    MODE_ARRAY_PRESSURE,
     MODE_AUTO
 } CollectionMode;
 
@@ -77,6 +78,7 @@ CollectionMode parse_mode(const char* mode_str) {
     if (strcmp(mode_str, "summary") == 0) return MODE_SUMMARY;
     if (strcmp(mode_str, "detailed") == 0) return MODE_DETAILED;
     if (strcmp(mode_str, "dual") == 0) return MODE_DUAL;
+    if (strcmp(mode_str, "array_pressure") == 0) return MODE_ARRAY_PRESSURE;
     if (strcmp(mode_str, "auto") == 0) return MODE_AUTO;
     return MODE_AUTO;
 }
@@ -88,6 +90,7 @@ const char* mode_to_string(CollectionMode mode) {
         case MODE_SUMMARY: return "summary";
         case MODE_DETAILED: return "detailed";
         case MODE_DUAL: return "dual";
+        case MODE_ARRAY_PRESSURE: return "array_pressure";
         case MODE_AUTO: return "auto";
         default: return "unknown";
     }
@@ -98,12 +101,13 @@ void print_usage(const char* prog_name) {
     print_init_usage(prog_name);
     printf("\n");
     printf("Monitor modes:\n");
-    printf("    motor    - Motor status only (all devices)\n");
-    printf("    touch    - Motor + Capacitive touch (Revo1/Revo2 Touch)\n");
-    printf("    summary  - Motor + Pressure summary (Revo2 Modulus)\n");
-    printf("    detailed - Motor + Pressure detailed (Revo2 Modulus)\n");
-    printf("    dual     - Motor + Pressure summary + detailed (Revo2 Modulus)\n");
-    printf("    auto     - Auto-detect based on device type (default)\n");
+    printf("    motor           - Motor status only (all devices)\n");
+    printf("    touch           - Motor + Capacitive touch (Revo1/Revo2 Touch)\n");
+    printf("    summary         - Motor + Pressure summary (Revo2 Modulus)\n");
+    printf("    detailed        - Motor + Pressure detailed (Revo2 Modulus)\n");
+    printf("    dual            - Motor + Pressure summary + detailed (Revo2 Modulus)\n");
+    printf("    array_pressure  - ArrayPressure 3D force + torque (10Hz)\n");
+    printf("    auto            - Auto-detect based on device type (default)\n");
     printf("\n");
     printf("Mode examples:\n");
     printf("  %s motor          # Auto-detect, motor only\n", prog_name);
@@ -393,6 +397,70 @@ void run_pressure_collection(
 }
 
 // ============================================================================
+// ArrayPressure Collection Loop
+// ============================================================================
+
+void run_array_pressure_collection(
+    CDataCollector* collector,
+    CMotorStatusBuffer* motor_buffer,
+    CArrayPressureTouchItemBuffer* ap_buffer
+) {
+    const size_t MAX_AP_DATA = 100;
+    CArrayPressureTouchItem ap_data[MAX_AP_DATA];
+    int loop_count = 0;
+
+    const char* finger_names[] = {"Thumb", "Index", "Middle", "Ring", "Pinky"};
+
+    printf("\n[ArrayPressure Monitor]\n");
+    printf("Data: 5 fingers x (Fx, Fy, Fz, Mx, My) - raw x100 scaled\n");
+    printf("  Force:  Fx,Fy in [-30,30]N  Fz in [0,30]N\n");
+    printf("  Torque: Mx,My in [-0.05,0.05]N.m\n\n");
+
+    while (keep_running) {
+        usleep(1000 * 1000); // 1 second
+        loop_count++;
+
+        int count = array_pressure_touch_buffer_pop_all(
+            ap_buffer, ap_data, MAX_AP_DATA
+        );
+
+        if (count <= 0) {
+            printf("[%2ds] No data\n", loop_count);
+            continue;
+        }
+
+        auto latest = &ap_data[count - 1];
+
+        // Print status
+        uint16_t sensor_bits = latest->sensor_status;
+        bool warmup = latest->warmup_complete != 0;
+
+        printf("[%2ds]\n", loop_count);
+        printf("  Sensors:");
+        for (int i = 0; i < 5; i++) {
+            bool ok = !((sensor_bits >> i) & 1);
+            printf(" %s%s", finger_names[i], ok ? "OK" : "ERR");
+        }
+        printf(" | %s\n", warmup ? "Ready" : "Warming up...");
+
+        // Print per-finger data
+        for (int finger = 0; finger < 5; finger++) {
+            int base = finger * 5;
+            int16_t fx = (int16_t)latest->data[base + 0];
+            int16_t fy = (int16_t)latest->data[base + 1];
+            int16_t fz = (int16_t)latest->data[base + 2];
+            int16_t mx = (int16_t)latest->data[base + 3];
+            int16_t my = (int16_t)latest->data[base + 4];
+            printf("  %-6s: Fx=%+7.2fN  Fy=%+7.2fN  Fz=%+7.2fN  "
+                   "Mx=%+6.3fN.m  My=%+6.3fN.m\n",
+                   finger_names[finger],
+                   fx / 100.0, fy / 100.0, fz / 100.0,
+                   mx / 100.0, my / 100.0);
+        }
+    }
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -446,8 +514,10 @@ int main(int argc, char const *argv[]) {
         } else if (touch_type == TOUCH_TYPE_PRESSURE) {
             // Revo2 Modulus (pressure touch) - use summary mode by default
             mode = MODE_SUMMARY;
+        } else if (touch_type == TOUCH_TYPE_ARRAY_PRESSURE) {
+            mode = MODE_ARRAY_PRESSURE;
         } else {
-            // Capacitive touch (Revo1 Touch, Revo2 Touch)
+            // Capacitive touch (Revo1 Touch, Revo2 Touch) or Force3D
             mode = MODE_TOUCH;
         }
         printf("[INFO] Auto-selected mode: %s\n", mode_to_string(mode));
@@ -504,6 +574,7 @@ int main(int argc, char const *argv[]) {
     CTouchStatusBuffer* touch_buffer = NULL;
     CPressureSummaryBuffer* summary_buffer = NULL;
     CPressureDetailedBuffer* detailed_buffer = NULL;
+    CArrayPressureTouchItemBuffer* ap_buffer = NULL;
 
     if (mode == MODE_TOUCH) {
         touch_buffer = touch_buffer_new(1000);
@@ -530,6 +601,16 @@ int main(int argc, char const *argv[]) {
         if (detailed_buffer == NULL) {
             fprintf(stderr, "[ERROR] Failed to create detailed buffer.\n");
             if (summary_buffer) pressure_summary_buffer_free(summary_buffer);
+            motor_buffer_free(motor_buffer);
+            cleanup_device_context(&ctx);
+            return -1;
+        }
+    }
+
+    if (mode == MODE_ARRAY_PRESSURE) {
+        ap_buffer = array_pressure_touch_buffer_new(1000);
+        if (ap_buffer == NULL) {
+            fprintf(stderr, "[ERROR] Failed to create ArrayPressure buffer.\n");
             motor_buffer_free(motor_buffer);
             cleanup_device_context(&ctx);
             return -1;
@@ -595,6 +676,14 @@ int main(int argc, char const *argv[]) {
             collector = data_collector_new_pressure_hybrid(
                 ctx.handle, motor_buffer, summary_buffer, detailed_buffer,
                 ctx.slave_id, motor_freq, summary_freq, detailed_freq, 1
+            );
+            break;
+
+        case MODE_ARRAY_PRESSURE:
+            printf("[INFO] ArrayPressure Touch: 10Hz\n");
+            collector = data_collector_new_array_pressure(
+                ctx.handle, motor_buffer, ap_buffer,
+                ctx.slave_id, 10, 10, 1
             );
             break;
 
@@ -692,6 +781,10 @@ int main(int argc, char const *argv[]) {
                                     detailed_buffer, traj_ptr, mode);
             break;
 
+        case MODE_ARRAY_PRESSURE:
+            run_array_pressure_collection(collector, motor_buffer, ap_buffer);
+            break;
+
         default:
             break;
     }
@@ -718,6 +811,7 @@ int main(int argc, char const *argv[]) {
     if (detailed_buffer) pressure_detailed_buffer_free(detailed_buffer);
     if (summary_buffer) pressure_summary_buffer_free(summary_buffer);
     if (touch_buffer) touch_buffer_free(touch_buffer);
+    if (ap_buffer) array_pressure_touch_buffer_free(ap_buffer);
     motor_buffer_free(motor_buffer);
     cleanup_device_context(&ctx);
 

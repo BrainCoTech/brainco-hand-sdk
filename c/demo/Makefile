@@ -41,8 +41,20 @@ debug_detect.exe: debug_detect.cpp $(DEMO_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(DEMO_OBJ) $(INCLUDE) $(LIBS) $(EXTRA_LDFLAGS)
 	@echo "\033[1;32m[$(OS)] Built $@\033[0m"
 
+hand_motor_revo3.exe: hand_motor_revo3.cpp $(DEMO_OBJ)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(DEMO_OBJ) $(INCLUDE) $(LIBS) $(EXTRA_LDFLAGS)
+	@echo "\033[1;32m[$(OS)] Built $@\033[0m"
+
+hand_touch_revo3.exe: hand_touch_revo3.cpp $(DEMO_OBJ)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(DEMO_OBJ) $(INCLUDE) $(LIBS) $(EXTRA_LDFLAGS)
+	@echo "\033[1;32m[$(OS)] Built $@\033[0m"
+
+hand_monitor_revo3.exe: hand_monitor_revo3.cpp $(DEMO_OBJ)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(DEMO_OBJ) $(INCLUDE) $(LIBS) $(EXTRA_LDFLAGS)
+	@echo "\033[1;32m[$(OS)] Built $@\033[0m"
+
 # Default target
-ALL_TARGETS := hand_demo.exe hand_monitor.exe auto_detect.exe hand_dfu.exe hand_protolbuf_test.exe debug_detect.exe
+ALL_TARGETS := hand_demo.exe hand_monitor.exe auto_detect.exe hand_dfu.exe hand_protolbuf_test.exe debug_detect.exe hand_motor_revo3.exe hand_touch_revo3.exe hand_monitor_revo3.exe
 
 all: $(ALL_TARGETS)
 	@echo "\033[1;32m[$(OS)] build done\033[0m"

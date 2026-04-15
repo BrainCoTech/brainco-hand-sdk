@@ -544,6 +544,88 @@ void demo_touch_sensor(DeviceHandler *handle, uint8_t slave_id, TouchSensorType 
         printf("\n[Info] For continuous pressure data collection, use motor_collector.exe:\n");
         printf("       ./motor_collector.exe summary   # Summary mode (6 values)\n");
         printf("       ./motor_collector.exe detailed  # Detailed mode (per-sensor)\n");
+    } else if (touch_type == TOUCH_TYPE_ARRAY_PRESSURE) {
+        // ArrayPressure touch sensor (华立创)
+        printf("[Demo] ArrayPressure touch sensor detected.\n");
+        printf("[Info] ArrayPressure provides:\n");
+        printf("       - 5 fingers x (Fx, Fy, Fz, Mx, My)\n");
+        printf("       - Force:  Fx,Fy in [-30,30]N  Fz in [0,30]N\n");
+        printf("       - Torque: Mx,My in [-0.05,0.05]N.m\n\n");
+
+        // Enable touch sensor
+        printf("[Demo] Enabling ArrayPressure touch sensors...\n");
+        stark_enable_touch_sensor(handle, slave_id, 0x1F);
+        usleep(500 * 1000);
+
+        // Create buffers
+        CMotorStatusBuffer *motor_buf = motor_buffer_new(100);
+        CArrayPressureTouchItemBuffer *ap_buf = array_pressure_touch_buffer_new(100);
+
+        if (motor_buf && ap_buf) {
+            CDataCollector *collector = data_collector_new_array_pressure(
+                handle, motor_buf, ap_buf, slave_id,
+                10,  // motor_frequency: 10Hz
+                10,  // touch_frequency: 10Hz
+                0    // enable_stats: false
+            );
+
+            if (collector) {
+                printf("[Demo] Starting data collection for 3 seconds...\n");
+                data_collector_start(collector);
+                usleep(3000 * 1000);
+                data_collector_stop(collector);
+                data_collector_wait(collector);
+
+                // Read ArrayPressure data
+                const size_t MAX_AP = 100;
+                CArrayPressureTouchItem ap_data[MAX_AP];
+                int count = array_pressure_touch_buffer_pop_all(ap_buf, ap_data, MAX_AP);
+
+                if (count > 0) {
+                    const char* finger_names[] = {"Thumb", "Index", "Middle", "Ring", "Pinky"};
+                    auto latest = &ap_data[count - 1];
+
+                    // Print status
+                    uint16_t sensor_bits = latest->sensor_status;
+                    bool warmup = latest->warmup_complete != 0;
+                    printf("\n[Demo] ArrayPressure data (%d samples collected):\n", count);
+                    printf("  Status:");
+                    for (int i = 0; i < 5; i++) {
+                        bool ok = !((sensor_bits >> i) & 1);
+                        printf(" %s:%s", finger_names[i], ok ? "OK" : "ERR");
+                    }
+                    printf(" | %s\n\n", warmup ? "Ready" : "Warming up...");
+
+                    // Print per-finger data
+                    for (int finger = 0; finger < 5; finger++) {
+                        int base = finger * 5;
+                        int16_t fx = (int16_t)latest->data[base + 0];
+                        int16_t fy = (int16_t)latest->data[base + 1];
+                        int16_t fz = (int16_t)latest->data[base + 2];
+                        int16_t mx = (int16_t)latest->data[base + 3];
+                        int16_t my = (int16_t)latest->data[base + 4];
+                        printf("  %-6s: Fx=%+7.2fN  Fy=%+7.2fN  Fz=%+7.2fN  "
+                               "Mx=%+6.3fN.m  My=%+6.3fN.m\n",
+                               finger_names[finger],
+                               fx / 100.0, fy / 100.0, fz / 100.0,
+                               mx / 100.0, my / 100.0);
+                    }
+                } else {
+                    printf("  [WARN] No ArrayPressure data collected\n");
+                }
+
+                data_collector_free(collector);
+            } else {
+                printf("  [ERROR] Failed to create data collector\n");
+            }
+        }
+
+        // Cleanup
+        if (motor_buf) motor_buffer_free(motor_buf);
+        if (ap_buf) array_pressure_touch_buffer_free(ap_buf);
+
+        printf("\n[Info] For continuous monitoring, use hand_monitor:\n");
+        printf("       ./hand_monitor.exe array_pressure\n");
     } else {
         printf("[WARN] No touch sensor or unknown touch type\n");
     }
@@ -602,7 +684,7 @@ void demo_interactive_loop(DeviceHandler *handle, uint8_t slave_id) {
  * Demo 8: Multi-device control
  * Controls multiple devices on the same bus simultaneously.
  *
- * This demo uses stark_auto_detect(scan_all=true) to find all devices,
+ * This demo uses stark_auto_detect(scan_all=false) to find all devices,
  * then controls them together.
  *
  * Typical setup:
@@ -616,7 +698,7 @@ void demo_multi_device(DeviceHandler *handle, uint8_t primary_slave_id) {
     printf("[Demo] Scanning for all devices using stark_auto_detect...\n");
 
     CDetectedDeviceList* device_list = stark_auto_detect(
-        true,   // scan_all: find ALL devices
+        false,   // scan_all: find ALL devices
         NULL,   // port: scan all ports
         STARK_PROTOCOL_TYPE_AUTO  // protocol: auto (try all)
     );

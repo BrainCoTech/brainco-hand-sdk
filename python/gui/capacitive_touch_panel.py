@@ -136,7 +136,7 @@ class FingerDetailWidget(QWidget):
         layout.setSpacing(8)
         
         # Title
-        title = QLabel(f"🖐️ {self.finger_name} ({self.sensor_count} force groups)")
+        title = QLabel(f"🖐 {self.finger_name} ({self.sensor_count} force groups)")
         title.setStyleSheet(f"font-size: 14px; font-weight: bold; color: rgb{FINGER_COLORS[self.finger_idx]};")
         layout.addWidget(title)
         
@@ -349,12 +349,11 @@ class FingerDetailWidget(QWidget):
                     curve.setData([], [])
 
 
-class TouchSensorPanel(QWidget):
-    """Touch Sensor Panel with multi-sensor support
-    
-    Uses SharedDataManager for device state.
+class CapacitiveTouchPanel(QWidget):
+    """Capacitive Touch Panel - For Revo1/Revo2 capacitive devices
+
+    Uses SharedDataManager for device state and data polling avoiding UI freezes.
     """
-    
     def __init__(self):
         super().__init__()
         self.shared_data: Optional['SharedDataManager'] = None
@@ -569,12 +568,11 @@ class TouchSensorPanel(QWidget):
             return
         
         # Check if device has capacitive touch (not pressure touch)
-        from common_imports import uses_revo1_touch_api, uses_revo2_touch_api
+        from common_imports import is_capacitive_touch
         if device_info and hasattr(device_info, 'hardware_type'):
             hw_type = device_info.hardware_type
-            # Capacitive touch: Revo1 touch API or Revo2 touch API (not pressure)
-            is_capacitive_touch = uses_revo1_touch_api(hw_type) or uses_revo2_touch_api(hw_type)
-            if not is_capacitive_touch:
+            # Capacitive touch: Revo1/2 touch
+            if not is_capacitive_touch(hw_type):
                 self.setEnabled(False)
                 return
         

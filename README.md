@@ -1,6 +1,6 @@
 # BrainCo RevoHand SDK Examples
 
-[![Version](https://img.shields.io/badge/version-v1.1.9-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-v1.4.0-blue.svg)](VERSION)
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)]()
 
 [English](README.md) | [中文](README.zh.md)
@@ -60,12 +60,12 @@ For detailed instructions: [C++ Development Guide](c/README.md)
 
 > 💡 The C++ demos in `c/demo/` correspond to the Python demos in `python/` - both provide equivalent functionality for device control, monitoring, and firmware upgrade.
 
-### Legacy C++ Examples (Deprecated)
+### Legacy C++ Examples (Archived)
 
-> ⚠️ **Deprecated**: The following folders will be removed in future versions. Please migrate to the `c/` folder.
+> ⚠️ **Archived**: The `linux/` and `windows/` folders have been moved to the `archive/` directory. Please use the unified `c/` folder for cross-platform C++ development.
 
-- [Linux Examples](linux/) - Legacy Linux-specific examples
-- [Windows Examples](windows/) - Legacy Windows-specific examples
+- [Linux Examples (Archived)](archive/linux/) - Legacy Linux-specific examples, moved to archive
+- [Windows Examples (Archived)](archive/windows/) - Legacy Windows-specific examples, moved to archive
 
 ### ROS/ROS2 Integration
 
@@ -96,20 +96,19 @@ For ROS/ROS2 integration and examples: [ROS Development Guide](https://github.co
 │   ├── revo2_canfd/    # Revo2 CANFD examples
 │   ├── revo2_ethercat/ # Revo2 EtherCAT examples
 │   └── revo2_tactile_grasp/ # Revo2 tactile grasping examples
-├── linux/              # ⚠️ DEPRECATED - use c/ folder instead
-├── windows/            # ⚠️ DEPRECATED - use c/ folder instead
+├── archive/            # ⚠️ Archived legacy examples (linux/ and windows/)
 ├── dll/                # Required DLL files for Windows
 └── dist/               # Distribution files
 
 ```
 
-> ⚠️ **Deprecation Notice**: The `linux/` and `windows/` folders are deprecated and will be removed in future versions. Please use the unified `c/` folder for cross-platform C++ development.
+> ⚠️ **Archived Notice**: The `linux/` and `windows/` folders are obsolete and have been moved to the `archive/` folder. Please use the unified `c/` folder for cross-platform C++ development.
 
 ## 🛠️ Development
 
 ### Building C++ Examples
 
-Refer to the [Linux README](linux/README.md) for detailed compilation instructions.
+Refer to the [C++ Development Guide](c/README.md) for detailed compilation instructions.
 
 ### Running Python Examples
 
@@ -117,7 +116,7 @@ Each example directory contains its own README with specific usage instructions.
 
 ## 📝 Version
 
-Current SDK Version: **v1.1.9**
+Current SDK Version: **v1.4.0**
 
 See [CHANGELOG](CHANGELOG.md) for update history.
 

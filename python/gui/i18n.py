@@ -1,42 +1,46 @@
 """Internationalization Support Module"""
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QSettings
 
 
 class I18n(QObject):
     """Internationalization Manager"""
-    
+
     language_changed = Signal(str)
-    
+
     _instance = None
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(self):
         if self._initialized:
             return
         super().__init__()
         self._initialized = True
-        self._current_language = "en"
+        self._settings = QSettings("BrainCo", "StarkSDK")
+        # Load saved language preference, default to "en"
+        saved_lang = self._settings.value("language", "en")
+        self._current_language = saved_lang if saved_lang in ("en", "zh") else "en"
         self._translations = {
             "en": TRANSLATIONS_EN,
             "zh": TRANSLATIONS_ZH
         }
-    
+
     @property
     def current_language(self):
         return self._current_language
-    
+
     def set_language(self, lang: str):
-        """Set language"""
+        """Set language and persist preference"""
         if lang in self._translations:
             self._current_language = lang
+            self._settings.setValue("language", lang)
             self.language_changed.emit(lang)
-    
+
     def translate(self, key: str) -> str:
         """Get translated text"""
         translations = self._translations.get(self._current_language, TRANSLATIONS_EN)
@@ -57,7 +61,7 @@ TRANSLATIONS_EN = {
     "status_disconnected": "Disconnected",
     "status_connected": "Connected",
     "ready": "Ready",
-    
+
     # About dialog
     "about_title": "About Stark SDK GUI",
     "about_text": (
@@ -73,7 +77,7 @@ TRANSLATIONS_EN = {
         "- Revo2 Basic/Touch\n\n"
         "© 2026 BrainCo"
     ),
-    
+
     # Connection panel
     "connection_settings": "Connection Settings",
     "connection_info": "Connection Info",
@@ -95,9 +99,11 @@ TRANSLATIONS_EN = {
     "status_connect_failed": "Connection failed",
     "error_sdk_not_installed": "Error: bc_stark_sdk not installed",
     "error_not_implemented": "Error: {protocol} not implemented",
-    
+
     # Motor control panel
     "motor_control": "Motor Control",
+    "motor_control_v3": "Motor Control (Revo3)",
+    "v3_motor_config": "Motor Config (Revo3)",
     "control_mode": "Control Mode",
     "mode": "Mode",
     "mode_position": "Position",
@@ -117,7 +123,7 @@ TRANSLATIONS_EN = {
     "btn_close_all": "Close All",
     "btn_stop_all": "Stop All",
     "btn_zero_all": "Zero All",
-    
+
     # Touch sensor panel
     "touch_sensor": "Touch Sensor",
     "touch_control": "Touch Control",
@@ -127,11 +133,12 @@ TRANSLATIONS_EN = {
     "btn_clear": "Clear",
     "finger_selection": "Finger Selection",
     "touch_data": "Touch Data",
+    "pressure_touch": "Pressure Touch",
     "normal_force": "Normal Force",
     "tangential_force": "Tangential Force",
     "proximity": "Proximity",
     "status": "Status",
-    
+
     # Touch sensor confirmation dialogs
     "dialog_calibrate_title": "Confirm Calibration",
     "dialog_calibrate_message": (
@@ -153,7 +160,7 @@ TRANSLATIONS_EN = {
         "• May require re-calibration after reset\n\n"
         "This operation cannot be undone."
     ),
-    
+
     # Data collection panel
     "data_collection": "Data Collection",
     "collection_settings": "Collection Settings",
@@ -177,7 +184,7 @@ TRANSLATIONS_EN = {
     "log_collection_failed": "Collection failed: {error}",
     "error_no_device": "Error: No device connected",
     "log": "Log",
-    
+
     # System config panel
     "system_config": "System Config",
     "device_info": "Device Info",
@@ -202,7 +209,7 @@ TRANSLATIONS_EN = {
     "log_factory_resetting": "Factory resetting...",
     "log_factory_reset_done": "Factory reset completed",
     "log_factory_reset_failed": "Factory reset failed: {error}",
-    
+
     # Action sequence panel
     "action_sequence": "Action Sequence",
     "preset_actions": "Preset Actions",
@@ -232,7 +239,7 @@ TRANSLATIONS_EN = {
     "run_failed": "Run failed",
     "import_failed": "Import failed",
     "export_failed": "Export failed",
-    
+
     # Realtime monitor panel
     "realtime_monitor": "Realtime Monitor",
     "config": "Config",
@@ -247,12 +254,20 @@ TRANSLATIONS_EN = {
     "speed": "Speed",
     "touch_force": "Touch Force",
     "hand_visualization": "Hand Visualization",
-    
+
     # Timing test panel
     "timing_test": "Timing Test",
     "test_config": "Test Configuration",
+    "test_mode": "Test Mode",
+    "mode_all_fingers": "All Fingers",
+    "mode_single_finger": "Single Finger",
+    "finger_label": "Finger:",
     "num_cycles": "Number of Cycles",
     "timeout_sec": "Timeout (sec)",
+    "read_freq": "Read Freq",
+    "chart_freq": "Chart Freq",
+    "avg_latency": "Avg Latency",
+    "no_chart_available": "pyqtgraph not installed - no chart available",
     "btn_start_test": "Start Test",
     "btn_stop_test": "Stop Test",
     "test_results": "Test Results",
@@ -275,10 +290,10 @@ TRANSLATIONS_EN = {
     "max_open_time": "Max open time",
     "test_completed": "Test completed",
     "test_failed": "Test failed",
-    
+
     # DFU panel
     "dfu_upgrade": "DFU Upgrade",
-    "dfu_warning_title": "⚠️ Firmware Upgrade Notice",
+    "dfu_warning_title": "⚠ Firmware Upgrade Notice",
     "dfu_warning_1": "1. Do not disconnect power or USB cable during upgrade",
     "dfu_warning_2": "2. Do not operate the device during upgrade",
     "dfu_warning_3": "3. Device will automatically restart after upgrade",
@@ -297,7 +312,7 @@ TRANSLATIONS_EN = {
     "dfu_starting": "Starting upgrade...",
     "dfu_completed": "Upgrade completed",
     "dfu_failed": "Upgrade failed",
-    
+
     # Motor settings
     "turbo_mode": "Turbo Mode",
     "enable_turbo": "Enable Turbo Mode",
@@ -318,14 +333,14 @@ TRANSLATIONS_EN = {
     "buzzer": "Buzzer",
     "vibration": "Vibration",
     "refresh_settings": "Refresh Settings",
-    
+
     # Communication settings
     "modbus_baudrate": "Modbus/RS485 Baudrate",
     "canfd_baudrate": "CANFD Data Baudrate",
     "current_settings": "Current Settings",
     "confirm_baudrate_change": "Confirm Baudrate Change",
     "device_will_reboot": "Device will reboot after change.",
-    
+
     # Finger settings (Revo2)
     "finger_settings": "Finger Settings (Revo2)",
     "protected_currents": "Protected Currents (Revo2)",
@@ -338,6 +353,57 @@ TRANSLATIONS_EN = {
     "apply_all": "Apply All",
     "finger_thumb_base": "Thumb Base",
     "finger_thumb_aux": "Thumb Aux",
+
+    # V3 Motor Settings
+    "v3_settings": "⚙ Settings",
+    "v3_global_protect_current": "Global Protect Current (A)",
+    "v3_joint_protect_current": "Joint Protect Current",
+
+    "v3_position_limits": "Position Limits",
+    "v3_speed_limits": "Speed Limits",
+    "v3_joint_protect_current": "Joint Protect Current",
+    "v3_global_settings": "Global Settings",
+    "v3_global_protect_current": "Global Protect Current",
+    "v3_calibration_current": "Calibration Current",
+    "v3_max_continuous_current": "Max Continuous",
+    "v3_auto_refresh": "Auto Refresh (3s)",
+    "v3_read_parameters": "Read Parameters",
+    "btn_apply": "Apply",
+    "btn_set": "Set",
+    "v3_joint_pos_limits": "Joint Pos Limits (°)",
+    "v3_joint_speed_limits": "Joint Speed Limits (rpm)",
+    "v3_calibration_current": "Calibration Current (A)",
+    "v3_max_continuous_current": "Max Continuous Current (A)",
+    "v3_auto_calibration": "Enable Auto Calibration",
+    "v3_manual_calibration": "🔧 Manual Calibration",
+    "v3_clear_errors": "🗑 Clear Motor Errors",
+    "v3_reset_finger_defaults": "↩ Reset Finger Defaults",
+    "v3_touch_screen": "Touch Screen",
+    "v3_teaching_mode": "🎓 Teaching Mode",
+    "v3_software_e_stop": "🛑 Software E-Stop",
+    "v3_use_broadcast_id": "Use Broadcast ID",
+    "v3_diagnostics": "📊 Hardware Diagnostics",
+    "v3_diag_read": "Read Info",
+    "v3_motor_status_info": "Motor Status",
+
+    # Teaching panel
+    "teaching_mode": "Teaching Mode",
+    "teaching_controls": "Controls",
+    "teaching_record": "Record",
+    "teaching_stop": "Stop",
+    "teaching_play": "Playback",
+    "teaching_save": "Save",
+    "teaching_load": "Load",
+    "teaching_save_title": "Save Trajectory",
+    "teaching_load_title": "Load Trajectory",
+    "teaching_record_freq": "Record Freq:",
+    "teaching_playback_speed": "Speed:",
+    "teaching_loop_count": "Loops:",
+    "teaching_status": "Status",
+    "teaching_state_idle": "Idle",
+    "teaching_state_recording": "Recording...",
+    "teaching_state_playing": "Playing...",
+    "teaching_trajectory_info": "Trajectory Info",
 }
 
 
@@ -355,7 +421,7 @@ TRANSLATIONS_ZH = {
     "status_disconnected": "未连接",
     "status_connected": "已连接",
     "ready": "就绪",
-    
+
     # About Dialog
     "about_title": "关于 Stark SDK GUI",
     "about_text": (
@@ -371,7 +437,7 @@ TRANSLATIONS_ZH = {
         "- Revo2 Basic/Touch\n\n"
         "© 2026 BrainCo"
     ),
-    
+
     # Connection Panel
     "connection_settings": "连接设置",
     "connection_info": "连接信息",
@@ -393,9 +459,11 @@ TRANSLATIONS_ZH = {
     "status_connect_failed": "连接失败",
     "error_sdk_not_installed": "错误: bc_stark_sdk 未安装",
     "error_not_implemented": "错误: {protocol} 尚未实现",
-    
+
     # Motor Control Panel
     "motor_control": "电机控制",
+    "motor_control_v3": "电机控制 (V3)",
+    "v3_motor_config": "关节参数配置 (V3)",
     "control_mode": "控制模式",
     "mode": "模式",
     "mode_position": "位置",
@@ -415,7 +483,7 @@ TRANSLATIONS_ZH = {
     "btn_close_all": "全部闭合",
     "btn_stop_all": "全部停止",
     "btn_zero_all": "全部归零",
-    
+
     # Touch Sensor Panel
     "touch_sensor": "触觉传感器",
     "touch_control": "触觉控制",
@@ -425,11 +493,12 @@ TRANSLATIONS_ZH = {
     "btn_clear": "清除",
     "finger_selection": "手指选择",
     "touch_data": "触觉数据",
+    "pressure_touch": "压力触觉",
     "normal_force": "法向力",
     "tangential_force": "切向力",
     "proximity": "接近值",
     "status": "状态",
-    
+
     # Touch Sensor Confirmation Dialogs
     "dialog_calibrate_title": "确认校准",
     "dialog_calibrate_message": (
@@ -451,7 +520,7 @@ TRANSLATIONS_ZH = {
         "• 复位后可能需要重新校准\n\n"
         "此操作无法撤销。"
     ),
-    
+
     # Data Collection Panel
     "data_collection": "数据采集",
     "collection_settings": "采集设置",
@@ -475,7 +544,7 @@ TRANSLATIONS_ZH = {
     "log_collection_failed": "采集失败: {error}",
     "error_no_device": "错误: 未连接设备",
     "log": "日志",
-    
+
     # System Config Panel
     "system_config": "系统配置",
     "device_info": "设备信息",
@@ -500,7 +569,7 @@ TRANSLATIONS_ZH = {
     "log_factory_resetting": "恢复出厂设置...",
     "log_factory_reset_done": "已恢复出厂设置",
     "log_factory_reset_failed": "恢复出厂设置失败: {error}",
-    
+
     # Action Sequence Panel
     "action_sequence": "动作序列",
     "preset_actions": "预设动作",
@@ -530,7 +599,7 @@ TRANSLATIONS_ZH = {
     "run_failed": "运行失败",
     "import_failed": "导入失败",
     "export_failed": "导出失败",
-    
+
     # Realtime Monitor Panel
     "realtime_monitor": "实时监控",
     "config": "配置",
@@ -545,12 +614,20 @@ TRANSLATIONS_ZH = {
     "speed": "速度",
     "touch_force": "触觉力",
     "hand_visualization": "手部可视化",
-    
+
     # Timing Test Panel
     "timing_test": "时序测试",
     "test_config": "测试配置",
+    "test_mode": "测试模式",
+    "mode_all_fingers": "所有手指",
+    "mode_single_finger": "单指测试",
+    "finger_label": "手指:",
     "num_cycles": "循环次数",
     "timeout_sec": "超时时间 (秒)",
+    "read_freq": "读取频率",
+    "chart_freq": "图表刷新率",
+    "avg_latency": "平均延迟",
+    "no_chart_available": "未安装 pyqtgraph - 无法显示图表",
     "btn_start_test": "开始测试",
     "btn_stop_test": "停止测试",
     "test_results": "测试结果",
@@ -573,10 +650,10 @@ TRANSLATIONS_ZH = {
     "max_open_time": "最大张开时间",
     "test_completed": "测试完成",
     "test_failed": "测试失败",
-    
+
     # DFU Panel
     "dfu_upgrade": "固件升级",
-    "dfu_warning_title": "⚠️ 固件升级注意事项",
+    "dfu_warning_title": "⚠ 固件升级注意事项",
     "dfu_warning_1": "1. 升级过程中请勿断开电源或USB线",
     "dfu_warning_2": "2. 升级过程中请勿操作设备",
     "dfu_warning_3": "3. 升级完成后设备将自动重启",
@@ -595,7 +672,7 @@ TRANSLATIONS_ZH = {
     "dfu_starting": "开始升级...",
     "dfu_completed": "升级完成",
     "dfu_failed": "升级失败",
-    
+
     # Motor settings
     "turbo_mode": "Turbo模式",
     "enable_turbo": "启用Turbo模式",
@@ -616,14 +693,14 @@ TRANSLATIONS_ZH = {
     "buzzer": "蜂鸣器",
     "vibration": "振动",
     "refresh_settings": "刷新设置",
-    
+
     # Communication settings
     "modbus_baudrate": "Modbus/RS485 波特率",
     "canfd_baudrate": "CANFD 数据波特率",
     "current_settings": "当前设置",
     "confirm_baudrate_change": "确认波特率更改",
     "device_will_reboot": "更改后设备将重启。",
-    
+
     # Finger settings (Revo2)
     "finger_settings": "手指设置 (Revo2)",
     "protected_currents": "保护电流 (Revo2)",
@@ -636,6 +713,57 @@ TRANSLATIONS_ZH = {
     "apply_all": "全部应用",
     "finger_thumb_base": "拇指根部",
     "finger_thumb_aux": "拇指辅助",
+
+    # V3 Motor Settings
+    "v3_settings": "⚙ 设置",
+    "v3_global_protect_current": "全局保护电流 (A)",
+    "v3_joint_protect_current": "关节保护电流",
+
+    "v3_position_limits": "位置限制",
+    "v3_speed_limits": "速度限制",
+    "v3_joint_protect_current": "单关节保护电流",
+    "v3_global_settings": "全局设置",
+    "v3_global_protect_current": "全局保护电流",
+    "v3_calibration_current": "校准保护电流",
+    "v3_max_continuous_current": "最大持续电流",
+    "v3_auto_refresh": "自动刷新 (3s)",
+    "v3_read_parameters": "读取参数",
+    "btn_apply": "应用",
+    "btn_set": "设置",
+    "v3_joint_pos_limits": "关节位置限制 (°)",
+    "v3_joint_speed_limits": "关节速度限制 (rpm)",
+    "v3_calibration_current": "校准电流 (A)",
+    "v3_max_continuous_current": "最大持续电流 (A)",
+    "v3_auto_calibration": "开机自动校准",
+    "v3_manual_calibration": "🔧 手动校准",
+    "v3_clear_errors": "🗑 清除电机错误",
+    "v3_reset_finger_defaults": "↩ 手指恢复默认",
+    "v3_touch_screen": "触屏功能",
+    "v3_teaching_mode": "🎓 示教模式",
+    "v3_software_e_stop": "🛑 软件急停",
+    "v3_use_broadcast_id": "使用广播ID",
+    "v3_diagnostics": "📊 硬件诊断",
+    "v3_diag_read": "读取信息",
+    "v3_motor_status_info": "马达状态信息",
+
+    # Teaching panel
+    "teaching_mode": "示教模式",
+    "teaching_controls": "控制",
+    "teaching_record": "录制",
+    "teaching_stop": "停止",
+    "teaching_play": "回放",
+    "teaching_save": "保存",
+    "teaching_load": "加载",
+    "teaching_save_title": "保存轨迹",
+    "teaching_load_title": "加载轨迹",
+    "teaching_record_freq": "录制频率:",
+    "teaching_playback_speed": "速度:",
+    "teaching_loop_count": "循环:",
+    "teaching_status": "状态",
+    "teaching_state_idle": "空闲",
+    "teaching_state_recording": "录制中...",
+    "teaching_state_playing": "回放中...",
+    "teaching_trajectory_info": "轨迹信息",
 }
 
 

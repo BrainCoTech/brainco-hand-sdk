@@ -15,7 +15,7 @@ from .styles import COLORS, CONNECTION_STATUS_STYLES
 
 # Add parent directory to path for SDK import
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from common_imports import sdk, get_protocol_display_name
+from common_imports import sdk, get_protocol_display_name, int_to_baudrate, modbus_open
 
 # Serial port listing
 try:
@@ -46,11 +46,12 @@ class AutoDetectWorker(QObject):
     error = Signal(str)
     progress = Signal(str)
 
-    def __init__(self, protocol=None, port=None, scan_all=False):
+    def __init__(self, protocol=None, port=None, scan_all=False, revo3_modbus=False):
         super().__init__()
         self.protocol = protocol
         self.port = port
         self.scan_all = scan_all
+        self.revo3_modbus = revo3_modbus
 
     def run(self):
         """Execute auto-detection"""
@@ -78,6 +79,9 @@ class AutoDetectWorker(QObject):
     async def _auto_detect(self):
         """Auto-detect device using unified API"""
         self.progress.emit("🔍 Scanning for devices...")
+
+        if self.revo3_modbus:
+            return await self._auto_detect_revo3_modbus()
 
         print(f"[DEBUG] Starting auto_detect: scan_all={self.scan_all}, port={self.port}, protocol={self.protocol}")
 
@@ -110,8 +114,8 @@ class AutoDetectWorker(QObject):
         # Build DeviceInfo from DetectedDevice (avoid re-querying get_device_info)
         # auto_detect already has correct hardware_type including TouchVendor resolution
         device_info = sdk.DeviceInfo(
-            sku_type=device.sku_type,
-            hardware_type=device.hardware_type,
+            sku_type=device.sku_type if device.sku_type is not None else sdk.SkuType.MediumRight,
+            hardware_type=device.hardware_type if device.hardware_type is not None else sdk.StarkHardwareType.Revo2Basic,
             serial_number=device.serial_number or "",
             firmware_version=device.firmware_version or ""
         )
@@ -120,6 +124,38 @@ class AutoDetectWorker(QObject):
         protocol_name = get_protocol_display_name(device.protocol_type)
 
         return ctx, slave_id, device_info, protocol_name
+
+    async def _auto_detect_revo3_modbus(self):
+        """Auto-detect Revo3 device via Modbus only (fast path)"""
+        self.progress.emit("🔍 Scanning Revo3 Modbus...")
+
+        try:
+            protocol_type, port_name, baudrate, slave_id = await sdk.auto_detect_modbus_revo3()
+            print(f"[Revo3 Modbus] Found: port={port_name}, baudrate={baudrate}, slave_id={slave_id}")
+        except Exception as e:
+            print(f"[Revo3 Modbus] auto_detect_modbus_revo3 failed: {e}")
+            raise
+
+        self.progress.emit(f"✅ Found Revo3 on {port_name}")
+
+        # Open Modbus connection
+        ctx = await modbus_open(port_name, baudrate)
+
+        # Set hw_type to Revo3Ultra
+        await ctx.set_hardware_type(slave_id, sdk.StarkHardwareType.Revo3Ultra)
+
+        # Try to get full device info, fallback to Revo3Ultra
+        try:
+            device_info = await ctx.get_device_info(slave_id)
+        except Exception:
+            device_info = sdk.DeviceInfo(
+                sku_type=sdk.SkuType.MediumRight,
+                hardware_type=sdk.StarkHardwareType.Revo3Ultra,
+                serial_number='',
+                firmware_version='',
+            )
+
+        return ctx, slave_id, device_info, "Modbus (RS485)"
 
 
 class ManualConnectWorker(QObject):
@@ -152,16 +188,21 @@ class ManualConnectWorker(QObject):
     async def _connect(self):
         """Connect to device"""
         if self.protocol == "Modbus/RS485":
-            baudrate_map = {
-                "115200": sdk.Baudrate.Baud115200,
-                "460800": sdk.Baudrate.Baud460800,
-                "921600": sdk.Baudrate.Baud1Mbps,  # Use 1Mbps as closest
-                "1000000": sdk.Baudrate.Baud1Mbps,
-            }
-            baudrate = baudrate_map.get(self.params['baudrate'], sdk.Baudrate.Baud1Mbps)
-            ctx = await sdk.modbus_open(self.params['port'], baudrate)
+            ctx = await modbus_open(self.params['port'], int(self.params['baudrate']))
             slave_id = self.params['slave_id']
-            device_info = await ctx.get_device_info(slave_id)
+            try:
+                device_info = await ctx.get_device_info(slave_id)
+            except Exception:
+                # Revo3 SN may not be available yet, force Revo3 hw_type at 5Mbps
+                if self.params['baudrate'] == "5000000":
+                    device_info = sdk.DeviceInfo(
+                        sku_type=sdk.SkuType.MediumRight,
+                        hardware_type=sdk.StarkHardwareType.Revo3Ultra,
+                        serial_number='',
+                        firmware_version='',
+                    )
+                else:
+                    raise
             return ctx, slave_id, device_info
 
         elif self.protocol == "Protobuf":
@@ -173,11 +214,12 @@ class ManualConnectWorker(QObject):
                 device_info = await ctx.get_device_info(slave_id)
             except Exception:
                 # Fallback to minimal info if get_device_info fails
-                device_info = type('DeviceInfo', (), {
-                    'hardware_type': sdk.StarkHardwareType.Revo1Protobuf,
-                    'serial_number': '',
-                    'firmware_version': ''
-                })()
+                device_info = sdk.DeviceInfo(
+                    sku_type=sdk.SkuType.MediumRight,
+                    hardware_type=sdk.StarkHardwareType.Revo1Protobuf,
+                    serial_number='',
+                    firmware_version='',
+                )
             return ctx, slave_id, device_info
 
         elif self.protocol == "CAN 2.0":
@@ -236,15 +278,17 @@ class ManualConnectWorker(QObject):
 class ConnectionPanel(QWidget):
     """Modern Connection Panel"""
     connected = Signal(object, int, object, str)
+    about_to_disconnect = Signal()  # Emitted before closing device, so DataCollector can stop first
     disconnected = Signal()
 
-    def __init__(self):
+    def __init__(self, revo3_modbus=False):
         super().__init__()
         self.ctx = None
         self.slave_id = None
         self.protocol = None
         self.worker = None
         self._thread: QThread | None = None
+        self.revo3_modbus = revo3_modbus
 
         self._setup_ui()
         self.update_texts()
@@ -265,7 +309,13 @@ class ConnectionPanel(QWidget):
         layout.addWidget(self.proto_label)
 
         self.protocol_combo = QComboBox()
-        self.protocol_combo.addItems(["Auto Detect", "Modbus/RS485", "Protobuf", "CAN 2.0", "CANFD", "EtherCAT"])
+        if self.revo3_modbus:
+            # Revo3 Modbus mode: hide protocol selector entirely
+            self.protocol_combo.addItems(["Auto Detect"])
+            self.proto_label.setVisible(False)
+            self.protocol_combo.setVisible(False)
+        else:
+            self.protocol_combo.addItems(["Auto Detect", "Modbus/RS485", "Protobuf", "CAN 2.0", "CANFD", "EtherCAT"])
         self.protocol_combo.setMinimumWidth(120)
         self.protocol_combo.currentTextChanged.connect(self._on_protocol_changed)
         layout.addWidget(self.protocol_combo)
@@ -293,7 +343,7 @@ class ConnectionPanel(QWidget):
         self.modbus_baud_label = QLabel(tr("baud") + ":")
         modbus_layout.addWidget(self.modbus_baud_label)
         self.baudrate_combo = QComboBox()
-        self.baudrate_combo.addItems(["115200", "460800", "921600", "1000000"])
+        self.baudrate_combo.addItems(["115200", "460800", "921600", "1000000", "5000000"])
         self.baudrate_combo.setCurrentText("1000000")
         modbus_layout.addWidget(self.baudrate_combo)
 
@@ -568,7 +618,7 @@ class ConnectionPanel(QWidget):
         self.status_label.setText("🔍 Scanning for devices...")
 
         self._thread = QThread()
-        self.worker = AutoDetectWorker()
+        self.worker = AutoDetectWorker(revo3_modbus=self.revo3_modbus)
         self.worker.moveToThread(self._thread)
 
         self._thread.started.connect(self.worker.run)
@@ -696,6 +746,10 @@ class ConnectionPanel(QWidget):
     def _on_disconnect(self):
         """Disconnect"""
         if self.ctx:
+            # Signal MainWindow to stop DataCollector BEFORE closing serial port
+            # (DataCollector holds Arc ref to ctx and actively reads from serial port)
+            self.about_to_disconnect.emit()
+
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)

@@ -718,4 +718,4 @@ For technical support:
 
 ---
 
-**Version:** Compatible with Stark SDK v1.1.9
+**Version:** Compatible with Stark SDK v1.4.0

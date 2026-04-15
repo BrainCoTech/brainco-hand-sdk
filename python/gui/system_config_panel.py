@@ -15,7 +15,7 @@ from PySide6.QtCore import Signal
 
 # Add parent directory to path for SDK import
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from common_imports import sdk
+from common_imports import sdk, int_to_baudrate
 
 if TYPE_CHECKING:
     from .shared_data import SharedDataManager
@@ -83,6 +83,12 @@ class SystemConfigPanel(QWidget):
         if self.device_info:
             return self.device_info.uses_revo2_motor_api()
         return False
+
+    def _uses_revo3_motor_api(self):
+        """Check if device uses Revo3 Motor API via SDK."""
+        if self.device_info:
+            return self.device_info.uses_revo3_motor_api()
+        return False
     
     def _supports_finger_settings(self):
         """Check if device supports finger settings API (requires Modbus or CANFD)"""
@@ -104,6 +110,10 @@ class SystemConfigPanel(QWidget):
         
         # Tab widget
         self.tabs = QTabWidget()
+        self.tabs.setUsesScrollButtons(True)
+        from PySide6.QtCore import Qt
+        self.tabs.setElideMode(Qt.ElideNone)
+        
         layout.addWidget(self.tabs)
         
         # Tab 1: Device Info & Basic Settings
@@ -208,7 +218,7 @@ class SystemConfigPanel(QWidget):
         layout.setSpacing(12)
         
         # Turbo Mode (all devices)
-        self.turbo_group = QGroupBox("Turbo Mode")
+        self.turbo_group = QGroupBox(tr("turbo_mode"))
         turbo_layout = QVBoxLayout()
         
         turbo_row1 = QHBoxLayout()
@@ -239,18 +249,18 @@ class SystemConfigPanel(QWidget):
         layout.addWidget(self.turbo_group)
         
         # Calibration (all devices)
-        self.calib_group = QGroupBox("Position Calibration")
+        self.calib_group = QGroupBox(tr("position_calibration"))
         calib_layout = QVBoxLayout()
         
         calib_row1 = QHBoxLayout()
-        self.auto_calib_check = QCheckBox("Auto Calibration on Power-up")
+        self.auto_calib_check = QCheckBox(tr("auto_calibration"))
         self.auto_calib_check.stateChanged.connect(self._on_auto_calib_changed)
         calib_row1.addWidget(self.auto_calib_check)
         calib_row1.addStretch()
         calib_layout.addLayout(calib_row1)
         
         calib_row2 = QHBoxLayout()
-        self.manual_calib_btn = QPushButton("🔧 Manual Calibration")
+        self.manual_calib_btn = QPushButton(tr("manual_calibration"))
         self.manual_calib_btn.clicked.connect(self._manual_calibrate)
         calib_row2.addWidget(self.manual_calib_btn)
         calib_row2.addStretch()
@@ -284,19 +294,19 @@ class SystemConfigPanel(QWidget):
         layout.addWidget(self.unit_mode_group)
         
         # Peripheral Settings
-        self.peripheral_group = QGroupBox("Peripheral Settings")
+        self.peripheral_group = QGroupBox(tr("peripheral_settings"))
         periph_layout = QVBoxLayout()
         
         periph_row = QHBoxLayout()
-        self.led_check = QCheckBox("LED")
+        self.led_check = QCheckBox(tr("led"))
         self.led_check.stateChanged.connect(self._on_led_changed)
         periph_row.addWidget(self.led_check)
         
-        self.buzzer_check = QCheckBox("Buzzer")
+        self.buzzer_check = QCheckBox(tr("buzzer"))
         self.buzzer_check.stateChanged.connect(self._on_buzzer_changed)
         periph_row.addWidget(self.buzzer_check)
         
-        self.vibration_check = QCheckBox("Vibration")
+        self.vibration_check = QCheckBox(tr("vibration"))
         self.vibration_check.stateChanged.connect(self._on_vibration_changed)
         periph_row.addWidget(self.vibration_check)
         
@@ -304,10 +314,13 @@ class SystemConfigPanel(QWidget):
         periph_layout.addLayout(periph_row)
         self.peripheral_group.setLayout(periph_layout)
         layout.addWidget(self.peripheral_group)
+
+        # LED visibility will be updated in _update_device_specific_ui
+        # (Revo3 uses touch screen instead of LED)
         
         # Refresh button
         refresh_layout = QHBoxLayout()
-        self.refresh_motor_btn = QPushButton("🔄 Refresh Settings")
+        self.refresh_motor_btn = QPushButton("🔄 " + tr("refresh_settings"))
         self.refresh_motor_btn.clicked.connect(self._load_motor_settings)
         refresh_layout.addWidget(self.refresh_motor_btn)
         refresh_layout.addStretch()
@@ -315,7 +328,7 @@ class SystemConfigPanel(QWidget):
         
         layout.addStretch()
         scroll.setWidget(widget)
-        self.tabs.addTab(scroll, "⚙️ Motor")
+        self.tabs.addTab(scroll, "⚙ Motor")
     
     def _setup_comm_tab(self):
         """Setup communication settings tab"""
@@ -503,7 +516,7 @@ class SystemConfigPanel(QWidget):
         scroll.setWidget(widget)
         
         # Store tab index for later show/hide
-        self.finger_settings_tab_index = self.tabs.addTab(scroll, "🖐️ Revo2 Finger")
+        self.finger_settings_tab_index = self.tabs.addTab(scroll, "🖐 Revo2 Finger")
     
     def update_texts(self):
         """Update texts for i18n"""
@@ -521,6 +534,24 @@ class SystemConfigPanel(QWidget):
         self.factory_reset_btn.setText(tr("btn_factory_reset"))
         
         self.log_group.setTitle(tr("operation_log"))
+
+        # Motor tab
+        self.turbo_group.setTitle(tr("turbo_mode"))
+        self.calib_group.setTitle(tr("position_calibration"))
+        self.auto_calib_check.setText(tr("auto_calibration"))
+        self.manual_calib_btn.setText(tr("manual_calibration"))
+        self.peripheral_group.setTitle(tr("peripheral_settings"))
+        self.led_check.setText(tr("led"))
+        self.buzzer_check.setText(tr("buzzer"))
+        self.vibration_check.setText(tr("vibration"))
+        self.refresh_motor_btn.setText("🔄 " + tr("refresh_settings"))
+
+        # Sub-tab names
+        self.tabs.setTabText(0, "📋 " + tr("device_info"))
+        self.tabs.setTabText(1, "⚙ " + tr("motor_control"))
+        self.tabs.setTabText(2, "📡 " + tr("modbus_baudrate").split("/")[0])
+        if hasattr(self, 'finger_settings_tab_index'):
+            self.tabs.setTabText(self.finger_settings_tab_index, "🖐 " + tr("finger_settings"))
 
     def set_device(self, device, slave_id, device_info, protocol=None, shared_data=None):
         """Set device"""
@@ -568,6 +599,9 @@ class SystemConfigPanel(QWidget):
         
         # Unit mode only for Revo2
         self.unit_mode_group.setVisible(uses_revo2_api)
+
+        # LED not available on Revo3 (uses touch screen)
+        self.led_check.setVisible(not self._uses_revo3_motor_api())
         
         # Finger settings tab only for Revo2
         if hasattr(self, 'finger_settings_tab_index'):
@@ -615,8 +649,13 @@ class SystemConfigPanel(QWidget):
             self.auto_calib_check.setChecked(auto_calib)
             
             # Peripheral settings
-            led_enabled = await self.device.get_led_enabled(self.slave_id)
-            self.led_check.setChecked(led_enabled)
+            # Peripheral settings — LED not available on Revo3
+            if not self._uses_revo3_motor_api():
+                try:
+                    led_enabled = await self.device.get_led_enabled(self.slave_id)
+                    self.led_check.setChecked(led_enabled)
+                except Exception:
+                    pass
             
             buzzer_enabled = await self.device.get_buzzer_enabled(self.slave_id)
             self.buzzer_check.setChecked(buzzer_enabled)
@@ -908,14 +947,7 @@ class SystemConfigPanel(QWidget):
             return
         try:
             self._log(f"Setting Modbus baudrate: {baud_text}...")
-            baud_map = {
-                "115200": sdk.Baudrate.Baud115200,
-                "460800": sdk.Baudrate.Baud460800,
-                "1000000": sdk.Baudrate.Baud1Mbps,
-                "2000000": sdk.Baudrate.Baud2Mbps,
-                "5000000": sdk.Baudrate.Baud5Mbps,
-            }
-            baudrate = baud_map.get(baud_text)
+            baudrate = int_to_baudrate(int(baud_text))
             if baudrate:
                 await self.device.set_serialport_baudrate(self.slave_id, baudrate)
                 self._log(f"Modbus baudrate set to {baud_text} ✓")

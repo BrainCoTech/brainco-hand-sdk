@@ -355,7 +355,7 @@ static int socketcan_recv_can(uint32_t expected_can_id, uint8_t expected_frames,
     if (nbytes != static_cast<int>(sizeof(frame))) {
       continue;
     }
-    if (frame.can_id & CAN_RTR_FLAG) {
+    if (frame.can_id & (CAN_ERR_FLAG | CAN_RTR_FLAG)) {
       continue;
     }
 
@@ -498,6 +498,10 @@ static int socketcan_recv_canfd(uint32_t expected_can_id, uint8_t expected_frame
     // Accept both CAN frames (16 bytes) and CANFD frames (72 bytes)
     if (nbytes != static_cast<int>(sizeof(struct can_frame)) && 
         nbytes != static_cast<int>(sizeof(struct canfd_frame))) {
+      continue;
+    }
+    // Skip error frames and remote frames
+    if (frame.can_id & (CAN_ERR_FLAG | CAN_RTR_FLAG)) {
       continue;
     }
 

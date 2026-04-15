@@ -57,6 +57,8 @@ FIRMWARE_TYPES = {
     "Revo2Basic": {"name": "Revo2 Basic", "default_path": DEFAULT_FIRMWARE_PATHS.get("revo2_485_canfd")},
     "Revo2Touch": {"name": "Revo2 Touch", "default_path": DEFAULT_FIRMWARE_PATHS.get("revo2_485_canfd")},
     "Revo2TouchPressure": {"name": "Revo2 Touch Pressure", "default_path": DEFAULT_FIRMWARE_PATHS.get("revo2_485_canfd")},
+    "Revo2TouchForce3D": {"name": "Revo2 Touch Force3D", "default_path": DEFAULT_FIRMWARE_PATHS.get("revo2_485_canfd")},
+    "Revo2TouchArrayPressure": {"name": "Revo2 Touch ArrayPressure", "default_path": DEFAULT_FIRMWARE_PATHS.get("revo2_485_canfd")},
 }
 
 

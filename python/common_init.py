@@ -324,7 +324,7 @@ async def init_socketcan_external(iface: str, slave_id: int, is_canfd: bool = Fa
         return None
 
 
-async def auto_detect_and_init(select_device: bool = True) -> Optional[DeviceContext]:
+async def auto_detect_and_init(select_device: bool = True, scan_all: bool = False) -> Optional[DeviceContext]:
     """Auto-detect device and initialize
     
     Args:
@@ -332,7 +332,7 @@ async def auto_detect_and_init(select_device: bool = True) -> Optional[DeviceCon
     """
     check_sdk()
     try:
-        devices = await sdk.auto_detect(scan_all=True)
+        devices = await sdk.auto_detect(scan_all)
         
         if not devices:
             logger.error("No devices found")

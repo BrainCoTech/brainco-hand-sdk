@@ -183,7 +183,7 @@ async def main():
         logger.info(f"Detected: protocol={protocol}, port={detected_port_name}, baudrate={baudrate}, slave_id=0x{detected_slave_id:X}")
 
         # Open connection
-        client = await libstark.modbus_open(detected_port_name, baudrate)
+        client = await modbus_open(detected_port_name, baudrate)
         slave_id = detected_slave_id
 
         device_info = await client.get_device_info(slave_id)

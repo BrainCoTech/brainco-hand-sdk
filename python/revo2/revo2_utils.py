@@ -17,13 +17,13 @@ import asyncio
 
 # Import from common_imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from common_imports import logger, libstark
+from common_imports import logger, libstark, int_to_baudrate, modbus_open
 
 libstark.init_logging()
 
 # Export for `from revo2_utils import *`
 __all__ = [
-    'logger', 'libstark',
+    'logger', 'libstark', 'int_to_baudrate', 'modbus_open',
     'open_modbus_revo2', 'get_stark_port_name',
     'is_positions_open', 'is_positions_closed',
     'init_cosine_trajectory', 'trajectory_control_task',
@@ -70,7 +70,7 @@ async def open_modbus_revo2(port_name=None, quick=True):
 
     # set_latency_by_com_or_serial(detected_port_name)
     # Establish Modbus connection
-    client: libstark.DeviceContext = await libstark.modbus_open(detected_port_name, baudrate)
+    client: libstark.DeviceContext = await modbus_open(detected_port_name, baudrate)
 
     # Get device information
     device_info: libstark.DeviceInfo = await client.get_device_info(slave_id)

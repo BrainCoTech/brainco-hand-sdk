@@ -50,6 +50,12 @@ Switch language via: Menu → Language → Select language
   - Sensor status
 - Charts with 5-finger curves
 
+##### 🔎 3D Force & Torque Visualization Guide (Revo2 Force Sensors)
+For advanced sensors providing 3D Force and Torque (e.g., ArrayPressure), the GUI uses a **2D Vector Compass** instead of standard line charts to intuitively map multidimensional forces to physical actions:
+1. **Normal Force (`Fz`)**: Visualized by the **size of the central colored bubble**. The harder the object is pressed against the fingerpad, the larger the bubble inflates.
+2. **Shear Force (`Fx`, `Fy`)**: Visualized by the **dynamic white arrow**. It points precisely in the direction of the surface friction/slide, and its length reflects the total shear magnitude ($\sqrt{Fx^2 + Fy^2}$).
+3. **Torque Twist (`Mx`, `My`)**: Visualized by the **orange dot in the smaller lower radar**. It acts as a Center of Pressure (CoP) offset gauge. If the object being grasped presses unevenly on the edges of the finger (creating a prying torque), the orange dot will instantly shift off the crosshair center towards that edge. This is crucial for detecting unstable grasps.
+
 #### 4. Data Collection
 - Configurable frequency (1-1000 Hz)
 - Configurable duration
@@ -195,6 +201,7 @@ gui/
 ├── hand_visualization.py       # Hand visualization widget
 ├── dfu_panel.py                # DFU firmware upgrade panel (NEW)
 ├── system_config_panel.py      # System config panel
+├── mock_touch_gui.py           # Standalone offline mock data UI tester
 ├── README.md                   # This file
 └── requirements.txt            # Dependencies
 ```
@@ -233,9 +240,29 @@ To add a new panel:
 
 ### Cannot Connect Device
 
-1. Check serial port permissions:
+1. Check serial port permissions (Linux):
    ```bash
+   # Check current permissions and group
+   ls -l /dev/ttyUSB0
+   # Output: crw-rw---- 1 root dialout ...
+
+   # Method 1 (Recommended): Add user to dialout group (permanent, requires re-login)
+   sudo usermod -aG dialout $USER
+   # Then log out and log back in. Verify with:
+   groups  # Should include 'dialout'
+
+   # Method 2: Temporary permission change (resets after reboot or re-plug)
    sudo chmod 666 /dev/ttyUSB0
+
+   # Method 3: Run with sudo
+   sudo python3 main.py
+   ```
+
+   For macOS:
+   ```bash
+   # macOS serial ports are typically /dev/cu.usbserial-* or /dev/tty.usbserial-*
+   # Usually no extra permissions needed. If permission denied:
+   sudo chmod 666 /dev/cu.usbserial-*
    ```
 
 2. Check if port is in use:

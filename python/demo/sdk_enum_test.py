@@ -35,15 +35,14 @@ def test_hardware_type_enum():
     print(f"1. str(hw):        '{str(hw)}'")
     print(f"2. repr(hw):       '{repr(hw)}'")
     print(f"3. int(hw):        {int(hw)}")
-    print(f"4. hw.value:       {hw.value}")
-    print(f"5. hw.int_value:   {hw.int_value}")
-    print(f"6. hw == 3:        {hw == 3}")
+    print(f"4. hw.name:        {hw.name if hasattr(hw, 'name') else str(hw).split('.')[-1]}")
+    print(f"5. hw == 3:        {hw == 3}")
     print(f"   hw == 1:        {hw == 1}")
-    print(f"7. hw == Revo1Advanced: {hw == sdk.StarkHardwareType.Revo1Advanced}")
+    print(f"6. hw == Revo1Advanced: {hw == sdk.StarkHardwareType.Revo1Advanced}")
     
     # Create from integer
     hw2 = sdk.StarkHardwareType(3)
-    print(f"8. StarkHardwareType(3): {hw2} (value={hw2.value})")
+    print(f"7. StarkHardwareType(3): {hw2}")
     
     # All values
     print("\n   All StarkHardwareType values:")
@@ -56,9 +55,18 @@ def test_hardware_type_enum():
         ("Revo2Basic", sdk.StarkHardwareType.Revo2Basic),
         ("Revo2Touch", sdk.StarkHardwareType.Revo2Touch),
         ("Revo2TouchPressure", sdk.StarkHardwareType.Revo2TouchPressure),
+        ("Revo2TouchForce3D", sdk.StarkHardwareType.Revo2TouchForce3D),
+        ("Revo2TouchArrayPressure", sdk.StarkHardwareType.Revo2TouchArrayPressure),
+        ("Revo3Ultra", sdk.StarkHardwareType.Revo3Ultra),
+        ("Revo3UltraTouch", sdk.StarkHardwareType.Revo3UltraTouch),
+        ("Revo3UltraVisionTouch", sdk.StarkHardwareType.Revo3UltraVisionTouch),
+        ("Revo3Pro", sdk.StarkHardwareType.Revo3Pro),
+        ("Revo3ProTouch", sdk.StarkHardwareType.Revo3ProTouch),
+        ("Revo3Basic", sdk.StarkHardwareType.Revo3Basic),
+        ("Revo3BasicTouch", sdk.StarkHardwareType.Revo3BasicTouch),
     ]
     for name, val in all_types:
-        print(f"   {name:20} = {val.value}")
+        print(f"   {name:20} = {int(val)}")
 
 
 def test_protocol_type_enum():
@@ -69,7 +77,6 @@ def test_protocol_type_enum():
     
     print(f"str(proto):      '{str(proto)}'")
     print(f"int(proto):      {int(proto)}")
-    print(f"proto.value:     {proto.value}")
     print(f"proto == 3:      {proto == 3}")
     
     print("\n   All StarkProtocolType values:")
@@ -79,7 +86,7 @@ def test_protocol_type_enum():
         ("CanFd", sdk.StarkProtocolType.CanFd),
     ]
     for name, val in all_protos:
-        print(f"   {name:10} = {val.value}")
+        print(f"   {name:10} = {int(val)}")
 
 
 def test_finger_id_enum():
@@ -90,7 +97,6 @@ def test_finger_id_enum():
     
     print(f"str(finger):     '{str(finger)}'")
     print(f"int(finger):     {int(finger)}")
-    print(f"finger.value:    {finger.value}")
     
     print("\n   All FingerId values:")
     all_fingers = [
@@ -102,7 +108,7 @@ def test_finger_id_enum():
         ("Pinky", sdk.FingerId.Pinky),
     ]
     for name, val in all_fingers:
-        print(f"   {name:10} = {val.value}")
+        print(f"   {name:10} = {int(val)}")
 
 
 def test_enum_in_dict():
@@ -112,14 +118,14 @@ def test_enum_in_dict():
     hw = sdk.StarkHardwareType.Revo1Basic
     
     # PyO3 enums are not hashable, use int value as key
-    d = {hw.value: "Revo1 Basic"}
+    d = {int(hw): "Revo1 Basic"}
     print(f"Dict with int key: {d}")
     print(f"d[1] = '{d[1]}'")
     
     # Enum as value works fine
     d2 = {"type": hw}
     print(f"Dict with enum value: {d2}")
-    print(f"d2['type'].value = {d2['type'].value}")
+    print(f"int(d2['type']) = {int(d2['type'])}")
 
 
 def main():

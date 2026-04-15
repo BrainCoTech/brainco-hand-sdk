@@ -7,7 +7,7 @@ import asyncio
 
 # Import from common_imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from common_imports import logger, libstark
+from common_imports import logger, libstark, int_to_baudrate, modbus_open
 
 async def open_modbus_revo1(port_name = None, quick = True):
     """
@@ -45,7 +45,7 @@ async def open_modbus_revo1(port_name = None, quick = True):
     ), "Only Modbus protocol is supported for Revo1"
 
     # Establish Modbus connection
-    client: libstark.DeviceContext = await libstark.modbus_open(detected_port_name, baudrate)
+    client: libstark.DeviceContext = await modbus_open(detected_port_name, baudrate)
 
     # Get device information
     device_info: libstark.DeviceInfo = await client.get_device_info(slave_id)

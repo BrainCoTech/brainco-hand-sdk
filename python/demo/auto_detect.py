@@ -11,6 +11,7 @@ Run:
 import asyncio
 import sys
 import os
+import argparse
 
 # Setup path and imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,7 +25,7 @@ async def main():
     logger.info("Scanning for devices...")
     
     # Scan all protocols
-    devices = await sdk.auto_detect(scan_all=True)
+    devices = await sdk.auto_detect(scan_all=False)
     
     if not devices:
         logger.info("No devices found")
@@ -67,6 +68,9 @@ async def main():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Stark Auto-Detect")
+    args = parser.parse_args()
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

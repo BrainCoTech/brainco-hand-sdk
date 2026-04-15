@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common_imports import (
     sdk, check_sdk, get_hw_type_name, logger,
     uses_revo1_motor_api, uses_revo2_motor_api, has_touch, 
-    uses_revo1_touch_api, uses_revo2_touch_api
+    uses_revo1_touch_api, uses_revo2_touch_api, is_array_pressure_touch
 )
 from common_init import (
     DeviceContext, parse_args_and_init, cleanup_context, 
@@ -193,26 +193,64 @@ class HandDemo:
             print("[SKIP] This device does not have touch sensor")
             return
         
-        if uses_revo1_touch_api(self.hw_type):
-            print("Enabling touch sensors...")
-            await self.ctx.touch_sensor_setup(self.slave_id, 0xFF)
+        if is_array_pressure_touch(self.hw_type):
+            print("Reading ArrayPressure sensor data (5 samples)...")
+            finger_names = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
+            
+            print("Enabling ArrayPressure touch sensors...")
+            await self.ctx.touch_sensor_setup(self.slave_id, 0x1F)
             await asyncio.sleep(0.5)
-        
-        print("Reading touch sensor data (5 samples)...")
-        finger_names = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
-        
-        for i in range(5):
-            try:
-                touch_data = await self.ctx.get_touch_sensor_status(self.slave_id)
-                print(f"\n[{i+1}] Touch Data:")
-                for idx, finger in enumerate(touch_data):
-                    if idx < len(finger_names):
-                        print(f"  {finger_names[idx]}: Normal={finger.normal_force1:4d}, "
-                              f"Tangential={finger.tangential_force1:4d}, "
-                              f"Status={finger.status}")
-            except Exception as e:
-                print(f"[{i+1}] Touch read error: {e}")
-            await asyncio.sleep(0.2)
+
+            for i in range(5):
+                try:
+                    ap_data = await self.ctx.get_array_pressure_touch_data(self.slave_id)
+                    sensor_bits = ap_data["status"]["sensor_status"]
+                    warmup = ap_data["status"]["warmup_complete"]
+                    status_str = " | ".join(f"{finger_names[j]}:{'OK' if not ((sensor_bits >> j) & 1) else 'ERR'}" for j in range(5))
+                    ready_str = "Ready" if warmup else "Warming up..."
+                    
+                    print(f"\n[{i+1}] ArrayPressure Data: Status={status_str} | {ready_str}")
+                    for finger in range(5):
+                        base = finger * 5
+                        fx = ap_data["data"][base + 0]
+                        fy = ap_data["data"][base + 1]
+                        fz = ap_data["data"][base + 2]
+                        mx = ap_data["data"][base + 3]
+                        my = ap_data["data"][base + 4]
+                        
+                        # Apply naive conversion from int16 matching C demo scaling (/100)
+                        def to_signed(val):
+                            return val if val < 32768 else val - 65536
+                            
+                        # Python values are returned as uint16 from struct parsing, so convert to signed
+                        s_fx, s_fy, s_fz, s_mx, s_my = map(to_signed, (fx, fy, fz, mx, my))
+                        
+                        print(f"  {finger_names[finger]:6}: Fx={s_fx/100.0:+7.2f}N  Fy={s_fy/100.0:+7.2f}N  Fz={s_fz/100.0:+7.2f}N  "
+                              f"Mx={s_mx/100.0:+6.3f}N.m  My={s_my/100.0:+6.3f}N.m")
+                except Exception as e:
+                    print(f"[{i+1}] ArrayPressure read error: {e}")
+                await asyncio.sleep(0.5)
+        else:
+            if uses_revo1_touch_api(self.hw_type):
+                print("Enabling touch sensors...")
+                await self.ctx.touch_sensor_setup(self.slave_id, 0xFF)
+                await asyncio.sleep(0.5)
+            
+            print("Reading touch sensor data (5 samples)...")
+            finger_names = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
+            
+            for i in range(5):
+                try:
+                    touch_data = await self.ctx.get_touch_sensor_status(self.slave_id)
+                    print(f"\n[{i+1}] Touch Data:")
+                    for idx, finger in enumerate(touch_data):
+                        if idx < len(finger_names):
+                            print(f"  {finger_names[idx]}: Normal={finger.normal_force1:4d}, "
+                                  f"Tangential={finger.tangential_force1:4d}, "
+                                  f"Status={finger.status}")
+                except Exception as e:
+                    print(f"[{i+1}] Touch read error: {e}")
+                await asyncio.sleep(0.2)
     
     async def demo_interactive_loop(self):
         """Demo 7: Interactive loop"""
@@ -256,7 +294,7 @@ class HandDemo:
         print("\n=== Demo 8: Multi-Device Control ===")
         
         print("Scanning for all devices...")
-        devices = await sdk.auto_detect(scan_all=True)
+        devices = await sdk.auto_detect(scan_all=False)
         
         if not devices:
             print("[WARN] No devices found via auto-detect")

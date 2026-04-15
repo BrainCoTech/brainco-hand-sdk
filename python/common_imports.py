@@ -83,6 +83,25 @@ def baudrate_to_int(baudrate) -> int:
     return _baudrate_bps_map.get(baudrate, 0)
 
 
+async def modbus_open(port_name: str, baudrate):
+    """Open Modbus connection with automatic baudrate conversion.
+
+    Accepts either an int (e.g. 5000000) or a Baudrate enum.
+    Converts int to Baudrate enum automatically.
+
+    Args:
+        port_name: Serial port name (e.g. "/dev/ttyUSB0")
+        baudrate: Baud rate as int or Baudrate enum
+
+    Returns:
+        DeviceContext instance
+    """
+    if sdk is None:
+        raise RuntimeError("SDK not available")
+    baudrate_enum = int_to_baudrate(baudrate) if isinstance(baudrate, int) else baudrate
+    return await sdk.modbus_open(port_name, baudrate_enum)
+
+
 def str_to_protocol_type(protocol_str: str):
     """Convert protocol string to StarkProtocolType enum (deprecated)
 
@@ -150,6 +169,15 @@ def get_hw_type_name(hw_type) -> str:
             "Revo2Basic": "Revo2 Basic",
             "Revo2Touch": "Revo2 Touch (Capacitive)",
             "Revo2TouchPressure": "Revo2 Touch (Pressure)",
+            "Revo2TouchForce3D": "Revo2 Touch (Force3D)",
+            "Revo2TouchArrayPressure": "Revo2 Touch (ArrayPressure)",
+            "Revo3Ultra": "Revo3 Ultra (21 DoF)",
+            "Revo3UltraTouch": "Revo3 Ultra Touch (21 DoF)",
+            "Revo3UltraVisionTouch": "Revo3 Ultra Vision Touch (21 DoF)",
+            "Revo3Pro": "Revo3 Pro (16 DoF)",
+            "Revo3ProTouch": "Revo3 Pro Touch (16 DoF)",
+            "Revo3Basic": "Revo3 Basic (13 DoF)",
+            "Revo3BasicTouch": "Revo3 Basic Touch (13 DoF)",
         }
         return descriptions.get(name, name)
 
@@ -160,9 +188,19 @@ def get_hw_type_name(hw_type) -> str:
         2: "Revo1 Touch",
         3: "Revo1 Advanced",
         4: "Revo1 Advanced Touch",
-        5: "Revo2 Basic",
-        6: "Revo2 Touch (Capacitive)",
-        7: "Revo2 Touch (Pressure)",
+        10: "Revo2 Basic",
+        11: "Revo2 Touch (Capacitive)",
+        12: "Revo2 Touch (Pressure)",
+        13: "Revo2 Touch (Force3D)",
+        14: "Revo2 Touch (ArrayPressure)",
+        20: "Revo3 Ultra (21 DoF)",
+        21: "Revo3 Ultra Touch (21 DoF)",
+        22: "Revo3 Ultra Vision Touch (21 DoF)",
+        23: "Revo3 Pro (16 DoF)",
+        24: "Revo3 Pro Touch (16 DoF)",
+        # 25 reserved for Revo3 Pro Vision Touch
+        26: "Revo3 Basic (13 DoF)",
+        27: "Revo3 Basic Touch (13 DoF)",
     }
     value = hw_type if isinstance(hw_type, int) else -1
     return names.get(value, f"Unknown ({value})")
@@ -193,7 +231,26 @@ def uses_revo2_motor_api(hw_type) -> bool:
 
     Revo1 Advanced/AdvancedTouch and all Revo2 use Revo2 Motor API.
     """
-    return not uses_revo1_motor_api(hw_type)
+    return not uses_revo1_motor_api(hw_type) and not uses_revo3_motor_api(hw_type)
+
+
+def uses_revo3_motor_api(hw_type) -> bool:
+    """Check if device uses Revo3 Motor API (23 motors, float values)"""
+    if hasattr(hw_type, 'uses_revo3_motor_api'):
+        return hw_type.uses_revo3_motor_api()
+
+    # Fallback using enum comparison
+    if sdk is None:
+        return False
+    return hw_type in (
+        sdk.StarkHardwareType.Revo3Ultra,
+        sdk.StarkHardwareType.Revo3UltraTouch,
+        sdk.StarkHardwareType.Revo3UltraVisionTouch,
+        sdk.StarkHardwareType.Revo3Pro,
+        sdk.StarkHardwareType.Revo3ProTouch,
+        sdk.StarkHardwareType.Revo3Basic,
+        sdk.StarkHardwareType.Revo3BasicTouch,
+    )
 
 
 # Legacy aliases for backward compatibility
@@ -214,6 +271,12 @@ def has_touch(hw_type) -> bool:
         sdk.StarkHardwareType.Revo1AdvancedTouch,
         sdk.StarkHardwareType.Revo2Touch,
         sdk.StarkHardwareType.Revo2TouchPressure,
+        sdk.StarkHardwareType.Revo2TouchForce3D,
+        sdk.StarkHardwareType.Revo2TouchArrayPressure,
+        sdk.StarkHardwareType.Revo3UltraTouch,
+        sdk.StarkHardwareType.Revo3UltraVisionTouch,
+        sdk.StarkHardwareType.Revo3ProTouch,
+        sdk.StarkHardwareType.Revo3BasicTouch,
     ]
 
 
@@ -237,36 +300,50 @@ def uses_revo1_touch_api(hw_type) -> bool:
 def uses_revo2_touch_api(hw_type) -> bool:
     """Check if device uses Revo2 Touch API (capacitive, uniform sensor counts per finger)
 
-    Only Revo2Touch uses Revo2 Touch API.
-    Revo2TouchPressure uses Pressure Touch API instead.
+    Only Revo2Touch uses the capacitive Revo2 Touch API.
+    Pressure, Force3D, and ArrayPressure have their own specialized APIs.
     """
-    if hasattr(hw_type, 'uses_revo2_touch_api'):
-        return hw_type.uses_revo2_touch_api()
-
-    # Fallback using enum comparison
     if sdk is None:
         return False
     return hw_type == sdk.StarkHardwareType.Revo2Touch
 
 
+def is_array_pressure_touch(hw_type) -> bool:
+    """Check if device uses ArrayPressure Touch API"""
+    if hasattr(hw_type, 'is_array_pressure_touch'):
+        return hw_type.is_array_pressure_touch()
+    if sdk is None:
+        return False
+    return hw_type == sdk.StarkHardwareType.Revo2TouchArrayPressure
+
+
 def uses_pressure_touch_api(hw_type) -> bool:
+    """Alias for is_pressure_touch"""
+    return is_pressure_touch(hw_type)
+
+
+def is_pressure_touch(hw_type) -> bool:
     """Check if device uses Pressure/Modulus Touch API
 
     Only Revo2TouchPressure uses Pressure Touch API.
     """
-    if hasattr(hw_type, 'uses_pressure_touch_api'):
-        return hw_type.uses_pressure_touch_api()
-
-    # Fallback using enum comparison
     if sdk is None:
         return False
     return hw_type == sdk.StarkHardwareType.Revo2TouchPressure
 
 
-# Legacy alias
-def has_pressure_touch(hw_type) -> bool:
-    """Check if device has pressure touch sensor (alias for uses_pressure_touch_api)"""
-    return uses_pressure_touch_api(hw_type)
+def is_force3d_touch(hw_type) -> bool:
+    """Check if device uses Force3D Touch API"""
+    if hasattr(hw_type, 'is_force3d_touch'):
+        return hw_type.is_force3d_touch()
+    if sdk is None:
+        return False
+    return hw_type == sdk.StarkHardwareType.Revo2TouchForce3D
+
+
+def is_capacitive_touch(hw_type) -> bool:
+    """Check if device uses Capacitive Touch API (Revo1/Revo2 Touch)"""
+    return uses_revo1_touch_api(hw_type) or uses_revo2_touch_api(hw_type)
 
 
 def is_protobuf_device(hw_type) -> bool:

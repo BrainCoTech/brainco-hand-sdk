@@ -110,6 +110,8 @@ QGroupBox::title {{
     padding: 0 8px;
     color: {COLORS['text_primary']};
     background-color: {COLORS['bg_card']};
+    font-size: 13px;
+    font-weight: 600;
 }}
 
 QGroupBox QLabel {{

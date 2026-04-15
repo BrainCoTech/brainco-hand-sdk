@@ -41,6 +41,7 @@ class SharedDataManager(QObject):
     
     # Signals for data updates (panels can connect to these)
     motor_updated = Signal(object)  # MotorStatusData
+    v3_motor_updated = Signal(object)  # V3MotorStatusData
     touch_updated = Signal(list)    # List of TouchFingerItem (capacitive)
     pressure_touch_updated = Signal(list, list)  # (summary_data, detailed_data) for pressure touch
     connection_lost = Signal()      # Emitted when device connection is lost
@@ -56,13 +57,17 @@ class SharedDataManager(QObject):
         
         # SDK components
         self.motor_buffer = None
+        self.v3_motor_buffer = None  # V3 motor status buffer (Revo3)
         self.touch_buffer = None  # Capacitive touch
         self.pressure_summary_buffer = None  # Pressure touch summary
         self.pressure_detailed_buffer = None  # Pressure touch detailed
         self.data_collector = None
         
-        # Touch type flags
+        # Device type flags
         self._is_pressure_touch = False
+        self._is_revo3 = False
+        self._is_force3d = False
+        self._is_array_pressure = False
         
         # State
         self.is_running = False
@@ -106,32 +111,75 @@ class SharedDataManager(QObject):
         self._slave_id = slave_id
         self._device_info = device_info
         
-        # Determine touch type using ctx.uses_pressure_touch_api (reads from saved hw_type)
+        # Determine device type
         self._is_pressure_touch = False
-        if device and device_info and device_info.is_touch():
-            # Use ctx method which checks hw_type == Revo2TouchPressure
-            self._is_pressure_touch = device.uses_pressure_touch_api(slave_id)
+        self._is_revo3 = False
+        self._is_force3d = False
+        self._is_array_pressure = False
+        
+        if device and device_info:
+            from common_imports import uses_revo3_motor_api
+            hw_type = getattr(device_info, 'hardware_type', None)
+            if hw_type and uses_revo3_motor_api(hw_type):
+                self._is_revo3 = True
+            elif hw_type == sdk.StarkHardwareType.Revo2TouchForce3D:
+                self._is_force3d = True
+            elif hw_type == sdk.StarkHardwareType.Revo2TouchArrayPressure:
+                self._is_array_pressure = True
+            elif device_info.is_touch():
+                self._is_pressure_touch = device.uses_pressure_touch_api(slave_id)
         
         # Create buffers
         if sdk and device:
-            self.motor_buffer = sdk.MotorStatusBuffer(MOTOR_BUFFER_SIZE)
-            
-            # Create touch buffer based on device type
-            if device_info and device_info.is_touch():
-                if self._is_pressure_touch:
-                    # Pressure touch: create summary and detailed buffers
-                    self.pressure_summary_buffer = sdk.PressureSummaryBuffer(TOUCH_BUFFER_SIZE)
-                    self.pressure_detailed_buffer = sdk.PressureDetailedBuffer(TOUCH_BUFFER_SIZE)
-                    self.touch_buffer = None
-                else:
-                    # Capacitive touch
-                    self.touch_buffer = sdk.TouchStatusBuffer(TOUCH_BUFFER_SIZE)
-                    self.pressure_summary_buffer = None
-                    self.pressure_detailed_buffer = None
-            else:
+            if self._is_revo3:
+                # V3: use V3MotorStatusBuffer + V3TouchDataBuffer
+                self.v3_motor_buffer = sdk.V3MotorStatusBuffer(MOTOR_BUFFER_SIZE)
+                self.v3_touch_buffer = sdk.V3TouchDataBuffer(TOUCH_BUFFER_SIZE)
+                self.motor_buffer = None
                 self.touch_buffer = None
                 self.pressure_summary_buffer = None
                 self.pressure_detailed_buffer = None
+                self.force3d_touch_buffer = None
+                self.array_pressure_touch_buffer = None
+            elif self._is_force3d:
+                # Force3D: motor + Force3DTouchDataBuffer
+                self.motor_buffer = sdk.MotorStatusBuffer(MOTOR_BUFFER_SIZE)
+                self.force3d_touch_buffer = sdk.Force3DTouchDataBuffer(TOUCH_BUFFER_SIZE)
+                self.v3_motor_buffer = None
+                self.touch_buffer = None
+                self.pressure_summary_buffer = None
+                self.pressure_detailed_buffer = None
+                self.array_pressure_touch_buffer = None
+            elif self._is_array_pressure:
+                # ArrayPressure: motor + ArrayPressureTouchDataBuffer
+                self.motor_buffer = sdk.MotorStatusBuffer(MOTOR_BUFFER_SIZE)
+                self.array_pressure_touch_buffer = sdk.ArrayPressureTouchDataBuffer(TOUCH_BUFFER_SIZE)
+                self.v3_motor_buffer = None
+                self.touch_buffer = None
+                self.pressure_summary_buffer = None
+                self.pressure_detailed_buffer = None
+                self.force3d_touch_buffer = None
+            else:
+                # V1/V2: use MotorStatusBuffer
+                self.motor_buffer = sdk.MotorStatusBuffer(MOTOR_BUFFER_SIZE)
+                self.v3_motor_buffer = None
+                self.force3d_touch_buffer = None
+                self.array_pressure_touch_buffer = None
+                
+                # Create touch buffer based on device type
+                if device_info and device_info.is_touch():
+                    if self._is_pressure_touch:
+                        self.pressure_summary_buffer = sdk.PressureSummaryBuffer(TOUCH_BUFFER_SIZE)
+                        self.pressure_detailed_buffer = sdk.PressureDetailedBuffer(TOUCH_BUFFER_SIZE)
+                        self.touch_buffer = None
+                    else:
+                        self.touch_buffer = sdk.TouchStatusBuffer(TOUCH_BUFFER_SIZE)
+                        self.pressure_summary_buffer = None
+                        self.pressure_detailed_buffer = None
+                else:
+                    self.touch_buffer = None
+                    self.pressure_summary_buffer = None
+                    self.pressure_detailed_buffer = None
     
     def clear_device(self):
         """Clear device and stop collection"""
@@ -140,10 +188,16 @@ class SharedDataManager(QObject):
         self._slave_id = 1
         self._device_info = None
         self._is_pressure_touch = False
+        self._is_revo3 = False
+        self._is_force3d = False
+        self._is_array_pressure = False
         self.motor_buffer = None
+        self.v3_motor_buffer = None
         self.touch_buffer = None
         self.pressure_summary_buffer = None
         self.pressure_detailed_buffer = None
+        self.force3d_touch_buffer = None
+        self.array_pressure_touch_buffer = None
     
     def update_slave_id(self, new_id: int):
         """Update slave_id and restart data collector
@@ -179,11 +233,33 @@ class SharedDataManager(QObject):
         
         # Determine frequency based on platform
         is_linux = platform.system() == "Linux"
-        motor_freq = 200 if is_linux else 60
+        motor_freq = 2000 if is_linux else 200
         touch_freq = 10
         
-        # Create DataCollector based on touch type
-        if self._is_pressure_touch and self.pressure_summary_buffer and self.motor_buffer:
+        if self._is_revo3 and self.v3_motor_buffer:
+            # V3: use V3 full collector (motor + touch)
+            v3_touch_freq = 5  # V3 touch is heavy (~180ms per read), 5Hz is reasonable
+            if hasattr(self, 'v3_touch_buffer') and self.v3_touch_buffer:
+                self.data_collector = sdk.DataCollector.new_v3_full(
+                    self._device,
+                    self.v3_motor_buffer,
+                    self.v3_touch_buffer,
+                    slave_id=self._slave_id,
+                    motor_frequency=motor_freq,
+                    touch_frequency=v3_touch_freq,
+                    enable_stats=False
+                )
+                print(f"[SharedDataManager] Started: {motor_freq}Hz V3 motor, {v3_touch_freq}Hz V3 touch")
+            else:
+                self.data_collector = sdk.DataCollector.new_v3_basic(
+                    self._device,
+                    self.v3_motor_buffer,
+                    slave_id=self._slave_id,
+                    motor_frequency=motor_freq,
+                    enable_stats=False
+                )
+                print(f"[SharedDataManager] Started: {motor_freq}Hz V3 motor")
+        elif self._is_pressure_touch and self.pressure_summary_buffer and self.motor_buffer:
             # Pressure touch: use hybrid mode (summary + detailed)
             if not self.pressure_detailed_buffer:
                 print("[SharedDataManager] Missing pressure_detailed_buffer")
@@ -200,6 +276,30 @@ class SharedDataManager(QObject):
                 enable_stats=False
             )
             print(f"[SharedDataManager] Started: {motor_freq}Hz motor, 20Hz pressure summary, 5Hz pressure detailed")
+        elif self._is_force3d and self.force3d_touch_buffer and self.motor_buffer:
+            # Force3D touch
+            self.data_collector = sdk.DataCollector.new_force3d(
+                self._device,
+                self.motor_buffer,
+                self.force3d_touch_buffer,
+                slave_id=self._slave_id,
+                motor_frequency=motor_freq,
+                touch_frequency=touch_freq,
+                enable_stats=False
+            )
+            print(f"[SharedDataManager] Started: {motor_freq}Hz motor, {touch_freq}Hz Force3D touch")
+        elif self._is_array_pressure and self.array_pressure_touch_buffer and self.motor_buffer:
+            # ArrayPressure touch
+            self.data_collector = sdk.DataCollector.new_array_pressure(
+                self._device,
+                self.motor_buffer,
+                self.array_pressure_touch_buffer,
+                slave_id=self._slave_id,
+                motor_frequency=motor_freq,
+                touch_frequency=touch_freq,
+                enable_stats=False
+            )
+            print(f"[SharedDataManager] Started: {motor_freq}Hz motor, {touch_freq}Hz ArrayPressure touch")
         elif self.touch_buffer and self.motor_buffer:
             # Capacitive touch
             self.data_collector = sdk.DataCollector.new_capacitive(
@@ -272,9 +372,14 @@ class SharedDataManager(QObject):
                     return
         
         # Get latest motor data
-        motor = self.get_latest_motor()
-        if motor:
-            self.motor_updated.emit(motor)
+        if self._is_revo3:
+            v3_motor = self.get_latest_v3_motor()
+            if v3_motor:
+                self.v3_motor_updated.emit(v3_motor)
+        else:
+            motor = self.get_latest_motor()
+            if motor:
+                self.motor_updated.emit(motor)
         
         # Get latest touch data based on type
         if self._is_pressure_touch:
@@ -302,6 +407,16 @@ class SharedDataManager(QObject):
         if not self.motor_buffer:
             return None
         return self.motor_buffer.peek_latest()
+    
+    def get_latest_v3_motor(self) -> Optional[object]:
+        """Get latest V3 motor status (non-blocking)
+        
+        Returns:
+            V3MotorStatusData or None
+        """
+        if not self.v3_motor_buffer:
+            return None
+        return self.v3_motor_buffer.peek_latest()
     
     def get_all_motor(self) -> List:
         """Get all buffered motor data and clear buffer
@@ -343,7 +458,7 @@ class SharedDataManager(QObject):
         """Check if touch data is available"""
         return self.touch_buffer is not None
     
-    def has_pressure_touch(self) -> bool:
+    def is_pressure_touch(self) -> bool:
         """Check if pressure touch data is available"""
         return self._is_pressure_touch and self.pressure_summary_buffer is not None
     
