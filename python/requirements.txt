@@ -1,3 +1,10 @@
-bc-stark-sdk==1.4.0
+bc-stark-sdk==1.4.2
 asyncio>=3.4.3
 colorlog>=6.9.0
+numpy<2.0.0  # PySide6 6.4.x requires numpy<2; upgrade to PySide6>=6.7.0 for numpy 2.x support
+
+# VisionTouch support (optional)
+# pyvitaisdk>=1.0.0
+opencv-python>=4.5.0  # Use opencv-python, not opencv-contrib-python (conflicts with numpy<2)
+pyqtgraph>=0.13.0  # 0.13.4+ supports numpy 2.x
+PyOpenGL>=3.1.5  # Required by pyqtgraph.opengl for 3D visualization

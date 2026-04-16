@@ -18,11 +18,10 @@ libstark.init_logging()
 __all__ = [
     'logger', 'libstark', 'int_to_baudrate', 'modbus_open',
     'open_modbus_revo3',
-    'REVO3_MOTOR_COUNT', 'REVO3_JOINT_COUNT', 'REVO3_FINGER_COUNT', 'FINGER_NAMES',
+    'REVO3_MOTOR_COUNT', 'REVO3_FINGER_COUNT', 'FINGER_NAMES',
 ]
 
-REVO3_MOTOR_COUNT = 23
-REVO3_JOINT_COUNT = 21
+REVO3_MOTOR_COUNT = 21
 REVO3_FINGER_COUNT = 5
 FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
 

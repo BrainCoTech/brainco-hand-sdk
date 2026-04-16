@@ -1,13 +1,13 @@
-"""Revo3 Timing Test Worker (New Protocol — 21 joints)
+"""Revo3 Timing Test Worker
 
-Handles Revo3 New Protocol timing tests:
+Handles Revo3 timing tests:
   - Position / Speed / Current tracking modes
-  - All-fingers test (21 joints, REVO3_JOINT_COUNT)
+  - All-fingers test (21 joints, REVO3_MOTOR_COUNT)
   - Single-finger test (finger group or individual joint, per-joint safe targets)
 
-Joint ID mapping (new protocol, 21 joints, id 0–20):
+Joint ID mapping (21 joints, id 0–20):
   Pinky  : 0-3    Ring  : 4-7    Middle: 8-11
-  Index  : 12-15  Thumb : 16-20  (Wrist 21-22 are legacy only — not in new protocol)
+  Index  : 12-15  Thumb : 16-20
 
 For Revo1/2 worker see timing_test_worker.py.
 """
@@ -24,15 +24,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if TYPE_CHECKING:
     from .shared_data import SharedDataManager
 
-from .constants import REVO3_MOTOR_COUNT, REVO3_JOINT_COUNT
+from .constants import REVO3_MOTOR_COUNT, REVO3_MOTOR_COUNT
 
 # ── Mode constants ────────────────────────────────────────────────────────────
 MODE_ALL_FINGERS   = 0
 MODE_SINGLE_FINGER = 1
 
-# ── Finger → joint_id mapping (new protocol, 21 joints, 0-20) ────────────────
-# Note: joint_id 0-20 matches the new protocol register layout.
-# Wrist joints (21, 22) are legacy only — excluded from new protocol tests.
+# ── Finger → joint_id mapping (21 joints, 0-20) ────────────────
+# Note: joint_id 0-20 matches the Revo3 register layout.
 REVO3_FINGER_JOINTS = {
     "Thumb":  [18, 17, 16, 19, 20],   # 5 joints
     "Index":  [15, 14, 13, 12],        # 4 joints
@@ -52,8 +51,8 @@ REVO3_SINGLE_FINGER_OPTIONS = [
     ("Pinky",  REVO3_FINGER_JOINTS["Pinky"]),
 ]
 
-# REVO3 single joint options (for UI): only new-protocol joints (0-20)
-REVO3_SINGLE_JOINT_OPTIONS = [(f"M{i}", [i]) for i in range(REVO3_JOINT_COUNT)]
+# REVO3 single joint options (for UI): only joints 0-20
+REVO3_SINGLE_JOINT_OPTIONS = [(f"M{i}", [i]) for i in range(REVO3_MOTOR_COUNT)]
 
 # ── Position constants ────────────────────────────────────────────────────────
 REVO3_OPEN_POSITION  = 0.0    # Open: 0°
@@ -104,14 +103,13 @@ REVO3_CURRENT_THRESHOLD = 0.80    # Accept if ≥80% of target
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 def _generate_v3_motor_colors():
-    """Generate per-motor colors (23 total for backward compat), grouped by finger."""
+    """Generate per-motor colors (21 total), grouped by finger."""
     finger_base_colors = {
         "Thumb":  (255, 107, 107),
         "Index":  ( 78, 205, 196),
         "Middle": ( 69, 183, 209),
         "Ring":   (255, 160, 122),
         "Pinky":  (152, 216, 200),
-        "Wrist":  (180, 180, 180),
     }
     colors = [(128, 128, 128)] * REVO3_MOTOR_COUNT
     finger_motor_map = {
@@ -120,7 +118,6 @@ def _generate_v3_motor_colors():
         "Middle": [11, 10,  9,  8],
         "Ring":   [ 7,  6,  5,  4],
         "Pinky":  [ 3,  2,  1,  0],
-        "Wrist":  [21, 22],
     }
     for fname, motor_ids in finger_motor_map.items():
         base = finger_base_colors[fname]
@@ -147,7 +144,7 @@ REVO3_FINGER_COLORS = [
 # ── Worker ────────────────────────────────────────────────────────────────────
 
 class TimingTestRevo3Worker(QObject):
-    """Worker thread for Revo3 New Protocol (21 joints) timing tests.
+    """Worker thread for Revo3 (21 joints) timing tests.
 
     Supports three view/control modes:
       Position — v3_set_motor_position, tracks position feedback
@@ -209,15 +206,15 @@ class TimingTestRevo3Worker(QObject):
     # ── Low-level control ─────────────────────────────────────────────────────
 
     async def _v3_set_all_positions(self, positions):
-        """Set all REVO3 motor positions (23 values, float degrees)."""
+        """Set all REVO3 motor positions (21 values, float degrees)."""
         await self.device.v3_set_all_motor_positions(self.slave_id, positions)
 
     async def _v3_set_all_velocities(self, velocities):
-        """Set all REVO3 motor velocities (23 values, rpm)."""
+        """Set all REVO3 motor velocities (21 values, rpm)."""
         await self.device.v3_set_all_motor_velocities(self.slave_id, velocities)
 
     async def _v3_set_all_currents(self, currents):
-        """Set all REVO3 motor currents (23 values, mA)."""
+        """Set all REVO3 motor currents (21 values, mA)."""
         await self.device.v3_set_all_motor_currents(self.slave_id, currents)
 
     async def _v3_set_joints_position(self, joint_ids: list, target_deg: float):
@@ -275,10 +272,10 @@ class TimingTestRevo3Worker(QObject):
     # ── All-fingers test ──────────────────────────────────────────────────────
 
     async def _run_all_fingers_test(self):
-        """Run all-fingers timing test (21 joints, new protocol)."""
+        """Run all-fingers timing test (21 joints)."""
         mode = self.view_mode
-        # Use REVO3_JOINT_COUNT (21) for new protocol; wrist joints 21-22 are excluded.
-        n = REVO3_JOINT_COUNT
+        # Use REVO3_MOTOR_COUNT (21)
+        n = REVO3_MOTOR_COUNT
         self.log_message.emit(f"=== Revo3 All Fingers Test ({mode} mode, {n} joints) ===")
 
         if mode == "Speed":
@@ -639,8 +636,8 @@ class TimingTestRevo3Worker(QObject):
     # ── Measurement helpers ───────────────────────────────────────────────────
 
     async def _measure_all_fingers(self, target_values: list, mode: str):
-        """Measure all-fingers response time (REVO3 new protocol, 21 joints)."""
-        n = REVO3_JOINT_COUNT
+        """Measure all-fingers response time (REVO3, 21 joints)."""
+        n = REVO3_MOTOR_COUNT
         padded_fwd = list(target_values) + [0.0] * (REVO3_MOTOR_COUNT - n)
 
         # Build constant reference arrays for this step

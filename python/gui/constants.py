@@ -38,26 +38,22 @@ MOTOR_COUNT = 6
 
 
 # =============================================================================
-# V3 Motor Constants (Revo3: 23 DOF legacy, 21 DOF new protocol)
+# V3 Motor Constants (21 DOF)
 # =============================================================================
 
-REVO3_MOTOR_COUNT = 23  # Legacy protocol: 23 motors (motor_id 0~22)
-REVO3_JOINT_COUNT = 21  # New protocol: 21 joints (joint_id 0~20)
+REVO3_MOTOR_COUNT = 21
 
 REVO3_MOTOR_NAMES_EN = [
     'M0', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7', 'M8', 'M9', 'M10',
-    'M11', 'M12', 'M13', 'M14', 'M15', 'M16', 'M17', 'M18', 'M19', 'M20',
-    'M21', 'M22',
+    'M11', 'M12', 'M13', 'M14', 'M15', 'M16', 'M17', 'M18', 'M19', 'M20'
 ]
 
 REVO3_MOTOR_NAMES_ZH = REVO3_MOTOR_NAMES_EN  # Same naming for V3
 
 
 def get_v3_motor_count() -> int:
-    """Get motor/joint count based on active V3 protocol version."""
-    if True:
-        return REVO3_JOINT_COUNT  # New protocol: 21 joints
-    return REVO3_MOTOR_COUNT  # Legacy: 23 motors
+    """Get motor/joint count active V3 protocol version."""
+    return REVO3_MOTOR_COUNT
 
 
 # =============================================================================
@@ -129,17 +125,17 @@ def get_force_count(finger_name: str) -> int:
 
 def get_touch_force_value(touch_item, force_index: int = 0, force_type: str = 'normal'):
     """Get force value from TouchFingerItem
-    
+
     Args:
         touch_item: TouchFingerItem object
         force_index: 0, 1, or 2 (which sensor)
         force_type: 'normal' or 'tangential'
-    
+
     Returns:
         Force value (int)
     """
     if not touch_item:
         return 0
-    
+
     attr_name = f"{force_type}_force{force_index + 1}"
     return getattr(touch_item, attr_name, 0)

@@ -32,19 +32,20 @@ FINGER_COLORS = [
 ]
 
 # Force/torque parameter names and colors
-PARAM_NAMES = ["Fx", "Fy", "Fz", "Mx", "My"]
+PARAM_NAMES = ["Fx", "Fy", "Fz", "Mx", "My", "Mz"]
 PARAM_COLORS = [
     (255, 80, 80),     # Fx - Red
     (80, 200, 80),     # Fy - Green
     (80, 130, 255),    # Fz - Blue
     (255, 180, 50),    # Mx - Orange
     (200, 80, 255),    # My - Purple
+    (26, 188, 156),    # Mz - Teal
 ]
 
 # Data ranges
 FORCE_RANGE = (-30, 30)     # N
 FZ_RANGE = (0, 30)          # N (unsigned)
-TORQUE_RANGE = (-0.05, 0.05)  # N·m
+TORQUE_RANGE = (-2.0, 2.0)    # N·m
 
 
 class ForceTorqueFingerChart(QWidget):
@@ -103,11 +104,12 @@ class ForceTorqueFingerChart(QWidget):
 
             layout.addWidget(self.force_compass, stretch=5)
 
-            # --- 2. Force Values Panel ---
+            # --- 2. Force Values Panel (single row: Fx Fy Fz) ---
             force_vals_frame = QFrame()
             force_vals_frame.setStyleSheet("background-color: #1a1a2e; border-radius: 4px; padding: 2px;")
-            force_vals_layout = QGridLayout(force_vals_frame)
-            force_vals_layout.setContentsMargins(2, 2, 2, 2)
+            force_vals_layout = QHBoxLayout(force_vals_frame)
+            force_vals_layout.setContentsMargins(2, 1, 2, 1)
+            force_vals_layout.setSpacing(1)
 
             self.value_labels = {}
             # Fx, Fy, Fz (Indices 0, 1, 2)
@@ -116,70 +118,76 @@ class ForceTorqueFingerChart(QWidget):
                 r_c, g_c, b_c = PARAM_COLORS[i]
 
                 name_lbl = QLabel(f"{name}:")
-                name_lbl.setStyleSheet(f"font-size: 11px; font-weight: bold; color: rgb({r_c},{g_c},{b_c});")
+                name_lbl.setStyleSheet(f"font-size: 10px; font-weight: bold; color: rgb({r_c},{g_c},{b_c});")
                 val_lbl = QLabel("0.00")
-                val_lbl.setStyleSheet("font-size: 11px; font-family: 'Menlo','Monaco',monospace; color: #eee;")
-                val_lbl.setAlignment(Qt.AlignRight)
+                val_lbl.setStyleSheet("font-size: 10px; font-family: 'Menlo','Monaco',monospace; color: #eee;")
+                val_lbl.setAlignment(Qt.AlignLeft)
 
-                row, col = divmod(i, 2)
-                force_vals_layout.addWidget(name_lbl, row, col * 2)
-                force_vals_layout.addWidget(val_lbl, row, col * 2 + 1)
+                force_vals_layout.addWidget(name_lbl)
+                force_vals_layout.addWidget(val_lbl)
+                if i < 2:  # Add small spacing between pairs, not after last
+                    force_vals_layout.addSpacing(4)
                 self.value_labels[name] = val_lbl
+            force_vals_layout.addStretch()
 
-            layout.addWidget(force_vals_frame, stretch=1)
+            layout.addWidget(force_vals_frame)
 
             # --- 3. Torque Vector (Mx, My) Compass ---
             self.torque_compass = pg.PlotWidget()
             self.torque_compass.setBackground('#1a1a2e')
             self.torque_compass.setAspectLocked(True)
-            self.torque_compass.setXRange(-0.06, 0.06)
-            self.torque_compass.setYRange(-0.06, 0.06)
+            self.torque_compass.setXRange(-2.5, 2.5)
+            self.torque_compass.setYRange(-2.5, 2.5)
             self.torque_compass.hideAxis('bottom')
             self.torque_compass.hideAxis('left')
             self.torque_compass.setTitle("Torque Twist (N·m)", color='gray', size='8pt')
 
-            # Crosshair & bounding box
+            # Crosshair & reference circles
             self.torque_compass.addLine(x=0, pen=pg.mkPen('#444', width=1, style=Qt.DashLine))
             self.torque_compass.addLine(y=0, pen=pg.mkPen('#444', width=1, style=Qt.DashLine))
-            box = pg.QtWidgets.QGraphicsRectItem(-0.05, -0.05, 0.1, 0.1)
-            box.setPen(pg.mkPen('#444', width=1, style=Qt.DashLine))
-            self.torque_compass.addItem(box)
+            for r_val in [0.5, 1.0, 2.0]:
+                circle = pg.QtWidgets.QGraphicsEllipseItem(-r_val, -r_val, r_val * 2, r_val * 2)
+                circle.setPen(pg.mkPen('#444', width=1, style=Qt.DashLine))
+                self.torque_compass.addItem(circle)
 
             # Torque offset dot
             self.torque_dot = pg.ScatterPlotItem(size=12, pen=pg.mkPen('w', width=1), brush=pg.mkBrush(255, 180, 50, 220))
             self.torque_compass.addItem(self.torque_dot)
             layout.addWidget(self.torque_compass, stretch=4)
 
-            # --- 4. Torque Values Panel ---
+            # --- 4. Torque Values Panel (single row: Mx My Mz) ---
             torque_vals_frame = QFrame()
             torque_vals_frame.setStyleSheet("background-color: #1a1a2e; border-radius: 4px; padding: 2px;")
-            torque_vals_layout = QGridLayout(torque_vals_frame)
-            torque_vals_layout.setContentsMargins(2, 2, 2, 2)
+            torque_vals_layout = QHBoxLayout(torque_vals_frame)
+            torque_vals_layout.setContentsMargins(2, 1, 2, 1)
+            torque_vals_layout.setSpacing(1)
 
-            # Mx, My (Indices 3, 4)
-            for i in range(3, 5):
+            # Mx, My, Mz (Indices 3, 4, 5)
+            for i in range(3, 6):
                 name = PARAM_NAMES[i]
                 r_c, g_c, b_c = PARAM_COLORS[i]
 
                 name_lbl = QLabel(f"{name}:")
-                name_lbl.setStyleSheet(f"font-size: 11px; font-weight: bold; color: rgb({r_c},{g_c},{b_c});")
+                name_lbl.setStyleSheet(f"font-size: 10px; font-weight: bold; color: rgb({r_c},{g_c},{b_c});")
                 val_lbl = QLabel("0.00")
-                val_lbl.setStyleSheet("font-size: 11px; font-family: 'Menlo','Monaco',monospace; color: #eee;")
-                val_lbl.setAlignment(Qt.AlignRight)
+                val_lbl.setStyleSheet("font-size: 10px; font-family: 'Menlo','Monaco',monospace; color: #eee;")
+                val_lbl.setAlignment(Qt.AlignLeft)
 
-                row, col = divmod(i - 3, 2)
-                torque_vals_layout.addWidget(name_lbl, row, col * 2)
-                torque_vals_layout.addWidget(val_lbl, row, col * 2 + 1)
+                torque_vals_layout.addWidget(name_lbl)
+                torque_vals_layout.addWidget(val_lbl)
+                if i < 5:
+                    torque_vals_layout.addSpacing(4)
                 self.value_labels[name] = val_lbl
+            torque_vals_layout.addStretch()
 
-            layout.addWidget(torque_vals_frame, stretch=1)
+            layout.addWidget(torque_vals_frame)
 
         else:
             layout.addWidget(QLabel("pyqtgraph required"))
 
-    def add_data(self, fx: float, fy: float, fz: float, mx: float, my: float):
+    def add_data(self, fx: float, fy: float, fz: float, mx: float, my: float, mz: float = 0.0):
         """Update 2D Vector displays and numeric labels"""
-        self.current_values = [fx, fy, fz, mx, my]
+        self.current_values = [fx, fy, fz, mx, my, mz]
 
         if HAS_PYQTGRAPH and pg is not None:
             # Force Compass Update
@@ -201,7 +209,7 @@ class ForceTorqueFingerChart(QWidget):
             self.value_labels[name].setText(f"{self.current_values[i]:+.2f} {unit}")
 
     def clear(self):
-        self.current_values = [0.0] * 5
+        self.current_values = [0.0] * 6
         if HAS_PYQTGRAPH and pg is not None:
             self.fz_bubble.setData([], [])
             self.fxy_line.setData([], [])

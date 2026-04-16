@@ -1,8 +1,8 @@
 /**
  * @file hand_motor_v3.cpp
- * @brief Stark Revo3 (V3) Motor Control Demo - New Protocol
+ * @brief Stark Revo3 Motor Control Demo
  *
- * Demonstrates V3-specific new protocol motor control APIs:
+ * Demonstrates Revo3 motor control APIs:
  *   - Control modes: position, velocity, current, MIT impedance, damping
  *   - Single motor and multi-joint control
  *   - MIT mode: τ = Kp*(P_des - P_act) + Kd*(V_des - V_act) + T_ff
@@ -139,7 +139,7 @@ void demo_new_multi_mit(DeviceHandler *handle, uint8_t slave_id) {
     }
     stark_revo3_multi_mit_set_all(handle, slave_id, kps, kds, positions, velocities, torques);
     msleep(1000);
-    
+
     // Reset
     for (int i = 0; i < 21; i++) {
         torques[i] = 0.0f;
@@ -168,7 +168,7 @@ void demo_new_batch_mit(DeviceHandler *handle, uint8_t slave_id) {
     for (int i = 0; i < 21; i++) vals[i] = 15.0f;
     stark_revo3_set_all_mit_positions(handle, slave_id, vals);
     msleep(500);
-    
+
     // Back to 0
     for (int i = 0; i < 21; i++) vals[i] = 0.0f;
     stark_revo3_set_all_mit_positions(handle, slave_id, vals);
@@ -203,10 +203,10 @@ void demo_new_teaching_mode(DeviceHandler *handle, uint8_t slave_id) {
     stark_revo3_set_all_mit_kp(handle, slave_id, zeros);
     stark_revo3_set_all_mit_kd(handle, slave_id, zeros);
     stark_revo3_set_all_mit_torques(handle, slave_id, zeros);
-    
+
     printf("  (Fingers should now move freely)\n");
     msleep(1500);
-    
+
     printf("  Restoring rigidity...\n");
     float kps[21]; for (int i = 0; i < 21; i++) kps[i] = 4.0f;
     float kds[21]; for (int i = 0; i < 21; i++) kds[i] = 0.4f;
@@ -236,8 +236,6 @@ void demo_status_monitor(DeviceHandler *handle, uint8_t slave_id, int count) {
 int main(int argc, char *argv[]) {
     signal(SIGINT, signal_handler);
     init_logging(LOG_LEVEL_INFO);
-    
-    // Default to New Protocol for C++ Revo3 Demos
 
     DeviceContext ctx = {};
     int arg_idx = 0;
@@ -251,10 +249,10 @@ int main(int argc, char *argv[]) {
         printf("V3 APIs may not work correctly on this device.\n");
     }
 
-    // Run demos (New Protocol)
+    // Run demos
     demo_device_info(ctx.handle, ctx.slave_id);
     demo_motor_status(ctx.handle, ctx.slave_id);
-    
+
     demo_new_single_joint(ctx.handle, ctx.slave_id);
     demo_new_multi_joint(ctx.handle, ctx.slave_id);
     demo_new_mit_control(ctx.handle, ctx.slave_id);
@@ -262,7 +260,7 @@ int main(int argc, char *argv[]) {
     demo_new_batch_mit(ctx.handle, ctx.slave_id);
     demo_new_impedance_damping(ctx.handle, ctx.slave_id);
     demo_new_teaching_mode(ctx.handle, ctx.slave_id);
-    
+
     demo_status_monitor(ctx.handle, ctx.slave_id, 5);
 
     // Cleanup

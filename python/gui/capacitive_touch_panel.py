@@ -70,6 +70,9 @@ class MultiSensorChart(QWidget):
             self.plot.setTitle(self.title, color='w', size='10pt')
             self.plot.setLabel('bottom', 'samples', color='w')
             
+            # Add legend before curves so names are registered
+            self.plot.addLegend(offset=(-10, 10))
+            
             # Create curves for each finger and sensor
             line_styles = [Qt.SolidLine, Qt.DashLine, Qt.DotLine]
             for i, color in enumerate(FINGER_COLORS):
@@ -155,11 +158,11 @@ class FingerDetailWidget(QWidget):
             
             self.normal_curves = []
             colors = [(255, 100, 100), (100, 255, 100), (100, 100, 255)]
+            self.normal_plot.addLegend(offset=(-10, 10))
             for i in range(3):
                 pen = pg.mkPen(color=colors[i], width=2)
                 curve = self.normal_plot.plot([], [], pen=pen, name=f"Sensor {i+1}")
                 self.normal_curves.append(curve)
-            self.normal_plot.addLegend()
             charts_layout.addWidget(self.normal_plot, 0, 0)
             
             # Tangential force chart (3 sensors) - auto scale Y
@@ -171,11 +174,11 @@ class FingerDetailWidget(QWidget):
             self.tangential_plot.setLabel('left', 'N', color='w')
             
             self.tangential_curves = []
+            self.tangential_plot.addLegend(offset=(-10, 10))
             for i in range(3):
                 pen = pg.mkPen(color=colors[i], width=2)
                 curve = self.tangential_plot.plot([], [], pen=pen, name=f"Sensor {i+1}")
                 self.tangential_curves.append(curve)
-            self.tangential_plot.addLegend()
             charts_layout.addWidget(self.tangential_plot, 0, 1)
             
             # Proximity chart (self1, self2, mutual)
@@ -188,21 +191,24 @@ class FingerDetailWidget(QWidget):
             
             self.proximity_curves = []
             prox_names = ['Self 1', 'Self 2', 'Mutual']
+            self.proximity_plot.addLegend(offset=(-10, 10))
             for i in range(3):
                 pen = pg.mkPen(color=colors[i], width=2)
                 curve = self.proximity_plot.plot([], [], pen=pen, name=prox_names[i])
                 self.proximity_curves.append(curve)
-            self.proximity_plot.addLegend()
             charts_layout.addWidget(self.proximity_plot, 1, 0)
             
-            # Status and current values
+            # Status and current values (right column)
+            status_scroll = QScrollArea()
+            status_scroll.setWidgetResizable(True)
+            status_scroll.setFrameShape(QFrame.NoFrame)
             status_widget = QFrame()
             status_widget.setStyleSheet(f"background-color: {COLORS['bg_card']}; border-radius: 8px;")
             status_layout = QVBoxLayout(status_widget)
             status_layout.setSpacing(4)
             
             status_title = QLabel("Current Values")
-            status_title.setStyleSheet("font-weight: bold;")
+            status_title.setStyleSheet("font-weight: bold; font-size: 14px; color: #ecf0f1;")
             status_layout.addWidget(status_title)
             
             # Sensor colors matching chart curves
@@ -232,24 +238,95 @@ class FingerDetailWidget(QWidget):
             for field, color in value_fields:
                 row = QHBoxLayout()
                 name_label = QLabel(f"{field}:")
-                name_label.setFixedWidth(80)
+                name_label.setFixedWidth(90)
                 if color:
-                    name_label.setStyleSheet(f"color: {color};")
+                    name_label.setStyleSheet(f"color: {color}; font-size: 13px;")
                 else:
-                    name_label.setStyleSheet(f"color: {COLORS['text_muted']};")
+                    name_label.setStyleSheet(f"color: {COLORS['text_muted']}; font-size: 13px;")
                 row.addWidget(name_label)
                 
                 val_label = QLabel("--")
                 if color:
-                    val_label.setStyleSheet(f"font-weight: bold; color: {color};")
+                    val_label.setStyleSheet(
+                        f"font-weight: bold; color: {color}; font-size: 14px; "
+                        "font-family: 'Menlo','Monaco','Courier New',monospace;"
+                    )
+                else:
+                    val_label.setStyleSheet(
+                        "font-size: 14px; font-family: 'Menlo','Monaco','Courier New',monospace;"
+                    )
                 row.addWidget(val_label)
                 row.addStretch()
                 
                 self.value_labels[field] = val_label
                 status_layout.addLayout(row)
             
+            # ── Per-Sensor 3D Force Section ──
+            separator = QFrame()
+            separator.setFrameShape(QFrame.HLine)
+            separator.setStyleSheet(f"color: {COLORS.get('border', '#444')};")
+            status_layout.addWidget(separator)
+            
+            force3d_title = QLabel("Per-Sensor 3D Force (N)")
+            force3d_title.setStyleSheet("font-weight: bold; color: #5D9CEC; font-size: 14px;")
+            status_layout.addWidget(force3d_title)
+            
+            self.sensor_3d_labels = []
+            for i in range(self.sensor_count):
+                row = QHBoxLayout()
+                s_label = QLabel(f"S{i+1}:")
+                s_label.setFixedWidth(30)
+                s_label.setStyleSheet(f"color: {sensor_colors[i]}; font-weight: bold; font-size: 13px;")
+                row.addWidget(s_label)
+                
+                v_label = QLabel("Fx=0.00  Fy=0.00  Fz=0.00")
+                v_label.setStyleSheet(
+                    "font-family: 'Menlo','Monaco','Courier New',monospace; font-size: 13px; color: #ddd;"
+                )
+                row.addWidget(v_label)
+                row.addStretch()
+                self.sensor_3d_labels.append(v_label)
+                status_layout.addLayout(row)
+            
+            # ── Finger Total Force Section ──
+            separator2 = QFrame()
+            separator2.setFrameShape(QFrame.HLine)
+            separator2.setStyleSheet(f"color: {COLORS.get('border', '#444')};")
+            status_layout.addWidget(separator2)
+            
+            if self.sensor_count > 1:
+                total_title = QLabel(f"Finger Total 6D Force")
+            else:
+                total_title = QLabel(f"Finger 3D Force")
+            total_title.setStyleSheet(f"font-weight: bold; color: rgb{FINGER_COLORS[self.finger_idx]};")
+            status_layout.addWidget(total_title)
+            
+            self.finger_total_label = QLabel("Fx=0.00  Fy=0.00  Fz=0.00")
+            self.finger_total_label.setStyleSheet(
+                "font-family: 'Menlo','Monaco','Courier New',monospace; font-size: 14px; "
+                "font-weight: bold; color: #ecf0f1;"
+            )
+            status_layout.addWidget(self.finger_total_label)
+            
+            if self.sensor_count > 1:
+                self.finger_torque_label = QLabel("Mx=0.000  My=0.000  Mz=0.000")
+                self.finger_torque_label.setStyleSheet(
+                    "font-family: 'Menlo','Monaco','Courier New',monospace; font-size: 13px; "
+                    f"color: {COLORS.get('text_muted', '#bbb')};"
+                )
+                status_layout.addWidget(self.finger_torque_label)
+            else:
+                self.finger_torque_label = None
+            
+            self.finger_magnitude_label = QLabel("|F| = 0.00 N")
+            self.finger_magnitude_label.setStyleSheet(
+                f"font-weight: bold; font-size: 13px; color: rgb{FINGER_COLORS[self.finger_idx]};"
+            )
+            status_layout.addWidget(self.finger_magnitude_label)
+            
             status_layout.addStretch()
-            charts_layout.addWidget(status_widget, 1, 1)
+            status_scroll.setWidget(status_widget)
+            charts_layout.addWidget(status_scroll, 1, 1)
             
             layout.addLayout(charts_layout)
         else:
@@ -337,6 +414,61 @@ class FingerDetailWidget(QWidget):
                     f"font-weight: bold; color: {COLORS['success']};" if status == 0 
                     else f"font-weight: bold; color: {COLORS['error']};"
                 )
+        
+        # ── Per-Sensor 3D Force Computation ──
+        import numpy as np
+        
+        normal_values = [n1, n2, n3]
+        tang_values = [t1, t2, t3]
+        directions = [
+            getattr(item, 'tangential_direction1', 0xFFFF),
+            getattr(item, 'tangential_direction2', 0xFFFF),
+            getattr(item, 'tangential_direction3', 0xFFFF),
+        ]
+        
+        total_fx = 0.0
+        total_fy = 0.0
+        total_fz = 0.0
+        
+        if hasattr(self, 'sensor_3d_labels'):
+            for i in range(self.sensor_count):
+                fz = normal_values[i] * 0.01  # N
+                tang = tang_values[i] * 0.01   # N
+                direction = directions[i]
+                
+                if direction != 0xFFFF and tang > 0:
+                    angle_rad = np.radians(direction)
+                    fx = tang * np.cos(angle_rad)
+                    fy = tang * np.sin(angle_rad)
+                else:
+                    fx = 0.0
+                    fy = 0.0
+                
+                total_fx += fx
+                total_fy += fy
+                total_fz += fz
+                
+                if i < len(self.sensor_3d_labels):
+                    self.sensor_3d_labels[i].setText(
+                        f"Fx={fx:+.2f}  Fy={fy:+.2f}  Fz={fz:.2f}"
+                    )
+        
+        # ── Finger Total Force ──
+        if hasattr(self, 'finger_total_label'):
+            self.finger_total_label.setText(
+                f"Fx={total_fx:+.2f}  Fy={total_fy:+.2f}  Fz={total_fz:.2f}"
+            )
+        
+        if hasattr(self, 'finger_torque_label') and self.finger_torque_label:
+            # Simple torque estimate (requires sensor positions - use approximate)
+            # For display purposes, show placeholder if positions not available
+            self.finger_torque_label.setText(
+                f"(torque from GlobalForceCalculator)"
+            )
+        
+        if hasattr(self, 'finger_magnitude_label'):
+            mag = np.sqrt(total_fx**2 + total_fy**2 + total_fz**2)
+            self.finger_magnitude_label.setText(f"|F| = {mag:.2f} N")
     
     def clear(self):
         """Clear chart data"""
@@ -533,6 +665,24 @@ class CapacitiveTouchPanel(QWidget):
         
         self.tabs.addTab(overview_widget, "📊 Overview")
         
+        # Global Force tab
+        try:
+            from .touch_global_force_widget import GlobalForceWidget
+            self.global_force_widget = GlobalForceWidget()
+            self.tabs.addTab(self.global_force_widget, "🌐 Global Force")
+        except ImportError as e:
+            logger.warning(f"Global force widget not available: {e}")
+            self.global_force_widget = None
+        
+        # Per-Finger Force tab (NEW - shows per-finger 6D force comparison)
+        try:
+            from .touch_per_finger_force_widget import PerFingerForceWidget
+            self.per_finger_force_widget = PerFingerForceWidget()
+            self.tabs.addTab(self.per_finger_force_widget, "🖐 Per-Finger Force")
+        except ImportError as e:
+            logger.warning(f"Per-finger force widget not available: {e}")
+            self.per_finger_force_widget = None
+        
         # Finger detail tabs
         self.finger_details = []
         for i in range(5):
@@ -577,6 +727,14 @@ class CapacitiveTouchPanel(QWidget):
                 return
         
         self.setEnabled(True)
+        
+        # Pass hardware type to force widgets for Revo1/Revo2 adaptation
+        if device_info and hasattr(device_info, 'hardware_type'):
+            hw_type = device_info.hardware_type
+            if hasattr(self, 'global_force_widget') and self.global_force_widget:
+                self.global_force_widget.set_hardware_type(hw_type)
+            if hasattr(self, 'per_finger_force_widget') and self.per_finger_force_widget:
+                self.per_finger_force_widget.set_hardware_type(hw_type)
         
         # Connect to touch_updated signal instead of polling
         if shared_data:
@@ -687,6 +845,51 @@ class CapacitiveTouchPanel(QWidget):
                 # Always update finger detail view (it has its own tab)
                 if i < len(self.finger_details):
                     self.finger_details[i].update_data(items)
+            
+            # Update global force widget and per-finger force widget
+            needs_force_update = (
+                (hasattr(self, 'global_force_widget') and self.global_force_widget) or
+                (hasattr(self, 'per_finger_force_widget') and self.per_finger_force_widget)
+            )
+            
+            if needs_force_update:
+                # Create a mock TouchFingerData structure for the calculator
+                class TouchFingerData:
+                    def __init__(self, items):
+                        self.items = items
+                
+                # Collect all finger items
+                all_items = []
+                for i in range(min(5, len(touch_data))):
+                    finger_data = touch_data[i]
+                    if finger_data is None:
+                        continue
+                    if hasattr(finger_data, 'items'):
+                        all_items.append(finger_data.items[0] if finger_data.items else None)
+                    else:
+                        all_items.append(finger_data)
+                
+                # Pad with None if less than 5 fingers
+                while len(all_items) < 5:
+                    all_items.append(None)
+                
+                mock_data = TouchFingerData(all_items)
+                
+                # Update global force widget
+                if hasattr(self, 'global_force_widget') and self.global_force_widget:
+                    self.global_force_widget.update_data(mock_data)
+                
+                # Update per-finger force widget
+                if hasattr(self, 'per_finger_force_widget') and self.per_finger_force_widget:
+                    try:
+                        calculator = self.global_force_widget.calculator if self.global_force_widget else None
+                        if calculator is None:
+                            from .touch_global_force import GlobalForceCalculator
+                            calculator = GlobalForceCalculator()
+                        per_finger = calculator.calculate_per_finger(mock_data)
+                        self.per_finger_force_widget.update_data(per_finger)
+                    except Exception as e:
+                        logger.debug(f"Per-finger force update failed: {e}")
                     
         except Exception as e:
             print(f"Process touch data failed: {e}")

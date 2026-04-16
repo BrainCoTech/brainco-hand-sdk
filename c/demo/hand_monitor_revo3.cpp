@@ -22,7 +22,7 @@
 #include <unistd.h>
 #include <signal.h>
 
-#define REVO3_MOTOR_COUNT 23
+#define REVO3_MOTOR_COUNT 21
 #define REVO3_TOUCH_MODULE_COUNT 11
 #define REVO3_TOUCH_SUMMARY_COUNT 16
 
@@ -171,9 +171,10 @@ void run_v3_full_collection(
         // Show motor snapshot
         if (motor_count > 0) {
             auto m = &motor_data[motor_count - 1];
-            printf("  Pos(0~4): %.1f %.1f %.1f %.1f %.1f\n",
-                   m->positions[0], m->positions[1], m->positions[2],
-                   m->positions[3], m->positions[4]);
+            printf("Pos[0]=%6.1f, Spd[0]=%6.1f, Cur[0]=%6.1f \t | "
+                   "Pos[20]=%6.1f, Spd[20]=%6.1f, Cur[20]=%6.1f\n",
+                   m->positions[0], m->velocities[0], m->currents[0],
+                   m->positions[20], m->velocities[20], m->currents[20]);
         }
 
         // Show touch snapshot
@@ -225,8 +226,6 @@ int main(int argc, char *argv[]) {
 
     printf("=== Revo3 Data Monitor ===\n\n");
     init_logging(LOG_LEVEL_INFO);
-
-    // Default to New Protocol for C++ Revo3 Demos
 
     DeviceContext ctx = {};
     int arg_idx = 0;

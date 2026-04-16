@@ -85,9 +85,9 @@ class MockWindow(QMainWindow):
         self.force_panel = ForceTouchSubPanel()
         self.tabs.addTab(self.force_panel, "Revo2: ArrayPressure (3D Force)")
         
-        # 2. Modulus (Pressure)
+        # 2. Pressure
         self.pressure_panel = PressureTouchSubPanel()
-        self.tabs.addTab(self.pressure_panel, "Revo2: Modulus (Pressure Arrays)")
+        self.tabs.addTab(self.pressure_panel, "Revo2: Pressure Arrays")
         
         # 3. V3 Touch (High-Res Arrays)
         self.v3_panel = V3TouchSubPanel()
@@ -108,7 +108,7 @@ class MockWindow(QMainWindow):
         force_raw = self.mock_gen.get_force_data()
         self.force_panel.update_data(force_raw)
         
-        # 2. Update Pressure (Modulus)
+        # 2. Update Pressure
         summ, det = self.mock_gen.get_pressure_data()
         self.pressure_panel.update_summary(summ)
         self.pressure_panel.update_detail(det)

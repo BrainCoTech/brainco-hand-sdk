@@ -323,7 +323,7 @@ def uses_pressure_touch_api(hw_type) -> bool:
 
 
 def is_pressure_touch(hw_type) -> bool:
-    """Check if device uses Pressure/Modulus Touch API
+    """Check if device uses Pressure Touch API
 
     Only Revo2TouchPressure uses Pressure Touch API.
     """

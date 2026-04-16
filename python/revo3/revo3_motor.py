@@ -59,6 +59,7 @@ async def main(port_name=None):
 # Demo Functions
 # =============================================================================
 
+
 async def demo_device_info(client, slave_id):
     """Read and display device information"""
     logger.info("=== Device Info ===")
@@ -68,8 +69,6 @@ async def demo_device_info(client, slave_id):
     logger.info(f"  Firmware: {device_info.firmware_version}")
     logger.info(f"  Hardware: {device_info.hardware_type}")
     logger.info(f"  SKU: {device_info.sku_type}")
-
-
 
 
 async def demo_motor_status(client, slave_id):
@@ -134,7 +133,6 @@ async def demo_current_control(client, slave_id):
     await asyncio.sleep(0.2)
 
 
-
 async def demo_status_monitor(client, slave_id, count=5):
     """Periodic status monitoring"""
     logger.info(f"=== Status Monitor ({count} reads) ===")
@@ -147,11 +145,11 @@ async def demo_status_monitor(client, slave_id, count=5):
 
 
 # =============================================================================
-# New Protocol Demos
+# Revo3 Demos
 # =============================================================================
 
 async def demo_new_device_info(client, slave_id):
-    """[New Protocol] Device info and motor online status"""
+    """Device info and motor online status"""
     logger.info("=== [New] Device Info ===")
 
     try:
@@ -162,14 +160,14 @@ async def demo_new_device_info(client, slave_id):
 
     try:
         online = await client.revo3_get_motor_online_status(slave_id)
-        online_count = bin(online).count('1')
+        online_count = bin(online).count("1")
         logger.info(f"  Motor Online: 0x{online:06X} ({online_count}/21 online)")
     except Exception as e:
         logger.info(f"  Motor Online: (error: {e})")
 
 
 async def demo_new_single_joint(client, slave_id):
-    """[New Protocol] Single joint control"""
+    """Single joint control"""
     logger.info("=== [New] Single Joint Control ===")
 
     mode = libstark.V3ControlMode.Position
@@ -179,18 +177,18 @@ async def demo_new_single_joint(client, slave_id):
 
 
 async def demo_new_multi_joint(client, slave_id):
-    """[New Protocol] Multi-joint synchronous control"""
+    """Multi-joint synchronous control"""
     logger.info("=== [New] Multi-Joint Control ===")
 
     mode = libstark.V3ControlMode.Position
-    params = [30] * REVO3_JOINT_COUNT  # 21 joints to 30° (raw)
+    params = [30] * REVO3_MOTOR_COUNT  # 21 joints to 30° (raw)
     logger.info(f"  All 21 joints: mode=Position, param=30°")
     await client.revo3_multi_joint_control(slave_id, int(mode), params)
     await asyncio.sleep(1.0)
 
 
 async def demo_new_mit_control(client, slave_id):
-    """[New Protocol] MIT impedance control for single joint"""
+    """MIT impedance control for single joint"""
     logger.info("=== [New] MIT Joint Control ===")
     logger.info("  τ = Kp*(pos_ref − pos) + Kd*(vel_ref − vel) + τ_ff")
 
@@ -200,7 +198,7 @@ async def demo_new_mit_control(client, slave_id):
 
 
 async def demo_new_multi_mit(client, slave_id):
-    """[New Protocol] Multi-joint MIT control (registers 1100–1204)"""
+    """Multi-joint MIT control (registers 1100–1204)"""
     logger.info("=== [New] Multi-Joint MIT Control ===")
 
     # Single joint via multi-MIT block
@@ -210,42 +208,42 @@ async def demo_new_multi_mit(client, slave_id):
 
     # All 21 joints via multi-MIT block
     logger.info("  All 21 joints via multi-MIT: Kp=2.0, Kd=0.2, pos=20°")
-    kp = [2.0] * REVO3_JOINT_COUNT
-    kd = [0.2] * REVO3_JOINT_COUNT
-    pos = [20.0] * REVO3_JOINT_COUNT
-    vel = [0.0] * REVO3_JOINT_COUNT
-    torque = [50.0] * REVO3_JOINT_COUNT
+    kp = [2.0] * REVO3_MOTOR_COUNT
+    kd = [0.2] * REVO3_MOTOR_COUNT
+    pos = [20.0] * REVO3_MOTOR_COUNT
+    vel = [0.0] * REVO3_MOTOR_COUNT
+    torque = [50.0] * REVO3_MOTOR_COUNT
     await client.revo3_multi_mit_set_all(slave_id, kp, kd, pos, vel, torque)
     await asyncio.sleep(1.0)
 
 
 async def demo_new_batch_mit(client, slave_id):
-    """[New Protocol] MIT batch single-parameter control (registers 1300–1404)"""
+    """MIT batch single-parameter control (registers 1300–1404)"""
     logger.info("=== [New] MIT Batch Parameter Control ===")
 
     logger.info("  All Kp=4.0")
-    await client.revo3_set_all_mit_kp(slave_id, [4.0] * REVO3_JOINT_COUNT)
+    await client.revo3_set_all_mit_kp(slave_id, [4.0] * REVO3_MOTOR_COUNT)
     await asyncio.sleep(0.1)
 
     logger.info("  All Kd=0.4")
-    await client.revo3_set_all_mit_kd(slave_id, [0.4] * REVO3_JOINT_COUNT)
+    await client.revo3_set_all_mit_kd(slave_id, [0.4] * REVO3_MOTOR_COUNT)
     await asyncio.sleep(0.1)
 
     logger.info("  All positions=25°")
-    await client.revo3_set_all_mit_positions(slave_id, [25.0] * REVO3_JOINT_COUNT)
+    await client.revo3_set_all_mit_positions(slave_id, [25.0] * REVO3_MOTOR_COUNT)
     await asyncio.sleep(0.1)
 
     logger.info("  All velocities=0")
-    await client.revo3_set_all_mit_velocities(slave_id, [0.0] * REVO3_JOINT_COUNT)
+    await client.revo3_set_all_mit_velocities(slave_id, [0.0] * REVO3_MOTOR_COUNT)
     await asyncio.sleep(0.1)
 
     logger.info("  All torques=100mA")
-    await client.revo3_set_all_mit_torques(slave_id, [100.0] * REVO3_JOINT_COUNT)
+    await client.revo3_set_all_mit_torques(slave_id, [100.0] * REVO3_MOTOR_COUNT)
     await asyncio.sleep(0.5)
 
 
 async def demo_new_finger_control(client, slave_id):
-    """[New Protocol] Finger-level control (registers 1500–1574)"""
+    """Finger-level control (registers 1500–1574)"""
     logger.info("=== [New] Finger-Level Control ===")
 
     mode = int(libstark.V3ControlMode.Position)
@@ -264,7 +262,7 @@ async def demo_new_finger_control(client, slave_id):
 
 
 async def demo_new_finger_mit(client, slave_id):
-    """[New Protocol] Finger MIT and Thumb MIT control (registers 1520–1574)"""
+    """Finger MIT and Thumb MIT control (registers 1520–1574)"""
     logger.info("=== [New] Finger/Thumb MIT Control ===")
 
     # Finger MIT: Index finger (finger_id=1), 4 joints × 5 params
@@ -286,7 +284,7 @@ async def demo_new_finger_mit(client, slave_id):
 
 
 async def demo_new_impedance_damping(client, slave_id):
-    """[New Protocol] Impedance and Damping mode control"""
+    """Impedance and Damping mode control"""
     logger.info("=== [New] Impedance & Damping Mode ===")
 
     # Impedance mode (V3ControlMode=4), param = coefficient × 100, range 0-100
@@ -312,7 +310,7 @@ async def demo_new_impedance_damping(client, slave_id):
 
 
 async def demo_new_motor_temps(client, slave_id):
-    """[New Protocol] Motor temperature monitoring"""
+    """Motor temperature monitoring"""
     logger.info("=== [New] Motor Temperatures ===")
 
     try:
@@ -330,7 +328,7 @@ async def demo_new_motor_temps(client, slave_id):
 
 
 async def demo_new_motor_info(client, slave_id):
-    """[New Protocol] Motor SN and firmware version"""
+    """Motor SN and firmware version"""
     logger.info("=== [New] Motor Info ===")
 
     try:
@@ -348,7 +346,7 @@ async def demo_new_motor_info(client, slave_id):
 
 
 async def demo_new_motor_params(client, slave_id):
-    """[New Protocol] Motor parameter configuration"""
+    """Motor parameter configuration"""
     logger.info("=== [New] Motor Parameters ===")
 
     logger.info("  Setting global protection current: 500 mA")
@@ -361,7 +359,7 @@ async def demo_new_motor_params(client, slave_id):
 
 
 async def demo_new_teaching_mode(client, slave_id):
-    """[New Protocol] Teaching mode"""
+    """Teaching mode"""
     logger.info("=== [New] Teaching Mode ===")
 
     logger.info("  Entering teaching mode...")

@@ -1,7 +1,7 @@
 """Pressure Touch Sensor Panel - Dispatcher for all touch sensor types
 
 Supports:
-- Revo2 Pressure Touch (Modulus): Distributed pressure arrays
+- Revo2 Pressure Touch: Distributed pressure arrays
 - Revo2 Force Touch (ArrayPressure): 3D force + torque
 - Revo3 V3 Touch: Tactile array modules
 
@@ -31,7 +31,7 @@ class PressureTouchPanel(QWidget):
 
     # Mode constants
     MODE_NONE = 'none'
-    MODE_PRESSURE = 'pressure'        # Modulus pressure arrays
+    MODE_PRESSURE = 'pressure'        # Pressure arrays
     MODE_FORCE = 'force'              # ArrayPressure force/torque
     MODE_V3 = 'v3'                    # Revo3 tactile arrays
 

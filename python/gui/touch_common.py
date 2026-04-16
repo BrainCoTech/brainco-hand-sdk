@@ -73,12 +73,12 @@ class SummaryChart(QWidget):
             self.plot.setLabel('bottom', 'samples', color='w')
             self.plot.setLabel('left', self.y_label, color='w')
 
+            self.plot.addLegend(offset=(-10, 10))
+
             for i, (name, color) in enumerate(zip(self.sensor_names, self.sensor_colors)):
                 pen = pg.mkPen(color=color, width=2)
                 curve = self.plot.plot([], [], pen=pen, name=name)
                 self.curves.append(curve)
-
-            self.plot.addLegend()
             layout.addWidget(self.plot)
         else:
             layout.addWidget(QLabel("pyqtgraph not installed"))
@@ -177,13 +177,12 @@ class HeatmapChart(QWidget):
             self.img_item.setLookupTable(self.lut)
             self.plot_widget.addItem(self.img_item)
 
-            # Initialize 2D grid
-            self._data_2d = np.full((self.rows, self.cols), np.nan, dtype=np.float64)
+            # Initialize 2D grid with zeros instead of nan (nan breaks pyqtgraph ImageItem)
+            self._data_2d = np.zeros((self.rows, self.cols), dtype=np.float64)
             valid_coords = set()
             for i in range(self.point_count):
                 r_idx, c_idx = self._get_coords(i)
                 if r_idx < self.rows and c_idx < self.cols:
-                    self._data_2d[r_idx, c_idx] = 0.0
                     valid_coords.add((r_idx, c_idx))
                     
             # Explicitly draw empty placeholders for missing sensors

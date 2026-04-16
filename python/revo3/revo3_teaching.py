@@ -12,7 +12,7 @@ Workflow:
   3. PLAY:   Replay the recorded trajectory with position control.
 
 Usage:
-    python revo3_teaching.py                          # Interactive mode (new protocol)
+    python revo3_teaching.py                          # Interactive mode
     python revo3_teaching.py --port /dev/ttyUSB0      # Specify port
     python revo3_teaching.py --freq 100               # Recording freq (Hz)
     python revo3_teaching.py --save trajectory.json   # Save to file
@@ -112,7 +112,7 @@ class Trajectory:
             traj.frames.append((frame["t"], frame["pos"]))
         logger.info(f"Trajectory loaded: {filepath} "
                    f"({traj.frame_count} frames, {traj.duration:.2f}s, "
-                   f"protocol={traj.recorded_protocol}, pos_per_frame={len(data['frames'][0]['pos'])})") 
+                   f"protocol={traj.recorded_protocol}, pos_per_frame={len(data['frames'][0]['pos'])})")
         return traj
 
     def summary(self):
@@ -129,7 +129,7 @@ class Trajectory:
         all_pos = [pos for _, pos in self.frames]
         pos_len = len(all_pos[0]) if all_pos else 0
         for name, motor_ids in MOTOR_LABELS.items():
-            # Skip motors beyond the recorded position count (21 new vs 23 legacy)
+            # Skip motors beyond the recorded position count
             valid_ids = [mid for mid in motor_ids if mid < pos_len]
             if not valid_ids:
                 continue
@@ -146,13 +146,12 @@ class Trajectory:
 async def enter_teaching_mode(client, slave_id):
     """Enter teaching mode - hand becomes compliant (zero torque).
 
-    New protocol:  Uses dedicated teaching mode register (register 118).
-    Legacy protocol: Sets all MIT parameters (pos, vel, cur, kp, kd) to zero.
+    Revo3:  Uses dedicated teaching mode register (register 118).
     """
     logger.info("Entering teaching mode (zero-torque)...")
 
     if True:
-        # Workaround for V0.0.2 firmware: Explicitly set Impedance mode and zero stiffness
+        # Explicitly set Impedance mode and zero stiffness
         try:
             await client.v3_set_ctrl_mode_all(slave_id, 4)  # 4 = Impedance Mode
             await asyncio.sleep(0.1)
@@ -168,10 +167,10 @@ async def enter_teaching_mode(client, slave_id):
                 zeros   # Torque FF
             )
         except Exception as e:
-            logger.debug(f"New protocol MIT zeroing skipped: {e}")
-            
+            logger.debug(f"Revo3 MIT zeroing skipped: {e}")
+
     else:
-        # Legacy protocol: zero all MIT impedance params
+        # zero all MIT impedance params
         zeros = [0.0] * REVO3_MOTOR_COUNT
         await client.v3_set_all_motor_mit(
             slave_id,
@@ -188,8 +187,8 @@ async def enter_teaching_mode(client, slave_id):
 async def exit_teaching_mode(client, slave_id, restore_positions=None):
     """Exit teaching mode and restore motor control.
 
-    New protocol:  Disables teaching mode register, then sends position targets.
-    Legacy protocol: Directly sends position targets (overrides MIT zero state).
+    Method 1: Disables teaching mode register, then sends position targets.
+    Method 2: Directly sends position targets (overrides MIT zero state).
     """
     logger.info("Exiting teaching mode...")
 
@@ -199,8 +198,8 @@ async def exit_teaching_mode(client, slave_id, restore_positions=None):
             await client.v3_set_ctrl_mode_all(slave_id, 0)
             await asyncio.sleep(0.1)
         except Exception as e:
-            logger.debug(f"New protocol restore position mode skipped: {e}")
-        
+            logger.debug(f"restore position mode skipped: {e}")
+
         if restore_positions is not None:
             await client.v3_set_all_motor_positions(slave_id, restore_positions)
             logger.info(f"✅ Restored to initial positions")
@@ -209,7 +208,7 @@ async def exit_teaching_mode(client, slave_id, restore_positions=None):
             await client.v3_set_all_motor_positions(slave_id, target)
             logger.info(f"✅ Reset to zero position")
     else:
-        # Legacy protocol: restore Kp/Kd to recover positional rigidity 
+        # restore Kp/Kd to recover positional rigidity
         # (they were zeroed during teaching mode)
         target = restore_positions if restore_positions else [0.0] * REVO3_MOTOR_COUNT
         kps = [0.8] * REVO3_MOTOR_COUNT
@@ -311,16 +310,16 @@ async def playback_trajectory(client, slave_id, trajectory, speed=1.0, motor_buf
         except Exception:
             pass
     else:
-        # Legacy: If the user ran --load right after recording without power cycling,
+        # If the user ran --load right after recording without power cycling,
         # Kp and Kd might still be 0! We MUST explicitly restore them.
         zeros = [0.0] * REVO3_MOTOR_COUNT
         kps = [0.8] * REVO3_MOTOR_COUNT
         kds = [0.01] * REVO3_MOTOR_COUNT
-        
+
         pos_init = list(first_pos)
         while len(pos_init) < REVO3_MOTOR_COUNT:
             pos_init.append(0.0)
-            
+
         await client.v3_set_all_motor_mit(slave_id, zeros, pos_init, zeros, kps, kds)
         await asyncio.sleep(0.1)
 
@@ -341,15 +340,9 @@ async def playback_trajectory(client, slave_id, trajectory, speed=1.0, motor_buf
                 remaining = adjusted_t - elapsed
                 await asyncio.sleep(min(remaining, 0.001))
 
-            # Adapt position count for current protocol (23 legacy vs 21 new)
+            # Adapt position count for current protocol
             pos = list(positions)
-            if True:
-                # New protocol expects up to 21 joints
-                pos = pos[:21]
-            else:
-                # Legacy protocol expects exactly 23 motors
-                while len(pos) < 23:
-                    pos.append(0.0)
+            pos = pos[:21]
 
             # Send positions
             await client.v3_set_all_motor_positions(slave_id, pos)
@@ -622,7 +615,6 @@ Examples:
                         help=f"Playback speed multiplier (default: {DEFAULT_PLAYBACK_SPEED})")
     parser.add_argument("--loop", type=int, default=DEFAULT_LOOP_COUNT,
                         help=f"Number of playback loops (default: {DEFAULT_LOOP_COUNT})")
-                        help="Use legacy V3 protocol (default: new protocol)")
     args = parser.parse_args()
 
     try:
@@ -633,7 +625,7 @@ Examples:
             load_path=args.load,
             playback_speed=args.speed,
             loop_count=args.loop,
-            
+
         ))
     except KeyboardInterrupt:
         logger.info("User interrupted")

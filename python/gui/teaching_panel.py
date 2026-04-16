@@ -46,23 +46,18 @@ MOTOR_LABELS = {
     "Middle": [8, 9, 10, 11],
     "Index":  [12, 13, 14, 15],
     "Thumb":  [16, 17, 18, 19, 20],
-    "Wrist":  [21, 22],
 }
 
-REVO3_MOTOR_COUNT = 23
-REVO3_JOINT_COUNT = 21
+# Import constants from constants.py
+from .constants import REVO3_MOTOR_COUNT
 
 DEFAULT_RECORD_FREQ = 100    # Hz
 DEFAULT_PLAYBACK_SPEED = 1.0
 DEFAULT_LOOP_COUNT = 1
 
 
-def _is_new_protocol():
-    return True
-
-
 def _get_motor_count():
-    return REVO3_JOINT_COUNT if _is_new_protocol() else REVO3_MOTOR_COUNT
+    return REVO3_MOTOR_COUNT
 
 
 def run_async(coro_fn):
@@ -117,7 +112,6 @@ class Trajectory:
             "motor_count": actual_motor_count,
             "frame_count": len(self.frames),
             "duration_sec": self.duration,
-            "protocol": "new",
             "frames": [
                 {"t": round(t, 4), "pos": [round(p, 2) for p in pos]}
                 for t, pos in self.frames
@@ -133,7 +127,6 @@ class Trajectory:
             data = json.load(f)
         traj = Trajectory()
         traj.start_time = 0
-        traj.recorded_protocol = data.get("protocol", "unknown")
         for frame in data["frames"]:
             traj.frames.append((frame["t"], frame["pos"]))
         return traj
@@ -168,57 +161,38 @@ class Trajectory:
 
 def enter_teaching_mode(device, slave_id):
     """Enter teaching mode - hand becomes compliant (zero torque)."""
-    if _is_new_protocol():
-        # Set Impedance mode and zero stiffness
-        try:
-            run_async(lambda: device.v3_set_ctrl_mode_all(slave_id, 4))
-            time.sleep(0.1)
-            zeros = [0.0] * 21
-            pos = run_async(lambda: device.v3_get_all_motor_positions(slave_id))
-            pos = pos[:21] if pos and len(pos) >= 21 else list(zeros)
-            run_async(lambda: device.revo3_set_all_mit_batch(
-                slave_id,
-                zeros,  # Kp
-                zeros,  # Kd
-                pos,    # Position
-                zeros,  # Velocity
-                zeros   # Torque FF
-            ))
-        except Exception as e:
-            print(f"[Teaching] New protocol MIT zeroing skipped: {e}")
-    else:
-        # Legacy protocol: zero all MIT impedance params
-        zeros = [0.0] * REVO3_MOTOR_COUNT
-        run_async(lambda: device.v3_set_all_motor_mit(
+    # Set Impedance mode and zero stiffness
+    try:
+        run_async(lambda: device.v3_set_ctrl_mode_all(slave_id, 4))
+        time.sleep(0.1)
+        zeros = [0.0] * 21
+        pos = run_async(lambda: device.v3_get_all_motor_positions(slave_id))
+        pos = pos[:21] if pos and len(pos) >= 21 else list(zeros)
+        run_async(lambda: device.revo3_set_all_mit_batch(
             slave_id,
-            zeros,   # velocities
-            zeros,   # positions
-            zeros,   # currents
-            zeros,   # kp
-            zeros,   # kd
+            zeros,  # Kp
+            zeros,  # Kd
+            pos,    # Position
+            zeros,  # Velocity
+            zeros   # Torque FF
         ))
+    except Exception as e:
+        print(f"[Teaching] MIT zeroing skipped: {e}")
 
 
 def exit_teaching_mode(device, slave_id, restore_positions=None):
     """Exit teaching mode and restore motor control."""
-    if _is_new_protocol():
-        try:
-            run_async(lambda: device.v3_set_ctrl_mode_all(slave_id, 0))
-            time.sleep(0.1)
-        except Exception as e:
-            print(f"[Teaching] New protocol restore position mode skipped: {e}")
+    try:
+        run_async(lambda: device.v3_set_ctrl_mode_all(slave_id, 0))
+        time.sleep(0.1)
+    except Exception as e:
+        print(f"[Teaching] Restore position mode skipped: {e}")
 
-        if restore_positions is not None:
-            run_async(lambda: device.v3_set_all_motor_positions(slave_id, restore_positions))
-        else:
-            target = [0.0] * _get_motor_count()
-            run_async(lambda: device.v3_set_all_motor_positions(slave_id, target))
+    if restore_positions is not None:
+        run_async(lambda: device.v3_set_all_motor_positions(slave_id, restore_positions))
     else:
-        target = restore_positions if restore_positions else [0.0] * REVO3_MOTOR_COUNT
-        kps = [0.8] * REVO3_MOTOR_COUNT
-        kds = [0.01] * REVO3_MOTOR_COUNT
-        zeros = [0.0] * REVO3_MOTOR_COUNT
-        run_async(lambda: device.v3_set_all_motor_mit(slave_id, zeros, target, zeros, kps, kds))
+        target = [0.0] * _get_motor_count()
+        run_async(lambda: device.v3_set_all_motor_positions(slave_id, target))
 
     time.sleep(0.3)
 
@@ -662,24 +636,11 @@ class TeachingPanel(QWidget):
 
     def _prepare_playback(self):
         """Set up motor control mode for playback."""
-        if _is_new_protocol():
-            try:
-                run_async(lambda: self.device.v3_set_ctrl_mode_all(self.slave_id, 0))
-                time.sleep(0.1)
-            except Exception:
-                pass
-        else:
-            # Legacy: restore Kp/Kd
-            zeros = [0.0] * REVO3_MOTOR_COUNT
-            kps = [0.8] * REVO3_MOTOR_COUNT
-            kds = [0.01] * REVO3_MOTOR_COUNT
-            first_pos = list(self._trajectory.frames[0][1])
-            while len(first_pos) < REVO3_MOTOR_COUNT:
-                first_pos.append(0.0)
-            run_async(lambda: self.device.v3_set_all_motor_mit(
-                self.slave_id, zeros, first_pos, zeros, kps, kds
-            ))
+        try:
+            run_async(lambda: self.device.v3_set_ctrl_mode_all(self.slave_id, 0))
             time.sleep(0.1)
+        except Exception:
+            pass
 
     def _start_playback_loop(self):
         """Start one playback loop."""
@@ -732,12 +693,7 @@ class TeachingPanel(QWidget):
         # Send only the latest due frame (skip intermediate ones)
         if send_idx >= 0:
             _, positions = self._trajectory.frames[send_idx]
-            pos = list(positions)
-            if _is_new_protocol():
-                pos = pos[:21]
-            else:
-                while len(pos) < REVO3_MOTOR_COUNT:
-                    pos.append(0.0)
+            pos = list(positions)[:21]
 
             try:
                 run_async(lambda: self.device.v3_set_all_motor_positions(self.slave_id, pos))

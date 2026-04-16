@@ -26,14 +26,15 @@ import argparse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common_imports import sdk, check_sdk, logger
 from common_init import (
-    DeviceContext, parse_args_and_init, cleanup_context,
-    auto_detect_and_init
+    DeviceContext,
+    parse_args_and_init,
+    cleanup_context,
+    auto_detect_and_init,
 )
 
 check_sdk()
 
-REVO3_MOTOR_COUNT = 23
-REVO3_JOINT_COUNT = 21
+REVO3_MOTOR_COUNT = 21
 REVO3_FINGER_COUNT = 5
 FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
 
@@ -41,6 +42,7 @@ FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
 # =============================================================================
 # Demo Functions
 # =============================================================================
+
 
 async def demo_device_info(ctx, slave_id):
     """Read and display V3 device information"""
@@ -51,8 +53,6 @@ async def demo_device_info(ctx, slave_id):
 
     fw = await ctx.get_device_fw_version(slave_id)
     print(f"  Firmware: {fw}")
-
-
 
 
 async def demo_motor_status(ctx, slave_id):
@@ -78,7 +78,7 @@ async def demo_position_control(ctx, slave_id):
     positions = await ctx.v3_get_all_motor_positions(slave_id)
     print(f"  Positions (first 5): {[f'{p:.1f}' for p in positions[:5]]}")
 
-    # Batch: all 23 motors
+    # Batch: all motors
     print("  All motors -> 30 degrees")
     target = [30.0] * REVO3_MOTOR_COUNT
     await ctx.v3_set_all_motor_positions(slave_id, target)
@@ -116,7 +116,6 @@ async def demo_current_control(ctx, slave_id):
     await asyncio.sleep(0.2)
 
 
-
 async def demo_status_monitor(ctx, slave_id, count=5):
     """Periodic status monitoring"""
     print(f"\n=== Status Monitor ({count} reads) ===")
@@ -129,12 +128,13 @@ async def demo_status_monitor(ctx, slave_id, count=5):
 
 
 # =============================================================================
-# New Protocol Exclusive Demos
+# Exclusive Demos
 # =============================================================================
 
+
 async def demo_new_single_joint(ctx, slave_id):
-    """[New Protocol] Single joint control"""
-    print("\n=== [New] Single Joint Control ===")
+    """Single joint control"""
+    print("\n=== Single Joint Control ===")
     print("  Registers: 1000 (joint_id) + 1001 (mode) + 1002 (param)")
 
     # Position mode: joint 0 -> 45 degrees (raw encoded)
@@ -146,20 +146,20 @@ async def demo_new_single_joint(ctx, slave_id):
 
 
 async def demo_new_multi_joint(ctx, slave_id):
-    """[New Protocol] Multi-joint synchronous control"""
-    print("\n=== [New] Multi-Joint Synchronous Control ===")
+    """Multi-joint synchronous control"""
+    print("\n=== Multi-Joint Synchronous Control ===")
     print("  Registers: 1010 (mode) + 1011~1031 (21 params)")
 
     mode = sdk.V3ControlMode.Position
-    params = [30] * REVO3_JOINT_COUNT  # 21 joints to 30° (raw)
+    params = [30] * REVO3_MOTOR_COUNT  # 21 joints to 30° (raw)
     print(f"  All 21 joints: mode=Position, param=30°")
     await ctx.revo3_multi_joint_control(slave_id, int(mode), params)
     await asyncio.sleep(1.0)
 
 
 async def demo_new_mit_control(ctx, slave_id):
-    """[New Protocol] MIT impedance control for single joint"""
-    print("\n=== [New] MIT Joint Control ===")
+    """MIT impedance control for single joint"""
+    print("\n=== MIT Joint Control ===")
     print("  τ = Kp*(pos_ref − pos) + Kd*(vel_ref − vel) + τ_ff")
     print("  Registers: 1050~1055 (joint_id, kp, kd, pos, vel, torque_ff)")
 
@@ -170,8 +170,8 @@ async def demo_new_mit_control(ctx, slave_id):
 
 
 async def demo_new_motor_params(ctx, slave_id):
-    """[New Protocol] Motor parameter configuration"""
-    print("\n=== [New] Motor Parameter Config ===")
+    """Motor parameter configuration"""
+    print("\n=== Motor Parameter Config ===")
 
     # Global protection current (mA)
     print("  Setting global protection current: 500 mA")
@@ -187,8 +187,8 @@ async def demo_new_motor_params(ctx, slave_id):
 
 
 async def demo_new_device_info(ctx, slave_id):
-    """[New Protocol] Device info and peripheral control"""
-    print("\n=== [New] Device Info & Peripherals ===")
+    """Device info and peripheral control"""
+    print("\n=== Device Info & Peripherals ===")
 
     # Hardware version
     try:
@@ -200,15 +200,15 @@ async def demo_new_device_info(ctx, slave_id):
     # Motor online status
     try:
         online = await ctx.revo3_get_motor_online_status(slave_id)
-        online_count = bin(online).count('1')
+        online_count = bin(online).count("1")
         print(f"  Motor Online: 0x{online:06X} ({online_count}/21 online)")
     except Exception as e:
         print(f"  Motor Online: (error: {e})")
 
 
 async def demo_new_teaching_mode(ctx, slave_id):
-    """[New Protocol] Teaching mode demo"""
-    print("\n=== [New] Teaching Mode ===")
+    """Teaching mode demo"""
+    print("\n=== Teaching Mode ===")
 
     print("  Entering teaching mode...")
     await ctx.v3_set_teaching_mode(slave_id, True)
@@ -221,20 +221,20 @@ async def demo_new_teaching_mode(ctx, slave_id):
 
 
 async def demo_new_peripherals(ctx, slave_id):
-    """[New Protocol] System peripheral control"""
-    print("\n=== [New] Peripheral Control ===")
+    """System peripheral control"""
+    print("\n=== Peripheral Control ===")
 
     # Note: LED switch (reg 104) removed in V1.4
 
-    # Touch screen (new protocol only)
+    # Touch screen
     print("  Touch screen on")
     await ctx.revo3_set_touch_screen(slave_id, True)
     await asyncio.sleep(0.3)
 
 
 async def demo_new_multi_mit(ctx, slave_id):
-    """[New Protocol] Multi-joint MIT control (registers 1100–1204)"""
-    print("\n=== [New] Multi-Joint MIT Control ===")
+    """Multi-joint MIT control (registers 1100–1204)"""
+    print("\n=== Multi-Joint MIT Control ===")
 
     # Single joint via multi-MIT block
     print("  Joint 0 via multi-MIT: Kp=3.0, Kd=0.3, pos=30°, vel=0, τ_ff=100mA")
@@ -243,43 +243,43 @@ async def demo_new_multi_mit(ctx, slave_id):
 
     # All 21 joints
     print("  All 21 joints: Kp=2.0, Kd=0.2, pos=20°, vel=0, τ_ff=50mA")
-    kp = [2.0] * REVO3_JOINT_COUNT
-    kd = [0.2] * REVO3_JOINT_COUNT
-    pos = [20.0] * REVO3_JOINT_COUNT
-    vel = [0.0] * REVO3_JOINT_COUNT
-    torque = [50.0] * REVO3_JOINT_COUNT
+    kp = [2.0] * REVO3_MOTOR_COUNT
+    kd = [0.2] * REVO3_MOTOR_COUNT
+    pos = [20.0] * REVO3_MOTOR_COUNT
+    vel = [0.0] * REVO3_MOTOR_COUNT
+    torque = [50.0] * REVO3_MOTOR_COUNT
     await ctx.revo3_multi_mit_set_all(slave_id, kp, kd, pos, vel, torque)
     await asyncio.sleep(1.0)
 
 
 async def demo_new_batch_mit(ctx, slave_id):
-    """[New Protocol] MIT batch single-parameter control (registers 1300–1404)"""
-    print("\n=== [New] MIT Batch Parameter Control ===")
+    """MIT batch single-parameter control (registers 1300–1404)"""
+    print("\n=== MIT Batch Parameter Control ===")
 
     print("  All Kp=4.0")
-    await ctx.revo3_set_all_mit_kp(slave_id, [4.0] * REVO3_JOINT_COUNT)
+    await ctx.revo3_set_all_mit_kp(slave_id, [4.0] * REVO3_MOTOR_COUNT)
     await asyncio.sleep(0.1)
 
     print("  All Kd=0.4")
-    await ctx.revo3_set_all_mit_kd(slave_id, [0.4] * REVO3_JOINT_COUNT)
+    await ctx.revo3_set_all_mit_kd(slave_id, [0.4] * REVO3_MOTOR_COUNT)
     await asyncio.sleep(0.1)
 
     print("  All positions=25°")
-    await ctx.revo3_set_all_mit_positions(slave_id, [25.0] * REVO3_JOINT_COUNT)
+    await ctx.revo3_set_all_mit_positions(slave_id, [25.0] * REVO3_MOTOR_COUNT)
     await asyncio.sleep(0.1)
 
     print("  All velocities=0")
-    await ctx.revo3_set_all_mit_velocities(slave_id, [0.0] * REVO3_JOINT_COUNT)
+    await ctx.revo3_set_all_mit_velocities(slave_id, [0.0] * REVO3_MOTOR_COUNT)
     await asyncio.sleep(0.1)
 
     print("  All torques=100mA")
-    await ctx.revo3_set_all_mit_torques(slave_id, [100.0] * REVO3_JOINT_COUNT)
+    await ctx.revo3_set_all_mit_torques(slave_id, [100.0] * REVO3_MOTOR_COUNT)
     await asyncio.sleep(0.5)
 
 
 async def demo_new_finger_control(ctx, slave_id):
-    """[New Protocol] Finger-level control (registers 1500–1574)"""
-    print("\n=== [New] Finger-Level Control ===")
+    """Finger-level control (registers 1500–1574)"""
+    print("\n=== Finger-Level Control ===")
 
     mode = int(sdk.V3ControlMode.Position)
 
@@ -295,8 +295,8 @@ async def demo_new_finger_control(ctx, slave_id):
 
 
 async def demo_new_motor_temps(ctx, slave_id):
-    """[New Protocol] Motor temperature monitoring"""
-    print("\n=== [New] Motor Temperatures ===")
+    """Motor temperature monitoring"""
+    print("\n=== Motor Temperatures ===")
 
     try:
         temps = await ctx.revo3_get_all_motor_temperatures(slave_id)
@@ -313,8 +313,8 @@ async def demo_new_motor_temps(ctx, slave_id):
 
 
 async def demo_new_motor_info(ctx, slave_id):
-    """[New Protocol] Motor SN and firmware versions"""
-    print("\n=== [New] Motor Info ===")
+    """Motor SN and firmware versions"""
+    print("\n=== Motor Info ===")
 
     try:
         sn = await ctx.revo3_get_motor_sn(slave_id, 0)

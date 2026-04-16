@@ -211,8 +211,6 @@ int main(int argc, char *argv[]) {
     signal(SIGINT, signal_handler);
     init_logging(LOG_LEVEL_INFO);
 
-    // Default to New Protocol for C++ Revo3 Demos
-
     DeviceContext ctx = {};
     int arg_idx = 0;
     if (!parse_args_and_init_revo3(&ctx, argc, (const char**)argv, &arg_idx)) {

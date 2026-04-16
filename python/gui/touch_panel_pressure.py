@@ -1,4 +1,4 @@
-"""Pressure Touch Panel - For Revo2 Modulus Pressure devices
+"""Pressure Touch Panel - For Revo2 Pressure Touch devices
 
 Displays distributed scalar pressure data:
 - 5 fingers × 9 sampling points (staggered 3×3 layout)
@@ -106,7 +106,7 @@ def _get_coord_map(sensor_name: str):
 
 
 class PressureTouchSubPanel(QWidget):
-    """Pressure Touch Panel for Modulus/Pressure devices.
+    """Pressure Touch Panel for Pressure Touch devices.
 
     Tabs:
     - Summary: 6-sensor force curves + status cards

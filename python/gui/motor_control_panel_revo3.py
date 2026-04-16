@@ -1,6 +1,6 @@
-"""Motor Control Panel V3 - Revo3 (23 motors, float values)
+"""Motor Control Panel V3 - Revo3 (21 motors, float values)
 
-Revo3 has 23 motors (motor_id 0~22) with float-based control:
+Revo3 has 21 motors (motor_id 0~20) with float-based control:
   - Position: degrees (float)
   - Velocity: float
   - Current: mA (float)
@@ -31,9 +31,9 @@ from common_imports import sdk
 if TYPE_CHECKING:
     from .shared_data import SharedDataManager
 
-# V3 motor layout: 23 motors grouped by finger
-REVO3_MOTOR_COUNT = 23
-REVO3_JOINT_COUNT = 21  # New protocol
+# Import constants from constants.py
+from .constants import REVO3_MOTOR_COUNT
+
 REVO3_FINGER_COUNT = 5
 
 # Finger -> motor_id mapping (top-to-bottom order per finger)
@@ -43,7 +43,6 @@ REVO3_FINGER_MOTORS = {
     "Middle": [11, 10, 9, 8],        # 4 DOF (top-down)
     "Ring":   [7, 6, 5, 4],          # 4 DOF (top-down)
     "Pinky":  [3, 2, 1, 0],          # 4 DOF (top-down)
-    "Wrist":  [21, 22],              # 2 DOF (wrist) — legacy only
 }
 
 MOTOR_ERROR_BITS = {
@@ -70,26 +69,19 @@ def decode_motor_error(err_val) -> list:
         errs.append(f"Unknown(0x{err_val:04X})")
     return errs
 
-REVO3_FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky", "Wrist"]
-
-def _is_new_protocol():
-    return True
+REVO3_FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
 
 def get_v3_finger_names():
     """Get active finger names based on protocol."""
-    if _is_new_protocol():
-        return ["Thumb", "Index", "Middle", "Ring", "Pinky"]  # No Wrist
-    return REVO3_FINGER_NAMES
+    return ["Thumb", "Index", "Middle", "Ring", "Pinky"]
 
 def get_v3_finger_motors():
     """Get active finger-motor mapping based on protocol."""
-    if _is_new_protocol():
-        return {k: v for k, v in REVO3_FINGER_MOTORS.items() if k != "Wrist"}
     return REVO3_FINGER_MOTORS
 
 def get_v3_motor_count():
     """Get motor/joint count based on protocol."""
-    return REVO3_JOINT_COUNT if _is_new_protocol() else REVO3_MOTOR_COUNT
+    return REVO3_MOTOR_COUNT
 
 # Cartesian finger names (no wrist - only 5 fingertips)
 REVO3_CARTESIAN_FINGERS = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
@@ -104,13 +96,12 @@ MODE_DAMPING = 4
 MODE_MIT = 5
 MODE_CARTESIAN = 6
 
-# Per-motor position ranges (degrees) based on V3 new protocol joint specs
+# Per-motor position ranges (degrees) based on joint specs
 # Pinky  (M0~M3):  Abd [-15,15], MCP [0,90], PIP [0,90], DIP [0,90]
 # Ring   (M4~M7):  Abd [-15,15], MCP [0,90], PIP [0,90], DIP [0,90]
 # Middle (M8~M11): Abd [-15,15], MCP [0,90], PIP [0,90], DIP [0,90]
 # Index  (M12~M15):Abd [-15,15], MCP [0,90], PIP [0,90], DIP [0,90]
 # Thumb  (M16~M20):CMC-Rot [0,50], MCP [0,90], IP [0,90], CMC-Abd [0,105], CMC-Flex [0,120]
-# Wrist  (M21~M22):Flex ±60, Abd ±25
 MOTOR_POSITION_RANGES = {
     # Pinky: [0]=Abd, [1]=MCP, [2]=PIP, [3]=DIP
     0:  (-15.0, 15.0),   # Pinky Abduction
@@ -138,9 +129,6 @@ MOTOR_POSITION_RANGES = {
     18: (0.0, 90.0),     # Thumb IP
     19: (0.0, 105.0),    # Thumb CMC Abduction (differential)
     20: (0.0, 120.0),    # Thumb CMC Flexion (differential)
-    # Wrist: [21]=Flex, [22]=Abd
-    21: (-60.0, 60.0),   # Wrist Flexion/Extension
-    22: (-25.0, 25.0),   # Wrist Abduction
 }
 
 # Joint labels for display (motor_id -> label)
@@ -151,7 +139,6 @@ MOTOR_JOINT_LABELS = {
     12: "Abd", 13: "MCP", 14: "PIP", 15: "DIP",   # Index
     16: "Rot", 17: "MCP", 18: "IP",                # Thumb
     19: "Abd", 20: "Flex",                          # Thumb CMC (diff)
-    21: "Flex", 22: "Abd",                         # Wrist
 }
 
 def get_motor_position_range(motor_id):
@@ -423,7 +410,7 @@ class V3MotorSlider(QWidget):
         else:
             real_errs = decode_motor_error(err_val)
             is_error = bool([e for e in real_errs if e != "Running"])
-            
+
             color = "#27ae60" # Green
             if is_error:
                 color = "#e74c3c" # Red
@@ -434,9 +421,9 @@ class V3MotorSlider(QWidget):
                 elif temp >= 45:
                     color = "#f39c12" # Orange
                 self.diag_label.setText(f"{int(temp)}°")
-            
+
             self.diag_label.setStyleSheet(f"color: white; background-color: {color}; border-radius: 3px; font-size: 9px; padding: 1px;")
-            
+
             if not real_errs:
                 self.diag_label.setToolTip(f'<span style="font-size:14px;">Temperature: {temp}°C</span>')
             else:
@@ -635,7 +622,7 @@ class V3MitMotorRow(QWidget):
         else:
             real_errs = decode_motor_error(err_val)
             is_error = bool([e for e in real_errs if e != "Running"])
-            
+
             color = "#27ae60" # Green
             if is_error:
                 color = "#e74c3c" # Red
@@ -646,9 +633,9 @@ class V3MitMotorRow(QWidget):
                 elif temp >= 45:
                     color = "#f39c12" # Orange
                 self.diag_label.setText(f"{int(temp)}°")
-            
+
             self.diag_label.setStyleSheet(f"color: white; background-color: {color}; border-radius: 3px; font-size: 9px; padding: 1px;")
-            
+
             if not real_errs:
                 self.diag_label.setToolTip(f'<span style="font-size:14px;">Temperature: {temp}°C</span>')
             else:
@@ -1084,10 +1071,6 @@ class V3MotorControlPanel(QWidget):
         print(f"[V3Settings] Use broadcast ID: {'enabled' if enabled else 'disabled'}")
 
     def _on_read_diagnostics(self):
-        if not _is_new_protocol():
-            self.lbl_diag_result.setText("Only supported in New Protocol")
-            return
-            
         async def fetch_diag():
             try:
                 hw = await self.device.revo3_get_hardware_version(self.slave_id)
@@ -1097,7 +1080,7 @@ class V3MotorControlPanel(QWidget):
                 return (True, hw, online, temps, errors)
             except Exception as e:
                 return (False, str(e), None, None, None)
-                
+
         res = run_async(fetch_diag)
         if res:
             success, hw, online, temps, errors = res
@@ -1133,7 +1116,7 @@ class V3MotorControlPanel(QWidget):
                         for i, e in err_motors[:4]:
                             err_names = [name for name in decode_motor_error(e) if name != "Running"]
                             err_parts.append(f"M{i:02d}={'+'.join(err_names)}")
-                        
+
                         if len(err_motors) > 4:
                             err_parts.append(f"+{len(err_motors)-4} more")
                         err_str = f"❌ ERR: {', '.join(err_parts)}"
@@ -1165,7 +1148,7 @@ class V3MotorControlPanel(QWidget):
                         temp_val = temps[mid] if mid < len(temps) else 0.0
                         err_val = errors[mid] if errors and mid < len(errors) else 0
                         slider.update_diagnostics(temp_val, is_online, err_val)
-                        
+
                 for group in self.mit_groups.values():
                     for mid, row in group.motor_rows.items():
                         is_online = (online & (1 << mid)) != 0
@@ -1176,7 +1159,7 @@ class V3MotorControlPanel(QWidget):
             else:
                 msg = hw  # error message is in hw
                 self.lbl_diag_result.setStyleSheet("color: red; font-weight: bold;")
-                
+
             self.lbl_diag_result.setText(msg)
 
             # Update info panels on all pages
@@ -1223,9 +1206,7 @@ class V3MotorControlPanel(QWidget):
             # Show open/close buttons only in position mode
             self.open_all_btn.setVisible(index == MODE_POSITION)
             self.close_all_btn.setVisible(index == MODE_POSITION)
-            # Impedance/Damping only available in New Protocol
-            if index in (MODE_IMPEDANCE, MODE_DAMPING) and not _is_new_protocol():
-                print("[V3Motor] Warning: Impedance/Damping modes require New Protocol")
+
         elif index == MODE_MIT:
             self.stack.setCurrentIndex(1)
             self.open_all_btn.setVisible(False)
@@ -1433,13 +1414,13 @@ class V3MotorControlPanel(QWidget):
         """All controls -> 0"""
         if not self.device:
             return
-            
+
         if self.current_mode <= MODE_DAMPING:
             targets = [0.0] * get_v3_motor_count()
             for group in self.finger_groups.values():
                 for slider in group.motor_sliders.values():
                     slider.set_value_silent(0.0)
-                    
+
             if self.current_mode == MODE_POSITION:
                 run_async(lambda: self.device.v3_set_all_motor_positions(self.slave_id, targets))
             elif self.current_mode == MODE_VELOCITY:
@@ -1450,7 +1431,7 @@ class V3MotorControlPanel(QWidget):
                 mode_val = 4 if self.current_mode == MODE_IMPEDANCE else 5
                 params = [0] * 21  # 21 joints, all zero
                 run_async(lambda: self.device.revo3_multi_joint_control(self.slave_id, mode_val, params))
-                
+
         elif self.current_mode == MODE_MIT:
             for group in self.mit_groups.values():
                 group.zero_all()
@@ -1458,7 +1439,7 @@ class V3MotorControlPanel(QWidget):
             targets = [0.0] * get_v3_motor_count()
             run_async(lambda: self.device.v3_set_all_motor_mit(
                 self.slave_id, targets, targets, targets, targets, targets))
-                
+
         elif self.current_mode == MODE_CARTESIAN:
             for group in self.cartesian_groups.values():
                 group.zero_all()
