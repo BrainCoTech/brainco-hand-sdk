@@ -24,8 +24,8 @@
 
 1. 克隆本仓库：
 ```bash
-git clone https://github.com/BrainCoTech/stark-serialport-example.git
-cd stark-serialport-example
+git clone https://github.com/BrainCoTech/brainco-hand-sdk.git
+cd brainco-hand-sdk
 ```
 
 2. Python 开发环境配置：

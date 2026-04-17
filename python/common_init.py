@@ -411,8 +411,9 @@ async def cleanup_context(ctx: DeviceContext):
 def print_init_usage(prog_name: str = "program"):
     """Print initialization usage help"""
     print(f"\nInitialization options:")
-    print(f"  {prog_name}                                    # Auto-detect (recommended)")
-    print(f"  {prog_name} -m <port> <baudrate> <slave_id>    # Modbus (RS485)")
+    print(f"  {prog_name} -h                                 # Show help")
+    print(f"  {prog_name}                                    # Auto-detect")
+    print(f"  {prog_name} -m <port> <baudrate> <slave_id>    # Modbus (RS485) (recommended)")
     print(f"  {prog_name} -p <port> [slave_id]               # Protobuf (serial, 115200 baud)")
     print(f"  {prog_name} -c <port> <baudrate> <slave_id>    # CAN 2.0 (ZQWL)")
     print(f"  {prog_name} -f <port> <arb> <data> <slave_id>  # CANFD (ZQWL)")

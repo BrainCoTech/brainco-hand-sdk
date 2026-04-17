@@ -42,7 +42,7 @@ class SlipDetectionWidget(QWidget):
     """Slip detection display and monitoring
     
     Shows real-time slip state with:
-    - Status indicator (NO_SLIP / SLIP_DETECTED)
+    - Status indicator (6 different states)
     - Live image with overlay
     - History bar (last 100 frames)
     - Statistics (total frames, slip events, slip rate)
@@ -67,7 +67,7 @@ class SlipDetectionWidget(QWidget):
         layout.addWidget(title)
         
         # Status indicator (large)
-        self.status_label = QLabel("🟢 NO SLIP")
+        self.status_label = QLabel("⚪ NO_OBJ")
         self.status_label.setStyleSheet(
             "font-size: 28px; font-weight: bold; "
             "background: #27ae60; color: white; "
@@ -157,24 +157,31 @@ class SlipDetectionWidget(QWidget):
             return
             
         self.total_frames += 1
-        is_slip = (slip_state.name == "SLIP_DETECTED")
         
-        # Update status indicator
+        state_name = slip_state.name if hasattr(slip_state, 'name') else str(slip_state)
+        is_slip = state_name in ("INCIPIENT_SLIP", "PARTIAL_SLIP", "COMPLETE_SLIP")
+        
+        # Mapping rules
+        slip_map = {
+            "NO_OBJ": ("⚪ NO OBJECT", "#95a5a6"),         # Gray
+            "CONTACT": ("🔵 CONTACT", "#3498db"),           # Blue
+            "STEADY_HOLD": ("🟢 STEADY HOLD", "#27ae60"),   # Green
+            "INCIPIENT_SLIP": ("🟡 INCIPIENT SLIP", "#f39c12"), # Yellow/Orange
+            "PARTIAL_SLIP": ("🟠 PARTIAL SLIP", "#e67e22"),   # Orange
+            "COMPLETE_SLIP": ("🔴 COMPLETE SLIP", "#e74c3c")  # Red
+        }
+        
+        display_text, bg_color = slip_map.get(state_name, (f"⚪ {state_name}", "#7f8c8d"))
+        
         if is_slip:
             self.slip_count += 1
-            self.status_label.setText("🔴 SLIP DETECTED!")
-            self.status_label.setStyleSheet(
-                "font-size: 28px; font-weight: bold; "
-                "background: #e74c3c; color: white; "
-                "padding: 16px; border-radius: 8px;"
-            )
-        else:
-            self.status_label.setText("🟢 NO SLIP")
-            self.status_label.setStyleSheet(
-                "font-size: 28px; font-weight: bold; "
-                "background: #27ae60; color: white; "
-                "padding: 16px; border-radius: 8px;"
-            )
+            
+        self.status_label.setText(display_text)
+        self.status_label.setStyleSheet(
+            "font-size: 28px; font-weight: bold; "
+            f"background: {bg_color}; color: white; "
+            "padding: 16px; border-radius: 8px;"
+        )
         
         # Update history
         self.slip_history.append(1 if is_slip else 0)
@@ -200,8 +207,16 @@ class SlipDetectionWidget(QWidget):
             import cv2
             img_copy = image.copy()
             
-            # Add text overlay
-            color = (0, 0, 255) if state_text == "SLIP_DETECTED" else (0, 255, 0)
+            # Map state to BGR color
+            color_map = {
+                "NO_OBJ": (128, 128, 128),       # Gray
+                "CONTACT": (255, 0, 0),          # Blue
+                "STEADY_HOLD": (0, 255, 0),      # Green
+                "INCIPIENT_SLIP": (0, 255, 255), # Yellow
+                "PARTIAL_SLIP": (0, 165, 255),   # Orange
+                "COMPLETE_SLIP": (0, 0, 255)     # Red
+            }
+            color = color_map.get(state_text, (255, 255, 255))
             font = cv2.FONT_HERSHEY_SIMPLEX
             
             # Main status text
@@ -234,7 +249,7 @@ class SlipDetectionWidget(QWidget):
         self.slip_history.clear()
         self.total_frames = 0
         self.slip_count = 0
-        self.status_label.setText("🟢 NO SLIP")
+        self.status_label.setText("⚪ NO_OBJ")
         self.history_bar.setValue(0)
         self.frames_label.setText("0")
         self.slip_events_label.setText("0")

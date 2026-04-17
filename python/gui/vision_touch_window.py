@@ -30,14 +30,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Try to import real SDK, fall back to mock
 MOCK_MODE = False
 try:
-    from pyvitaisdk import VTSensor, VTSDeviceFinder, VTSDataType, VTSError
+    from pyvitaisdk import VTSensor, VTSDeviceFinder, VTSDataType, VTSError, VTSensorType
     HAS_VITAI_SDK = True
     print("✅ Using real pyvitaisdk")
 except ImportError:
     HAS_VITAI_SDK = False
     try:
         from .vision_touch_mock import (
-            VTSensor, VTSDeviceFinder, VTSDataType, VTSError
+            VTSensor, VTSDeviceFinder, VTSDataType, VTSError, VTSensorType
         )
         MOCK_MODE = True
         print("⚠ pyvitaisdk not found, using Mock Device")
@@ -96,6 +96,8 @@ class VisionTouchDataCollector:
                 data = self.vision_device.collect_sensor_data(
                     VTSDataType.FORCE6D_VECTOR,
                     VTSDataType.DEPTH_MAP,
+                    VTSDataType.RAW_IMG,
+                    VTSDataType.CALIBRATE_IMG,
                     VTSDataType.WARPED_IMG,
                     VTSDataType.DIFF_IMG,
                     VTSDataType.MARKER_IMG,
@@ -115,6 +117,10 @@ class VisionTouchDataCollector:
                 
                 # Collect images
                 images = {}
+                if VTSDataType.RAW_IMG in data:
+                    images['raw'] = data[VTSDataType.RAW_IMG]
+                if VTSDataType.CALIBRATE_IMG in data:
+                    images['calibrate'] = data[VTSDataType.CALIBRATE_IMG]
                 if VTSDataType.WARPED_IMG in data:
                     images['warped'] = data[VTSDataType.WARPED_IMG]
                 if VTSDataType.DIFF_IMG in data:
@@ -348,6 +354,20 @@ class ImageViewWidget(QWidget):
         # Image tabs
         self.image_tabs = QTabWidget()
         
+        # Raw image
+        self.raw_label = QLabel("No image")
+        self.raw_label.setAlignment(Qt.AlignCenter)
+        self.raw_label.setStyleSheet("background: #2c3e50; color: #ecf0f1;")
+        self.raw_label.setMinimumSize(400, 300)
+        self.image_tabs.addTab(self.raw_label, "Raw")
+        
+        # Calibrate image
+        self.calibrate_label = QLabel("No image")
+        self.calibrate_label.setAlignment(Qt.AlignCenter)
+        self.calibrate_label.setStyleSheet("background: #2c3e50; color: #ecf0f1;")
+        self.calibrate_label.setMinimumSize(400, 300)
+        self.image_tabs.addTab(self.calibrate_label, "Calibrate")
+        
         # Warped image
         self.warped_label = QLabel("No image")
         self.warped_label.setAlignment(Qt.AlignCenter)
@@ -380,6 +400,8 @@ class ImageViewWidget(QWidget):
         import cv2
         
         for key, label in [
+            ('raw', self.raw_label),
+            ('calibrate', self.calibrate_label),
             ('warped', self.warped_label),
             ('diff', self.diff_label),
             ('marker', self.marker_label)

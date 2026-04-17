@@ -13,6 +13,8 @@ from typing import Dict, Any, Optional
 class MockVTSDataType(Enum):
     """Mock data types matching pyvitaisdk.VTSDataType"""
     TIME_STAMP = "TIME_STAMP"
+    CALIBRATE_IMG = "CALIBRATE_IMG"
+    RAW_IMG = "RAW_IMG"
     WARPED_IMG = "WARPED_IMG"
     DIFF_IMG = "DIFF_IMG"
     DEPTH_MAP = "DEPTH_MAP"
@@ -25,10 +27,23 @@ class MockVTSDataType(Enum):
     SLIP_STATE = "SLIP_STATE"
 
 
+class MockVTSensorType(Enum):
+    """Mock sensor types matching pyvitaisdk.VTSensorType"""
+    GF225 = "GF225"
+    GF515I = "GF515I"
+    GF515T = "GF515T"
+    GFBCI = "GFBCI"
+    GFBCT = "GFBCT"
+
+
 class MockSlipState(Enum):
     """Mock slip state"""
-    NO_SLIP = "NO_SLIP"
-    SLIP_DETECTED = "SLIP_DETECTED"
+    NO_OBJ = "NO_OBJ"                  # 无物体接触
+    CONTACT = "CONTACT"                # 初次接触
+    STEADY_HOLD = "STEADY_HOLD"        # 稳定保持
+    INCIPIENT_SLIP = "INCIPIENT_SLIP"  # 初始滑移
+    PARTIAL_SLIP = "PARTIAL_SLIP"      # 部分滑移
+    COMPLETE_SLIP = "COMPLETE_SLIP"    # 完全滑移
 
 
 class MockVTSensor:
@@ -86,6 +101,12 @@ class MockVTSensor:
             if dtype == MockVTSDataType.TIME_STAMP:
                 data[dtype] = int((time.time() - self.start_time) * 1000)
                 
+            elif dtype == MockVTSDataType.CALIBRATE_IMG:
+                data[dtype] = self._generate_calibrate_image()
+                
+            elif dtype == MockVTSDataType.RAW_IMG:
+                data[dtype] = self._generate_raw_image()
+                
             elif dtype == MockVTSDataType.WARPED_IMG:
                 data[dtype] = self._generate_warped_image()
                 
@@ -117,6 +138,21 @@ class MockVTSensor:
                 data[dtype] = self._generate_slip_state()
         
         return data
+    
+    def _generate_calibrate_image(self) -> np.ndarray:
+        """Generate synthetic calibrate image"""
+        h, w, c = self.image_size
+        img = np.ones((h, w, c), dtype=np.uint8) * 100
+        # Add some mock calibration pattern
+        import cv2
+        cv2.putText(img, "MOCK CALIBRATION", (40, h//2), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (200, 200, 200), 2)
+        return img
+        
+    def _generate_raw_image(self) -> np.ndarray:
+        """Generate synthetic raw image (distorted)"""
+        # Just use warped image but slightly darker to simulate raw
+        img = self._generate_warped_image()
+        return (img * 0.8).astype(np.uint8)
     
     def _generate_warped_image(self) -> np.ndarray:
         """Generate synthetic warped image"""
@@ -281,11 +317,20 @@ class MockVTSensor:
     
     def _generate_slip_state(self):
         """Generate slip state"""
-        # Simulate occasional slip events
-        if self.slip_counter % 100 < 5:  # Slip for 5 frames every 100 frames
-            return MockSlipState.SLIP_DETECTED
+        # Simulate different slip states
+        cycle = self.slip_counter % 200
+        if cycle < 80:
+            return MockSlipState.NO_OBJ
+        elif cycle < 90:
+            return MockSlipState.CONTACT
+        elif cycle < 150:
+            return MockSlipState.STEADY_HOLD
+        elif cycle < 160:
+            return MockSlipState.INCIPIENT_SLIP
+        elif cycle < 180:
+            return MockSlipState.PARTIAL_SLIP
         else:
-            return MockSlipState.NO_SLIP
+            return MockSlipState.COMPLETE_SLIP
     
     def release(self):
         """Release mock sensor"""
@@ -302,6 +347,18 @@ class MockVTSDeviceFinder:
     def get_sns(self):
         """Get list of mock device serial numbers"""
         return self.mock_devices
+        
+    def get_devices(self):
+        """Get list of mock device configs"""
+        return [{"sn": sn, "type": "mock"} for sn in self.mock_devices]
+        
+    def count(self):
+        """Get number of available mock devices"""
+        return len(self.mock_devices)
+        
+    def indexes(self):
+        """Get list of mock device indexes"""
+        return list(range(len(self.mock_devices)))
     
     def get_device_by_sn(self, sn: str):
         """Get mock device config by serial number"""
@@ -319,6 +376,7 @@ class MockVTSError(Exception):
 
 # Export mock classes with same names as real SDK
 VTSensor = MockVTSensor
+VTSensorType = MockVTSensorType
 VTSDeviceFinder = MockVTSDeviceFinder
 VTSDataType = MockVTSDataType
 VTSError = MockVTSError

@@ -8,9 +8,14 @@ Supports: Modbus (RS485), Protobuf, CAN 2.0, CANFD, SocketCAN, ZLG
 Run:
     python hand_demo.py              # Auto-detect, interactive menu
     python hand_demo.py 1            # Run specific demo (1-8)
-    python hand_demo.py -p /dev/ttyUSB0  # Protobuf, default slave_id=10
-    python hand_demo.py -s can0 1    # SocketCAN, slave_id=1
-    python hand_demo.py -z 2         # ZLG CAN, slave_id=2
+    python hand_demo.py -m /dev/ttyUSB0 460800 127
+    python hand_demo.py -p /dev/ttyUSB0          # Protobuf with default slave_id 10
+    python hand_demo.py -p /dev/ttyUSB0 10       # Protobuf with custom slave_id
+    python hand_demo.py -c /dev/ttyUSB0 1000000 1
+    python hand_demo.py -f /dev/ttyUSB0 1000000 5000000 127
+    python hand_demo.py -b can0 1       # SDK built-in SocketCAN (recommended)
+    python hand_demo.py -s can0 1       # External adapter SocketCAN
+    python hand_demo.py -z 2
     python hand_demo.py -h           # Show help
 
 Demo modes:

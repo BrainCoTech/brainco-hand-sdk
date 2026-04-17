@@ -24,8 +24,8 @@ For detailed technical specifications and API references, visit: [BrainCo RevoHa
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/BrainCoTech/stark-serialport-example.git
-cd stark-serialport-example
+git clone https://github.com/BrainCoTech/brainco-hand-sdk.git
+cd brainco-hand-sdk
 ```
 
 2. For Python development:
