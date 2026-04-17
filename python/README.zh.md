@@ -599,18 +599,21 @@ SDK 现在内置了一套完整的原生跨平台 PyQt6 可视化调试程序 `g
 - **Revo1**：`revo1_utils.py` - 连接辅助函数、角度/位置转换、电流转换
 - **Revo2**：`revo2_utils.py` - 连接辅助函数、位置状态检查
 
-## 📖 其他资源
+## 📖 其他开源与生态资源
 
-- [官方文档](https://www.brainco-hz.com/docs/revolimb-hand/index.html)
-- [ROS/ROS2 集成](https://github.com/BrainCoTech/brainco_hand_ros2)
-
-## 🤝 技术支持
-
-获取技术支持：
-
-- 查看子目录中的示例代码
-- 查阅上方的 API 文档
-- 联系 BrainCo 技术支持团队
+- 🤖 **BrainCo 官方开源主页**: [BrainCoTech GitHub Organization](https://github.com/BrainCoTech) - 获取最新的固件、URDF 模型及生态应用项目
+- 📖 **官方文档**: [BrainCo 灵巧手官方开发文档](https://www.brainco-hz.com/docs/revolimb-hand/index.html)
+- 💽 **最新固件发布**: [revo-hand-firmware](https://github.com/BrainCoTech/revo-hand-firmware) - 提供适用于各版本灵巧手的稳定版固件
+- 🦾 **ROS / ROS2 集成**:
+  - [brainco_hand_ros2](https://github.com/BrainCoTech/brainco_hand_ros2) - 针对 ROS 2 提供的控制驱动层
+  - [ros2_control_demos](https://github.com/BrainCoTech/ros2_control_demos) - 提供基于 ROS 2 Control 的操作示例
+  - [revo2_description (ROS 2)](https://github.com/BrainCoTech/revo2_description) / [(ROS 1)](https://github.com/BrainCoTech/revo2_description_ros1) - 包含用于可视化与仿真的 URDF 描述
+- 🎮 **仿真环境**:
+  - [BrainCo Isaac Lab (RevoLab)](https://github.com/BrainCoTech/RevoLab) - 基于 NVIDIA Isaac Lab 打造的强化学习仿真环境
+- 🌐 **生态联动应用合集 (官网指南)**:
+  - [人形机器人 (Unitree G1) 联动方案](https://www.brainco-hz.com/docs/revolimb-hand/ecology/unitree.html) 及 [开源代码](https://github.com/BrainCoTech/unitree-g1-brainco-hand)
+  - [协作机械臂 (6自由度) 夹取集成](https://www.brainco-hz.com/docs/revolimb-hand/ecology/mechanical_revo2.html)
+  - [各种遥控操作方案 (肌电臂环 / 动捕手套)](https://www.brainco-hz.com/docs/revolimb-hand/ecology/arm.html)
 
 ## 📝 注意事项
 
@@ -619,6 +622,15 @@ SDK 现在内置了一套完整的原生跨平台 PyQt6 可视化调试程序 `g
 - 所有设备的位置值范围为 0（张开）到 1000（闭合）
 - 触觉版本设备使用电流控制而非力度等级
 - 在生产环境中使用快速检测模式以加快连接速度
+
+## 🤝 技术支持
+
+遇到问题？可以通过以下渠道获取我们提供的相关技术支持与帮助：
+
+- 📋 **提交工单 (Submit a ticket)**: [https://web.static.brainco.cn/work-order](https://web.static.brainco.cn/work-order)
+- 🐙 **GitHub**: [https://github.com/BrainCoTech](https://github.com/BrainCoTech)
+- 💡 **参考文档**: 请优先查看子目录中的示例代码或查阅全文 API 文档
+- 💬 **人工客服**: 直接联系 BrainCo 官方技术支持团队
 
 ---
 

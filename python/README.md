@@ -635,18 +635,21 @@ Supports the advanced 21 DOF dexterous hand (Revo3).
 - **Revo1**: `revo1_utils.py` - Connection helpers, angle/position conversion, current conversion
 - **Revo2**: `revo2_utils.py` - Connection helpers, position state checking
 
-## 📖 Additional Resources
+## 📖 Additional Open Source Resources
 
-- [Official Documentation](https://www.brainco-hz.com/docs/revolimb-hand/index.html)
-- [ROS/ROS2 Integration](https://github.com/BrainCoTech/brainco_hand_ros2)
-
-## 🤝 Support
-
-For technical support:
-
-- Check example code in subdirectories
-- Review API documentation above
-- Contact BrainCo technical support
+- 🤖 **BrainCo Open Source Hub**: [BrainCoTech GitHub Organization](https://github.com/BrainCoTech) - Discover latest firmware updates, URDF models, and ecosystem integrations
+- 📖 **Official Documentation**: [BrainCo Dexterous Hand Docs](https://www.brainco-hz.com/docs/revolimb-hand/index.html)
+- 💽 **Firmware Releases**: [revo-hand-firmware](https://github.com/BrainCoTech/revo-hand-firmware) - Official firmware variants for Revo devices
+- 🦾 **ROS / ROS 2 Integration**:
+  - [brainco_hand_ros2](https://github.com/BrainCoTech/brainco_hand_ros2) - Official ROS 2 Driver
+  - [ros2_control_demos](https://github.com/BrainCoTech/ros2_control_demos) - ROS 2 Control integration examples
+  - URDF Models: [ROS 2](https://github.com/BrainCoTech/revo2_description) | [ROS 1](https://github.com/BrainCoTech/revo2_description_ros1)
+- 🎮 **Simulation**:
+  - [BrainCo Isaac Lab (RevoLab)](https://github.com/BrainCoTech/RevoLab) - Reinforcement learning environments built upon NVIDIA Isaac Lab
+- 🌐 **Ecosystem App Guides**:
+  - [Unitree G1 Humanoid Integration](https://github.com/BrainCoTech/unitree-g1-brainco-hand)
+  - [6-DoF Robot Arm Integration](https://www.brainco-hz.com/docs/revolimb-hand/ecology/mechanical_revo2.html)
+  - [Teleoperation via EMG & Data Gloves](https://www.brainco-hz.com/docs/revolimb-hand/ecology/arm.html)
 
 ## 📝 Notes
 
@@ -695,6 +698,15 @@ from common_imports import modbus_open
 # Accepts both int and Baudrate enum
 client = await modbus_open("/dev/ttyUSB0", 5000000)
 ```
+
+## 🤝 Support
+
+Need help? Reach out to us through the following channels:
+
+- 📋 **Submit a ticket**: [https://web.static.brainco.cn/work-order](https://web.static.brainco.cn/work-order)
+- 🐙 **GitHub**: [https://github.com/BrainCoTech](https://github.com/BrainCoTech)
+- 💡 **References**: Check the example code in subdirectories and review the API documentation above
+- 💬 **Direct Support**: Contact the BrainCo technical support team
 
 ---
 
