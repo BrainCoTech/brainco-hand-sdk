@@ -223,18 +223,18 @@ class V3DeviceInfoPanel(QWidget):
 
         # Device info UI
         l_dev = QVBoxLayout()
-        self.lbl_hw = QLabel("HW: --")
-        self.lbl_fw = QLabel("FW: --")
-        self.lbl_sn = QLabel("SN: --")
-        self.lbl_online = QLabel("Online: --")
+        self.lbl_hw = QLabel(f"{tr('v3_hw')}: --")
+        self.lbl_fw = QLabel(f"{tr('v3_fw')}: --")
+        self.lbl_sn = QLabel(f"{tr('v3_sn')}: --")
+        self.lbl_online = QLabel(f"{tr('v3_online')}: --")
         for lbl in [self.lbl_hw, self.lbl_fw, self.lbl_sn, self.lbl_online]:
             l_dev.addWidget(lbl)
         self.group_dev.setLayout(l_dev)
 
         # Motor status UI
         l_motor = QVBoxLayout()
-        self.lbl_temp = QLabel("Temp: --")
-        self.lbl_errors = QLabel("Errors: --")
+        self.lbl_temp = QLabel(f"{tr('v3_temp')}: --")
+        self.lbl_errors = QLabel(f"{tr('v3_errors')}: --")
         self.lbl_last_update = QLabel("")
         self.lbl_last_update.setStyleSheet("color: #999; font-size: 10px;")
         for lbl in [self.lbl_temp, self.lbl_errors, self.lbl_last_update]:
@@ -250,36 +250,36 @@ class V3DeviceInfoPanel(QWidget):
         """Update all device info labels."""
         import time
         if hw is not None:
-            self.lbl_hw.setText(f"HW: {hw}")
+            self.lbl_hw.setText(f"{tr('v3_hw')}: {hw}")
         if fw is not None:
-            self.lbl_fw.setText(f"FW: {fw}")
+            self.lbl_fw.setText(f"{tr('v3_fw')}: {fw}")
         if sn is not None:
-            self.lbl_sn.setText(f"SN: {sn if sn else '(empty)'}")
+            self.lbl_sn.setText(f"{tr('v3_sn')}: {sn if sn else '(empty)'}")
         if online is not None:
             total = 21
             cnt = bin(online).count('1')
             offline = [f"M{i}" for i in range(total) if not (online & (1 << i))]
             if offline:
-                self.lbl_online.setText(f"Online: ⚠ {cnt}/{total}")
-                self.lbl_online.setToolTip(f"Offline: {', '.join(offline)}")
+                self.lbl_online.setText(f"{tr('v3_online')}: ⚠ {cnt}/{total}")
+                self.lbl_online.setToolTip(f"{tr('v3_offline')}: {', '.join(offline)}")
                 self.lbl_online.setStyleSheet("color: #e74c3c; font-weight: bold;")
             else:
-                self.lbl_online.setText(f"Online: ✅ {cnt}/{total}")
+                self.lbl_online.setText(f"{tr('v3_online')}: ✅ {cnt}/{total}")
                 self.lbl_online.setToolTip("")
                 self.lbl_online.setStyleSheet("")
         if temps is not None and len(temps) >= 21:
             max_t = max(temps[:21])
             max_i = temps[:21].index(max_t)
             color = "#e74c3c" if max_t >= 60 else ("#e67e22" if max_t >= 45 else "")
-            self.lbl_temp.setText(f"Temp: {int(max_t)}°C max (M{max_i})")
+            self.lbl_temp.setText(f"{tr('v3_temp')}: {int(max_t)}°C {tr('v3_max_temp')} (M{max_i})")
             self.lbl_temp.setStyleSheet(f"color: {color};" if color else "")
         if errors is not None:
             err_count = sum(1 for e in errors[:21] if (e & ~(1 << 11)) != 0)
             if err_count:
-                self.lbl_errors.setText(f"Errors: ❌ {err_count} motor(s)")
+                self.lbl_errors.setText(f"{tr('v3_errors')}: ❌ {err_count}")
                 self.lbl_errors.setStyleSheet("color: #e74c3c; font-weight: bold;")
             else:
-                self.lbl_errors.setText("Errors: ✅ None")
+                self.lbl_errors.setText(f"{tr('v3_errors')}: ✅ {tr('v3_no_errors')}")
                 self.lbl_errors.setStyleSheet(f"color: {COLORS['primary']};")
         self.lbl_last_update.setText(f"Updated: {time.strftime('%H:%M:%S')}")
 
@@ -290,6 +290,21 @@ class V3DeviceInfoPanel(QWidget):
             lbl.setText(lbl.text().split(':')[0] + ": --")
             lbl.setStyleSheet("")
         self.lbl_last_update.setText("")
+
+    def update_texts(self):
+        self.group_dev.setTitle(tr("device_info"))
+        self.group_motor.setTitle(tr("v3_motor_status_info"))
+        # Force re-evaluation of info text
+        self.lbl_hw.setText(f"{tr('v3_hw')}: {self.lbl_hw.text().split(': ', 1)[1] if ': ' in self.lbl_hw.text() else '--'}")
+        self.lbl_fw.setText(f"{tr('v3_fw')}: {self.lbl_fw.text().split(': ', 1)[1] if ': ' in self.lbl_fw.text() else '--'}")
+        self.lbl_sn.setText(f"{tr('v3_sn')}: {self.lbl_sn.text().split(': ', 1)[1] if ': ' in self.lbl_sn.text() else '--'}")
+        # Simplistic approach: if not connected, just reset format, else it updates automatically on next poll
+        if "⚠" not in self.lbl_online.text() and "✅" not in self.lbl_online.text():
+            self.lbl_online.setText(f"{tr('v3_online')}: --")
+        if "max" not in self.lbl_temp.text() and "最高" not in self.lbl_temp.text():
+            self.lbl_temp.setText(f"{tr('v3_temp')}: --")
+        if "❌" not in self.lbl_errors.text() and "✅" not in self.lbl_errors.text():
+            self.lbl_errors.setText(f"{tr('v3_errors')}: --")
 
 
 def run_async(coro_fn):
@@ -478,18 +493,18 @@ class V3FingerGroup(QGroupBox):
         # Header row with Open/Close buttons
         header = QHBoxLayout()
         header.setSpacing(4)
-        self.open_btn = QPushButton("Open")
+        self.open_btn = QPushButton(tr("btn_open"))
         self.open_btn.setFixedHeight(32)
         self.open_btn.setStyleSheet("font-size: 13px; font-weight: bold; padding: 4px 14px; min-width: 60px;")
         self.open_btn.clicked.connect(self._on_open)
         header.addWidget(self.open_btn)
-        self.close_btn = QPushButton("Close")
+        self.close_btn = QPushButton(tr("btn_close"))
         self.close_btn.setFixedHeight(32)
         self.close_btn.setStyleSheet("font-size: 13px; font-weight: bold; padding: 4px 14px; min-width: 60px;")
         self.close_btn.clicked.connect(self._on_close)
         header.addWidget(self.close_btn)
 
-        self.run_finger_btn = QPushButton("▶ Run Finger")
+        self.run_finger_btn = QPushButton(tr("btn_run_finger"))
         self.run_finger_btn.setFixedHeight(32)
         self.run_finger_btn.setStyleSheet("font-size: 13px; font-weight: bold; padding: 4px 10px;")
         self.run_finger_btn.clicked.connect(self._on_run_finger)
@@ -534,6 +549,11 @@ class V3FingerGroup(QGroupBox):
             slider.set_value_silent(value)
             slider._on_spin_changed(value)
 
+
+    def update_texts(self):
+        self.open_btn.setText(tr("btn_open"))
+        self.close_btn.setText(tr("btn_close"))
+        self.run_finger_btn.setText(tr("btn_run_finger"))
 
 # ============================================================================
 # MIT Motor Row (per motor: position + velocity + current + Kp + Kd)
@@ -827,8 +847,8 @@ class V3MotorControlPanel(QWidget):
         self.mode_combo = QComboBox()
         self.mode_combo.addItems([
             tr("mode_position"), tr("mode_current"),
-            "Impedance", "Damping",
-            "MIT", "Trajectory"
+            tr("mode_impedance"), tr("mode_damping"),
+            tr("mode_mit"), tr("mode_trajectory")
         ])
         self.mode_combo.setMinimumWidth(120)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
@@ -928,6 +948,15 @@ class V3MotorControlPanel(QWidget):
         self.spin_T.setFixedWidth(60)
         traj_layout.addWidget(self.spin_T)
         
+        self.lbl_speed_or = QLabel(tr("or_speed") + "(rpm):")
+        traj_layout.addWidget(self.lbl_speed_or)
+        self.spin_speed = QDoubleSpinBox()
+        self.spin_speed.setRange(0.0, 1000.0)
+        self.spin_speed.setValue(0.0)
+        self.spin_speed.setToolTip(tr("speed_priority_tooltip"))
+        self.spin_speed.setFixedWidth(65)
+        traj_layout.addWidget(self.spin_speed)
+        
         traj_layout.addWidget(QLabel("dt(ms):"))
         self.spin_dt = QSpinBox()
         self.spin_dt.setRange(1, 100)
@@ -939,7 +968,7 @@ class V3MotorControlPanel(QWidget):
         self.spin_kp = QDoubleSpinBox()
         self.spin_kp.setRange(0, 5.0)
         self.spin_kp.setSingleStep(0.1)
-        self.spin_kp.setValue(1.0)
+        self.spin_kp.setValue(3.0)
         self.spin_kp.setFixedWidth(55)
         traj_layout.addWidget(self.spin_kp)
         
@@ -947,7 +976,7 @@ class V3MotorControlPanel(QWidget):
         self.spin_kd = QDoubleSpinBox()
         self.spin_kd.setRange(0, 5.0)
         self.spin_kd.setSingleStep(0.01)
-        self.spin_kd.setValue(0.1)
+        self.spin_kd.setValue(0.3)
         self.spin_kd.setFixedWidth(55)
         traj_layout.addWidget(self.spin_kd)
         
@@ -958,7 +987,6 @@ class V3MotorControlPanel(QWidget):
         traj_layout.addStretch()
         
         self.traj_bar.setLayout(traj_layout)
-        self.traj_bar.hide()
         layout.addWidget(self.traj_bar)
 
         # Stacked widget: page 0 = motor sliders, page 1 = MIT, page 2 = Cartesian
@@ -973,6 +1001,9 @@ class V3MotorControlPanel(QWidget):
 
         # --- Page 2: Cartesian control ---
         self._build_cartesian_page()
+
+        # Set default mode to Trajectory (must be after all UI elements are built)
+        self.mode_combo.setCurrentIndex(MODE_TRAJECTORY)
 
     def _build_motor_page(self):
         scroll = QScrollArea()
@@ -1283,10 +1314,10 @@ class V3MotorControlPanel(QWidget):
         self.mode_label.setText(tr("mode") + ":")
         self.mode_combo.setItemText(0, tr("mode_position"))
         self.mode_combo.setItemText(1, tr("mode_current"))
-        self.mode_combo.setItemText(2, "Impedance")
-        self.mode_combo.setItemText(3, "Damping")
-        self.mode_combo.setItemText(4, "MIT")
-        self.mode_combo.setItemText(5, "Trajectory")
+        self.mode_combo.setItemText(2, tr("mode_impedance"))
+        self.mode_combo.setItemText(3, tr("mode_damping"))
+        self.mode_combo.setItemText(4, tr("mode_mit"))
+        self.mode_combo.setItemText(5, tr("mode_trajectory"))
         self.open_all_btn.setText(tr("btn_open_all"))
         self.close_all_btn.setText(tr("btn_close_all"))
         self.zero_all_btn.setText(tr("btn_zero_all"))
@@ -1301,7 +1332,21 @@ class V3MotorControlPanel(QWidget):
         self.software_e_stop_cb.setText(tr("v3_software_e_stop"))
         self.use_broadcast_id_cb.setText(tr("v3_use_broadcast_id"))
         self.btn_read_diag.setText(tr("v3_diag_read"))
+        
+        if hasattr(self, 'lbl_speed_or'):
+            self.lbl_speed_or.setText(tr("or_speed") + "(rpm):")
+        if hasattr(self, 'spin_speed'):
+            self.spin_speed.setToolTip(tr("speed_priority_tooltip"))
 
+        # Update finger group buttons
+        if hasattr(self, 'finger_groups'):
+            for group in self.finger_groups.values():
+                group.update_texts()
+
+        # Update info panels
+        for panel in [self.info_panel, self.mit_info_panel, self.cart_info_panel]:
+            if hasattr(panel, 'update_texts'):
+                panel.update_texts()
 
     # ========================================================================
     # Mode switching
@@ -1570,6 +1615,7 @@ class V3MotorControlPanel(QWidget):
         """Helper to get global trajectory params"""
         return {
             'T': self.spin_T.value() / 1000.0,
+            'speed': self.spin_speed.value(),
             'dt': self.spin_dt.value() / 1000.0,
             'kp': self.spin_kp.value(),
             'kd': self.spin_kd.value()
@@ -1578,9 +1624,14 @@ class V3MotorControlPanel(QWidget):
     def _on_run_motor_trajectory(self, motor_id, target):
         if not self.device: return
         p = self._get_traj_params()
-        run_async(lambda: self.device.revo3_move_joint_with_gains(
-            self.slave_id, motor_id, target, p['T'], p['dt'], p['kp'], p['kd']
-        ))
+        if p['speed'] > 0:
+            run_async(lambda: self.device.revo3_move_joint_with_speed_and_gains(
+                self.slave_id, motor_id, target, p['speed'], p['dt'], p['kp'], p['kd']
+            ))
+        else:
+            run_async(lambda: self.device.revo3_move_joint_with_gains(
+                self.slave_id, motor_id, target, p['T'], p['dt'], p['kp'], p['kd']
+            ))
         
     def _on_run_finger_trajectory(self, finger_name, targets_dict):
         if not self.device: return
@@ -1598,9 +1649,14 @@ class V3MotorControlPanel(QWidget):
         for mid, val in targets_dict.items():
             targets[mid] = val
             
-        run_async(lambda: self.device.revo3_move_hand_with_gains(
-            self.slave_id, targets, p['T'], p['dt'], p['kp'], p['kd']
-        ))
+        if p['speed'] > 0:
+            run_async(lambda: self.device.revo3_move_hand_with_speed_and_gains(
+                self.slave_id, targets, p['speed'], p['dt'], p['kp'], p['kd']
+            ))
+        else:
+            run_async(lambda: self.device.revo3_move_hand_with_gains(
+                self.slave_id, targets, p['T'], p['dt'], p['kp'], p['kd']
+            ))
         
     def _on_run_all(self):
         if not self.device or self.current_mode != MODE_TRAJECTORY:
@@ -1611,6 +1667,11 @@ class V3MotorControlPanel(QWidget):
             for mid, slider in group.motor_sliders.items():
                 targets[mid] = slider.spin.value()
                 
-        run_async(lambda: self.device.revo3_move_hand_with_gains(
-            self.slave_id, targets, p['T'], p['dt'], p['kp'], p['kd']
-        ))
+        if p['speed'] > 0:
+            run_async(lambda: self.device.revo3_move_hand_with_speed_and_gains(
+                self.slave_id, targets, p['speed'], p['dt'], p['kp'], p['kd']
+            ))
+        else:
+            run_async(lambda: self.device.revo3_move_hand_with_gains(
+                self.slave_id, targets, p['T'], p['dt'], p['kp'], p['kd']
+            ))

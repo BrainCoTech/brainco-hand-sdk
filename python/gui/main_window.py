@@ -51,7 +51,7 @@ class DfuOverlay(QWidget):
         font.setPointSize(24)
         font.setBold(True)
         painter.setFont(font)
-        painter.drawText(self.rect(), Qt.AlignCenter, "⚠ 固件升级中，请勿操作...")
+        painter.drawText(self.rect(), Qt.AlignCenter, tr("dfu_overlay_warning"))
 
     def show_overlay(self, parent_widget):
         """Show overlay covering the parent widget"""
@@ -550,7 +550,7 @@ class MainWindow(QMainWindow):
         print("[MainWindow] Connection lost detected")
 
         # Show warning in status bar
-        self.statusbar.showMessage("⚠ 连接丢失 - 设备可能已断开")
+        self.statusbar.showMessage(tr("status_connection_lost"))
 
         # Trigger disconnect cleanup via connection panel
         self.connection_panel._on_disconnect()
@@ -595,7 +595,7 @@ class MainWindow(QMainWindow):
         self.connection_panel.disconnect_btn.setEnabled(False)
         self.connection_panel.auto_detect_btn.setEnabled(False)
 
-        self.statusbar.showMessage("⚠ DFU 升级中，请勿断开连接...")
+        self.statusbar.showMessage(tr("dfu_status_warning"))
 
     def _on_dfu_finished(self, success):
         """DFU upgrade finished - unlock UI and auto-reconnect"""
@@ -608,17 +608,17 @@ class MainWindow(QMainWindow):
         self.connection_panel.auto_detect_btn.setEnabled(True)
 
         if success:
-            self.statusbar.showMessage("DFU 完成 - 等待设备重启后自动重连...")
+            self.statusbar.showMessage(tr("dfu_wait_reconnect"))
 
             # Auto-reconnect after delay (device needs time to reboot)
             from PySide6.QtCore import QTimer
             QTimer.singleShot(7000, self._auto_reconnect_after_dfu)
         else:
-            self.statusbar.showMessage("DFU 升级失败")
+            self.statusbar.showMessage(tr("dfu_failed"))
 
     def _auto_reconnect_after_dfu(self):
         """Auto-reconnect after DFU completion"""
-        self.statusbar.showMessage("正在重新连接设备...")
+        self.statusbar.showMessage(tr("status_reconnecting"))
 
         # Clear connection panel state (ZQWL is already closed by SDK after DFU)
         self.connection_panel.ctx = None

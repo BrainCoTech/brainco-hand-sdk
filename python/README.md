@@ -36,7 +36,7 @@ For users in China or when PyPI is slow, use the install script or download `.wh
 
 ```bash
 # Use install script (auto-detect platform)
-bash install_whl.sh 1.4.3 # Replace with actual version if needed
+bash install_whl.sh 1.4.5 # Replace with actual version if needed
 ```
 
 Or manually download and install:
@@ -58,7 +58,7 @@ pip3 install https://app.brainco.cn/universal/bc-stark-sdk/libs/v[VERSION]/bc_st
 pip3 install https://app.brainco.cn/universal/bc-stark-sdk/libs/v[VERSION]/bc_stark_sdk-[VERSION]-cp38-abi3-win_amd64.whl
 ```
 
-> **Note:** Replace `[VERSION]` with the desired version (e.g., `1.4.3`). The `abi3-cp38` tag means the wheel is compatible with Python 3.8+.
+> **Note:** Replace `[VERSION]` with the desired version (e.g., `1.4.5`). The `abi3-cp38` tag means the wheel is compatible with Python 3.8+.
 
 ### Install Other Dependencies
 
@@ -710,4 +710,4 @@ Need help? Reach out to us through the following channels:
 
 ---
 
-**Version:** Requires `bc-stark-sdk >= 1.4.3`
+**Version:** Requires `bc-stark-sdk >= 1.4.5`

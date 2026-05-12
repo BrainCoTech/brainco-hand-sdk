@@ -41,12 +41,12 @@ DEFAULT_FIRMWARE_PATHS = {
 
 # DFU State names
 DFU_STATE_NAMES = {
-    0: "空闲",
-    1: "启动中",
-    2: "已启动",
-    3: "传输中",
-    4: "已完成",
-    5: "已中止",
+    0: "dfu_state_idle",
+    1: "dfu_state_starting",
+    2: "dfu_state_started",
+    3: "dfu_state_transferring",
+    4: "dfu_state_completed",
+    5: "dfu_state_aborted",
 }
 
 # Firmware type mapping
@@ -118,16 +118,16 @@ class DfuWorker(QObject):
 
             # Check final state
             if self.dfu_completed:
-                self.finished.emit(True, "固件升级成功！设备将自动重启。")
+                self.finished.emit(True, tr("dfu_success_reboot"))
             elif self.dfu_failed:
-                self.finished.emit(False, "固件升级被中止")
+                self.finished.emit(False, tr("dfu_aborted"))
             else:
-                self.finished.emit(False, f"升级超时，状态: {DFU_STATE_NAMES.get(self.last_state, self.last_state)}")
+                self.finished.emit(False, tr("dfu_timeout").format(state=tr(DFU_STATE_NAMES.get(self.last_state, "dfu_state_unknown"))))
 
         except Exception as e:
             import traceback
             traceback.print_exc()
-            self.finished.emit(False, f"升级失败: {e}")
+            self.finished.emit(False, tr("dfu_fail_msg").format(error=str(e)))
 
     def _on_dfu_state(self, slave_id, state):
         """DFU state callback - called from SDK thread"""
@@ -141,7 +141,7 @@ class DfuWorker(QObject):
                 state_val = dfu_state.int_value
 
             self.last_state = state_val
-            state_name = DFU_STATE_NAMES.get(state_val, str(dfu_state))
+            state_name = tr(DFU_STATE_NAMES.get(state_val, "dfu_state_unknown"))
             print(f"[DFU] State: {state_name}")
 
             # Track completion/failure using enum
@@ -409,8 +409,8 @@ class DfuPanel(QWidget):
                     self.firmware_type_combo.setCurrentIndex(i)
                     break
         else:
-            self.device_type_label.setText("设备类型: --")
-            self.firmware_version_label.setText("当前固件: --")
+            self.device_type_label.setText(tr("device_type_none"))
+            self.firmware_version_label.setText(tr("current_firmware_none"))
 
     def _on_type_changed(self, index):
         """Firmware type changed"""
@@ -426,7 +426,7 @@ class DfuPanel(QWidget):
     def _browse_firmware(self):
         """Browse for firmware file"""
         filename, _ = QFileDialog.getOpenFileName(
-            self, "选择固件文件", "", "Binary Files (*.bin *.ota);;All Files (*)"
+            self, tr("select_firmware_file_title"), "", "Binary Files (*.bin *.ota);;All Files (*)"
         )
         if filename:
             self.firmware_path_edit.setText(filename)
@@ -434,18 +434,18 @@ class DfuPanel(QWidget):
     def _start_upgrade(self):
         """Start firmware upgrade"""
         if not self.device:
-            QMessageBox.warning(self, "错误", "请先连接设备")
+            QMessageBox.warning(self, tr("error_title"), tr("error_no_device"))
             return
 
         firmware_path = self.firmware_path_edit.text()
         if not firmware_path or not os.path.exists(firmware_path):
-            QMessageBox.warning(self, "错误", "请选择有效的固件文件")
+            QMessageBox.warning(self, tr("error_title"), tr("error_invalid_file"))
             return
 
         # Confirm
         reply = QMessageBox.question(
-            self, "确认升级",
-            "确定要开始固件升级吗？\n\n升级过程中请勿断开连接或关闭电源。",
+            self, tr("dfu_confirm_title"),
+            tr("dfu_confirm_msg"),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
@@ -460,9 +460,9 @@ class DfuPanel(QWidget):
 
         # Reset progress
         self.progress_bar.setValue(0)
-        self.status_label.setText("正在升级...")
+        self.status_label.setText(tr("dfu_upgrading"))
         self.status_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: #3498db; padding: 8px;")
-        self.state_label.setText("状态: 启动中")
+        self.state_label.setText(tr("dfu_state_prefix") + tr("dfu_state_starting"))
 
         # Start worker
         self._thread = QThread()
@@ -481,12 +481,12 @@ class DfuPanel(QWidget):
     def _on_progress(self, percent):
         """Progress update"""
         self.progress_bar.setValue(percent)
-        self.status_label.setText(f"正在升级... {percent}%")
+        self.status_label.setText(tr("dfu_upgrading_progress").format(percent=percent))
 
     def _on_state_changed(self, state):
         """DFU state changed"""
-        state_name = DFU_STATE_NAMES.get(state, f"未知({state})")
-        self.state_label.setText(f"状态: {state_name}")
+        state_name = tr(DFU_STATE_NAMES.get(state, "dfu_state_unknown"))
+        self.state_label.setText(tr("dfu_state_prefix") + state_name)
 
     def _on_finished(self, success, message):
         """Upgrade finished"""
@@ -499,20 +499,20 @@ class DfuPanel(QWidget):
 
         if success:
             self.progress_bar.setValue(100)
-            self.status_label.setText("✅ 升级成功，设备将自动重启")
+            self.status_label.setText(tr("dfu_success_short"))
             self.status_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: #28a745; padding: 8px;")
-            self.state_label.setText("状态: 已完成")
+            self.state_label.setText(tr("dfu_state_prefix") + tr("dfu_state_completed"))
             # No dialog - just show status in panel
         else:
-            self.status_label.setText("❌ 升级失败")
+            self.status_label.setText(tr("dfu_failed_short"))
             self.status_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: #dc3545; padding: 8px;")
             # Delay dialog to let UI update first
-            QTimer.singleShot(100, lambda: QMessageBox.warning(self, "升级失败", message))
+            QTimer.singleShot(100, lambda: QMessageBox.warning(self, tr("error_title"), message))
 
     def _reset_dfu_state(self):
         """Reset DFU state (for recovery from stuck states)"""
         if not self.device:
-            QMessageBox.warning(self, "错误", "请先连接设备")
+            QMessageBox.warning(self, tr("error_title"), tr("error_no_device"))
             return
         
         try:
@@ -532,12 +532,12 @@ class DfuPanel(QWidget):
             
             # Reset UI
             self.progress_bar.setValue(0)
-            self.status_label.setText("状态已重置")
+            self.status_label.setText(tr("dfu_state_reset"))
             self.status_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {COLORS['text_primary']}; padding: 8px;")
-            self.state_label.setText("状态: 空闲")
+            self.state_label.setText(tr("dfu_state_prefix") + tr("dfu_state_idle"))
             
-            QMessageBox.information(self, "成功", "DFU状态已重置，可以重新开始升级")
+            QMessageBox.information(self, tr("dfu_reset_success_title"), tr("dfu_reset_success_msg"))
         except Exception as e:
             import traceback
             traceback.print_exc()
-            QMessageBox.warning(self, "错误", f"重置失败: {e}")
+            QMessageBox.warning(self, tr("error_title"), tr("dfu_reset_fail_msg").format(error=str(e)))

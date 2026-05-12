@@ -36,3 +36,5 @@ python/revo3/revo3_motor_ids.png
 python/revo3/joint_spec_table.png
 python/revo3/revo3_joint_map.md
 python/revo3/mit_debug/
+jitter_analysis.py
+jitter_report.png

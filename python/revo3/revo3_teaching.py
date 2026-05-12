@@ -24,11 +24,11 @@ Usage:
 
 import asyncio
 import sys
+import os
 import time
 import json
 import platform
 import argparse
-from common_imports import modbus_open
 from revo3_utils import *
 
 
@@ -150,36 +150,10 @@ async def enter_teaching_mode(client, slave_id):
     """
     logger.info("Entering teaching mode (zero-torque)...")
 
-    if True:
-        # Explicitly set Impedance mode and zero stiffness
-        try:
-            await client.v3_set_ctrl_mode_all(slave_id, 4)  # 4 = Impedance Mode
-            await asyncio.sleep(0.1)
-            zeros = [0.0] * 21
-            pos = await client.v3_get_all_motor_positions(slave_id)
-            pos = pos[:21] if pos and len(pos) >= 21 else list(zeros)
-            await client.revo3_set_all_mit_batch(
-                slave_id,
-                zeros,  # Kp
-                zeros,  # Kd
-                pos,    # Position
-                zeros,  # Velocity
-                zeros   # Torque FF
-            )
-        except Exception as e:
-            logger.debug(f"Revo3 MIT zeroing skipped: {e}")
-
-    else:
-        # zero all MIT impedance params
-        zeros = [0.0] * REVO3_MOTOR_COUNT
-        await client.v3_set_all_motor_mit(
-            slave_id,
-            zeros,   # velocities
-            zeros,   # positions
-            zeros,   # currents (torque feedforward)
-            zeros,   # kp
-            zeros,   # kd
-        )
+    try:
+        await client.v3_set_teaching_mode(slave_id, True)
+    except Exception as e:
+        logger.error(f"Failed to enter teaching mode: {e}")
 
     logger.info("✅ Teaching mode active - hand is compliant, move fingers freely")
 
@@ -192,31 +166,19 @@ async def exit_teaching_mode(client, slave_id, restore_positions=None):
     """
     logger.info("Exiting teaching mode...")
 
-    if True:
-        # Workaround: switch back to Position mode (0) to restore internal PID stiffness
-        try:
-            await client.v3_set_ctrl_mode_all(slave_id, 0)
-            await asyncio.sleep(0.1)
-        except Exception as e:
-            logger.debug(f"restore position mode skipped: {e}")
+    try:
+        await client.v3_set_teaching_mode(slave_id, False)
+        await asyncio.sleep(0.1)
+    except Exception as e:
+        logger.error(f"Failed to exit teaching mode: {e}")
 
-        if restore_positions is not None:
-            await client.v3_set_all_motor_positions(slave_id, restore_positions)
-            logger.info(f"✅ Restored to initial positions")
-        else:
-            target = [0.0] * REVO3_MOTOR_COUNT
-            await client.v3_set_all_motor_positions(slave_id, target)
-            logger.info(f"✅ Reset to zero position")
+    if restore_positions is not None:
+        await client.v3_set_all_motor_positions(slave_id, restore_positions)
+        logger.info(f"✅ Restored to initial positions")
     else:
-        # restore Kp/Kd to recover positional rigidity
-        # (they were zeroed during teaching mode)
-        target = restore_positions if restore_positions else [0.0] * REVO3_MOTOR_COUNT
-        kps = [0.8] * REVO3_MOTOR_COUNT
-        kds = [0.01] * REVO3_MOTOR_COUNT
-        zeros = [0.0] * REVO3_MOTOR_COUNT
-        await client.v3_set_all_motor_mit(slave_id, zeros, target, zeros, kps, kds)
-        logger.info(f"✅ Restored rigidity and initial positions")
-        logger.info("✅ Motors returned to zero position")
+        target = [0.0] * REVO3_MOTOR_COUNT
+        await client.v3_set_all_motor_positions(slave_id, target)
+        logger.info(f"✅ Reset to zero position")
 
     await asyncio.sleep(0.5)
 
@@ -425,7 +387,17 @@ async def interactive_session(client, slave_id, motor_buffer, collector,
         )
 
         # Wait for user to press Enter to stop
-        await wait_for_key_or_enter("Press Enter to stop recording...")
+        try:
+            await wait_for_key_or_enter("Press Enter to stop recording...")
+        except asyncio.CancelledError:
+            logger.info("Interrupted during recording. Saving trajectory...")
+            record_task.cancel()
+            trajectory = result_holder.get('trajectory', Trajectory())
+            if save_path and trajectory.frame_count > 0:
+                trajectory.save(save_path)
+            elif trajectory.frame_count > 0:
+                trajectory.save(f"trajectory_{int(time.time())}.json")
+            raise
 
         # Stop recording
         record_task.cancel()
@@ -582,6 +554,7 @@ async def main(port_name=None, record_freq=DEFAULT_RECORD_FREQ,
             except Exception:
                 pass
         logger.info("Done. Closed.")
+        os._exit(0)
 
 
 if __name__ == "__main__":
@@ -629,7 +602,7 @@ Examples:
         ))
     except KeyboardInterrupt:
         logger.info("User interrupted")
-        sys.exit(0)
+        os._exit(0)
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
-        sys.exit(1)
+        os._exit(1)

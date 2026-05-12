@@ -1,6 +1,6 @@
 # BrainCo RevoHand SDK Examples Changelog
 
-## v1.4.3 (2026/05/11)
+## v1.4.5 (2026/05/12)
 
 ### 🚀 New Features
 - **Revo3 Smooth Trajectory Control**: Added host-side trajectory interpolation support (`hand_trajectory_revo3.cpp`, `revo3_trajectory.py`) for smooth multi-joint motion execution.

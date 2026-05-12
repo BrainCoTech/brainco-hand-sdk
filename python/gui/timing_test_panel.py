@@ -173,10 +173,13 @@ class TimingTestPanel(QWidget):
         mode_layout.addWidget(self.view_mode_label)
 
         self.view_mode_combo = QComboBox()
-        self.view_mode_combo.addItems(["Position", "Speed", "Current", "MIT"])
-        self.view_mode_combo.setCurrentText("MIT")   # default to MIT mode
+        self.view_mode_combo.addItem("Position", "Position")
+        self.view_mode_combo.addItem("Speed", "Speed")
+        self.view_mode_combo.addItem("Current", "Current")
+        self.view_mode_combo.addItem("MIT", "MIT")
+        self.view_mode_combo.setCurrentIndex(3)   # default to MIT mode
         self.view_mode_combo.setMinimumWidth(90)
-        self.view_mode_combo.currentTextChanged.connect(self._on_view_mode_changed)
+        self.view_mode_combo.currentIndexChanged.connect(self._on_view_mode_changed)
         mode_layout.addWidget(self.view_mode_combo)
 
         self.kp_label = QLabel("Kp:")
@@ -209,8 +212,9 @@ class TimingTestPanel(QWidget):
         self.signal_combo_label = QLabel("Signal:")
         mode_layout.addWidget(self.signal_combo_label)
         self.signal_combo = QComboBox()
-        self.signal_combo.addItems(["Step", "Sine"])
-        self.signal_combo.setCurrentText("Sine")
+        self.signal_combo.addItem("Step", "Step")
+        self.signal_combo.addItem("Sine", "Sine")
+        self.signal_combo.setCurrentIndex(1)
         self.signal_combo.setMinimumWidth(80)
         mode_layout.addWidget(self.signal_combo)
 
@@ -373,6 +377,17 @@ class TimingTestPanel(QWidget):
         self.packets_title.setText(tr("packets"))
         self.errors_title.setText(tr("errors"))
         self.result_group.setTitle(tr("test_results"))
+        
+        self.view_mode_label.setText(tr("timing_control") + ":")
+        self.signal_combo_label.setText(tr("timing_signal") + ":")
+        
+        self.view_mode_combo.setItemText(0, tr("mode_position"))
+        self.view_mode_combo.setItemText(1, tr("mode_speed"))
+        self.view_mode_combo.setItemText(2, tr("mode_current"))
+        self.view_mode_combo.setItemText(3, tr("mode_mit"))
+        
+        self.signal_combo.setItemText(0, tr("timing_step"))
+        self.signal_combo.setItemText(1, tr("timing_sine"))
 
     # ── Device setup ──────────────────────────────────────────────────────────
 
@@ -624,9 +639,10 @@ class TimingTestPanel(QWidget):
             return
         self._set_active_curves(self._resolve_active_joints())
 
-    def _on_view_mode_changed(self, mode: str):
-        self._view_mode = mode
-        is_mit = (mode == "MIT")
+    def _on_view_mode_changed(self, index: int):
+        mode_str = self.view_mode_combo.itemData(index)
+        self._view_mode = mode_str
+        is_mit = (mode_str == "MIT")
         self.kp_label.setVisible(is_mit)
         self.kp_spin.setVisible(is_mit)
         self.kd_label.setVisible(is_mit)
@@ -670,13 +686,13 @@ class TimingTestPanel(QWidget):
         else:
             active_set = set(range(self._num_curves))
 
-        mode = self._view_mode
+        mode_str = self._view_mode
         for i, (rpc, rvc, rcc) in enumerate(zip(
                 self.ref_pos_curves, self.ref_vel_curves, self.ref_cur_curves)):
             in_active = i in active_set
-            rpc.setVisible(in_active and mode in ("Position", "MIT"))
-            rvc.setVisible(in_active and mode in ("Speed",    "MIT"))
-            rcc.setVisible(in_active and mode == "Current")
+            rpc.setVisible(in_active and mode_str in ("Position", "MIT"))
+            rvc.setVisible(in_active and mode_str in ("Speed", "MIT"))
+            rcc.setVisible(in_active and mode_str == "Current")
 
     # ── Chart updates ─────────────────────────────────────────────────────────
 

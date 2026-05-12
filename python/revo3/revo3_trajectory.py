@@ -26,7 +26,9 @@ async def main(port_name=None):
 
     await demo_single_joint_move(client, slave_id)
     await demo_single_joint_custom_gains(client, slave_id)
+    await demo_single_joint_move_with_speed(client, slave_id)
     await demo_full_hand_move(client, slave_id)
+    await demo_full_hand_move_with_speed(client, slave_id)
     await demo_position_protection(client, slave_id)
     await demo_teach_and_replay_joint(client, slave_id)
     await demo_teach_and_replay_hand(client, slave_id)
@@ -90,6 +92,27 @@ async def demo_single_joint_custom_gains(client, slave_id):
     await asyncio.sleep(0.5)
 
 
+async def demo_single_joint_move_with_speed(client, slave_id):
+    """Single joint move with specified speed"""
+    logger.info("\n=== Single Joint Move with Speed ===")
+
+    joint_id = 3  # Pinky DIP
+    target = 45.0
+    speed = 30.0  # 30 rpm
+
+    logger.info(f"  J{joint_id}: target={target}°, speed={speed} rpm")
+    await client.revo3_move_joint_with_speed(slave_id, joint_id, target, speed, 0.01)
+
+    await asyncio.sleep(0.2)
+    status = await client.v3_get_motor_status_data(slave_id)
+    logger.info(f"  Final: {status.positions[joint_id]:.2f}°")
+
+    # Move back
+    logger.info(f"  Moving J{joint_id} back to 0° at {speed} rpm...")
+    await client.revo3_move_joint_with_speed(slave_id, joint_id, 0.0, speed, 0.01)
+    await asyncio.sleep(0.5)
+
+
 async def demo_full_hand_move(client, slave_id):
     """Full hand synchronized move"""
     logger.info("\n=== Full Hand Move (21 joints) ===")
@@ -115,6 +138,35 @@ async def demo_full_hand_move(client, slave_id):
     # Reset
     logger.info("  Resetting all to 0°...")
     await client.revo3_move_hand(slave_id, [0.0] * REVO3_MOTOR_COUNT, 3.0, 0.01)
+    await asyncio.sleep(0.5)
+
+
+async def demo_full_hand_move_with_speed(client, slave_id):
+    """Full hand synchronized move with uniform speed"""
+    logger.info("\n=== Full Hand Move with Uniform Speed ===")
+
+    # Move PIP joints to 60°, others stay at 0°
+    targets = [0.0] * REVO3_MOTOR_COUNT
+    pip_joints = [2, 6, 10, 14, 18]  # PIP joints for each finger
+    for jid in pip_joints:
+        targets[jid] = 60.0
+
+    speed = 20.0  # 20 rpm
+    logger.info(f"  PIP joints {pip_joints} → 60°, speed={speed} rpm")
+    await client.revo3_move_hand_with_speed(slave_id, targets, speed, 0.01)
+
+    # Verify
+    await asyncio.sleep(0.5)
+    status = await client.v3_get_motor_status_data(slave_id)
+    logger.info("  Final PIP positions:")
+    for jid in pip_joints:
+        pos = status.positions[jid]
+        err = abs(targets[jid] - pos)
+        logger.info(f"    J{jid:>2}: {pos:.2f}° (err={err:.2f}°) {'✅' if err < 5.0 else '⚠️'}")
+
+    # Reset
+    logger.info(f"  Resetting all to 0° at {speed} rpm...")
+    await client.revo3_move_hand_with_speed(slave_id, [0.0] * REVO3_MOTOR_COUNT, speed, 0.01)
     await asyncio.sleep(0.5)
 
 

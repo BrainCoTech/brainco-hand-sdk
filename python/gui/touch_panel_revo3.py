@@ -17,6 +17,7 @@ from .touch_common import (
     SummaryChart, HeatmapChart, build_status_cards,
     run_async, logger
 )
+from .i18n import tr
 
 
 # Summary: 16 values
@@ -311,3 +312,18 @@ class V3TouchSubPanel(QWidget):
         for chart in self.detail_charts:
             if chart is not None:
                 chart.clear()
+
+    def update_texts(self):
+        self.tabs.setTabText(0, f"📊 {tr('touch_summary')}")
+        
+        v3_finger_groups = [
+            ("touch_palm", "🖐"),
+            ("touch_thumb", "👆"),
+            ("touch_index", "👆"),
+            ("touch_middle", "👆"),
+            ("touch_ring", "👆"),
+            ("touch_pinky", "👆"),
+        ]
+        
+        for i, (tr_key, icon) in enumerate(v3_finger_groups):
+            self.tabs.setTabText(i + 1, f"{icon} {tr(tr_key)}")

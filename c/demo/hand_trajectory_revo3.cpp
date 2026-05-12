@@ -87,6 +87,35 @@ void demo_custom_gains_move(DeviceHandler *handle, uint8_t slave_id) {
     msleep(500);
 }
 
+void demo_single_joint_move_with_speed(DeviceHandler *handle, uint8_t slave_id) {
+    printf("\n=== Single Joint Move with Speed ===\n");
+
+    uint16_t joint_id = 3;  // Pinky DIP
+    float target = 45.0f;
+    float speed = 30.0f; // 30 rpm
+    float dt = 0.01f;
+
+    printf("  Moving J%d to %.1f° at %.1f rpm...\n", joint_id, target, speed);
+    int ret = stark_revo3_move_joint_with_speed(handle, slave_id, joint_id, target, speed, dt);
+    printf("  Result: %s\n", ret == 0 ? "✅ OK" : "❌ FAIL");
+
+    // Verify
+    msleep(200);
+    CV3MotorStatusData *status = stark_v3_get_motor_status_data(handle, slave_id);
+    if (status) {
+        float error = fabsf(target - status->positions[joint_id]);
+        printf("  Final: %.2f° (error: %.2f°) %s\n",
+               status->positions[joint_id], error,
+               error < 5.0f ? "✅" : "⚠️");
+        free_v3_motor_status_data(status);
+    }
+
+    // Move back
+    printf("  Moving J%d back to 0° at %.1f rpm...\n", joint_id, speed);
+    stark_revo3_move_joint_with_speed(handle, slave_id, joint_id, 0.0f, speed, dt);
+    msleep(500);
+}
+
 void demo_full_hand_move(DeviceHandler *handle, uint8_t slave_id) {
     printf("\n=== Full Hand Move ===\n");
 
@@ -125,6 +154,49 @@ void demo_full_hand_move(DeviceHandler *handle, uint8_t slave_id) {
     float zeros[REVO3_MOTOR_COUNT];
     memset(zeros, 0, sizeof(zeros));
     stark_revo3_move_hand(handle, slave_id, zeros, REVO3_MOTOR_COUNT, 3.0f, 0.01f);
+    msleep(500);
+}
+
+void demo_full_hand_move_with_speed(DeviceHandler *handle, uint8_t slave_id) {
+    printf("\n=== Full Hand Move with Uniform Speed ===\n");
+
+    float targets[REVO3_MOTOR_COUNT];
+    memset(targets, 0, sizeof(targets));
+
+    // Set PIP joints to 60°
+    int pip_joints[] = {2, 6, 10, 14, 18};
+    int n_pip = sizeof(pip_joints) / sizeof(pip_joints[0]);
+    for (int i = 0; i < n_pip; i++) {
+        targets[pip_joints[i]] = 60.0f;
+    }
+
+    float speed = 20.0f; // 20 rpm
+
+    printf("  PIP joints → 60°, speed=%.1f rpm\n", speed);
+    int ret = stark_revo3_move_hand_with_speed(
+        handle, slave_id, targets, REVO3_MOTOR_COUNT, speed, 0.01f);
+    printf("  Result: %s\n", ret == 0 ? "✅ OK" : "❌ FAIL");
+
+    // Verify
+    msleep(500);
+    CV3MotorStatusData *status = stark_v3_get_motor_status_data(handle, slave_id);
+    if (status) {
+        printf("  Final PIP positions:\n");
+        for (int i = 0; i < n_pip; i++) {
+            int jid = pip_joints[i];
+            float err = fabsf(targets[jid] - status->positions[jid]);
+            printf("    J%2d: %.2f° (err=%.2f°) %s\n",
+                   jid, status->positions[jid], err,
+                   err < 5.0f ? "✅" : "⚠️");
+        }
+        free_v3_motor_status_data(status);
+    }
+
+    // Reset
+    printf("  Resetting to 0° at %.1f rpm...\n", speed);
+    float zeros[REVO3_MOTOR_COUNT];
+    memset(zeros, 0, sizeof(zeros));
+    stark_revo3_move_hand_with_speed(handle, slave_id, zeros, REVO3_MOTOR_COUNT, speed, 0.01f);
     msleep(500);
 }
 
@@ -274,7 +346,9 @@ int main(int argc, char *argv[]) {
     // Trajectory control demos
     demo_single_joint_move(ctx.handle, ctx.slave_id);
     demo_custom_gains_move(ctx.handle, ctx.slave_id);
+    demo_single_joint_move_with_speed(ctx.handle, ctx.slave_id);
     demo_full_hand_move(ctx.handle, ctx.slave_id);
+    demo_full_hand_move_with_speed(ctx.handle, ctx.slave_id);
     demo_position_protection(ctx.handle, ctx.slave_id);
 
     // Teaching demos

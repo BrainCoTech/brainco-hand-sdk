@@ -144,12 +144,12 @@ class ActionSequencePanel(QWidget):
         builtin_layout.addWidget(self.builtin_label)
 
         self.builtin_combo = QComboBox()
-        self.builtin_combo.addItem("Open (张开)", "DefaultGestureOpen")
-        self.builtin_combo.addItem("Fist (握拳)", "DefaultGestureFist")
-        self.builtin_combo.addItem("Pinch Two (两指捏)", "DefaultGesturePinchTwo")
-        self.builtin_combo.addItem("Pinch Three (三指捏)", "DefaultGesturePinchThree")
-        self.builtin_combo.addItem("Pinch Side (侧捏)", "DefaultGesturePinchSide")
-        self.builtin_combo.addItem("Point (指向)", "DefaultGesturePoint")
+        self.builtin_combo.addItem(f"{tr('action_open')} (Open)", "DefaultGestureOpen")
+        self.builtin_combo.addItem(f"{tr('action_fist')} (Fist)", "DefaultGestureFist")
+        self.builtin_combo.addItem(f"{tr('action_pinch_two')} (Pinch Two)", "DefaultGesturePinchTwo")
+        self.builtin_combo.addItem(f"{tr('action_pinch_three')} (Pinch Three)", "DefaultGesturePinchThree")
+        self.builtin_combo.addItem(f"{tr('action_pinch_side')} (Pinch Side)", "DefaultGesturePinchSide")
+        self.builtin_combo.addItem(f"{tr('action_point')} (Point)", "DefaultGesturePoint")
         builtin_layout.addWidget(self.builtin_combo)
 
         self.run_builtin_btn = QPushButton("▶ Run")
@@ -263,6 +263,10 @@ class ActionSequencePanel(QWidget):
         self.preset_group.setTitle(tr("preset_actions"))
         self.preset_label.setText(tr("preset") + ":")
         self.load_preset_btn.setText(tr("btn_load"))
+        
+        self.builtin_group.setTitle(tr("builtin_gestures"))
+        self.builtin_label.setText(tr("gesture") + ":")
+        self.run_builtin_btn.setText(tr("btn_run"))
 
         # Update preset dropdown
         self.preset_combo.clear()

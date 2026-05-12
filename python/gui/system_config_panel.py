@@ -530,7 +530,7 @@ class SystemConfigPanel(QWidget):
         layout.setSpacing(12)
         
         # System Status Group
-        self.revo3_sys_group = QGroupBox("System Status")
+        self.revo3_sys_group = QGroupBox(tr("revo3_status"))
         sys_layout = QGridLayout()
         sys_layout.setSpacing(8)
         
@@ -541,40 +541,61 @@ class SystemConfigPanel(QWidget):
         self.sys_power_label = QLabel("--")
         self.sys_temp_label = QLabel("--")
         
-        sys_layout.addWidget(QLabel("System State:"), 0, 0)
+        self.lbl_sys_state_title = QLabel(tr("system_state") + ":")
+        sys_layout.addWidget(self.lbl_sys_state_title, 0, 0)
         sys_layout.addWidget(self.sys_state_label, 0, 1)
-        sys_layout.addWidget(QLabel("Error Code:"), 0, 2)
+        
+        self.lbl_error_code_title = QLabel(tr("error_code") + ":")
+        sys_layout.addWidget(self.lbl_error_code_title, 0, 2)
         sys_layout.addWidget(self.sys_error_label, 0, 3)
-        sys_layout.addWidget(QLabel("Current (mA):"), 1, 0)
+        
+        self.lbl_current_title = QLabel(tr("current_ma") + ":")
+        sys_layout.addWidget(self.lbl_current_title, 1, 0)
         sys_layout.addWidget(self.sys_current_label, 1, 1)
-        sys_layout.addWidget(QLabel("Voltage (V):"), 1, 2)
+        
+        self.lbl_voltage_title = QLabel(tr("voltage_v") + ":")
+        sys_layout.addWidget(self.lbl_voltage_title, 1, 2)
         sys_layout.addWidget(self.sys_voltage_label, 1, 3)
-        sys_layout.addWidget(QLabel("Power (W):"), 2, 0)
+        
+        self.lbl_power_title = QLabel(tr("power_w") + ":")
+        sys_layout.addWidget(self.lbl_power_title, 2, 0)
         sys_layout.addWidget(self.sys_power_label, 2, 1)
-        sys_layout.addWidget(QLabel("Temperature (°C):"), 2, 2)
+        
+        self.lbl_temp_title = QLabel(tr("temperature_c") + ":")
+        sys_layout.addWidget(self.lbl_temp_title, 2, 2)
         sys_layout.addWidget(self.sys_temp_label, 2, 3)
+        
+        # Add a stretching column at the end to push everything left
+        sys_layout.setColumnStretch(4, 1)
         
         self.revo3_sys_group.setLayout(sys_layout)
         layout.addWidget(self.revo3_sys_group)
         
         # Motor Info Group
-        self.revo3_motor_group = QGroupBox("Motor Info")
+        self.revo3_motor_group = QGroupBox(tr("motor_info"))
         motor_layout = QVBoxLayout()
         
         # Grid for motors
         grid = QGridLayout()
         grid.setSpacing(8)
         
-        grid.addWidget(QLabel("Motor ID"), 0, 0)
-        grid.addWidget(QLabel("Serial Number"), 0, 1)
-        grid.addWidget(QLabel("Firmware Version"), 0, 2)
+        self.lbl_motor_id = QLabel(tr("motor_id"))
+        self.lbl_motor_sn = QLabel(tr("v3_sn"))
+        self.lbl_motor_fw = QLabel(tr("v3_fw"))
+        
+        grid.addWidget(self.lbl_motor_id, 0, 0)
+        grid.addWidget(self.lbl_motor_sn, 0, 1)
+        grid.addWidget(self.lbl_motor_fw, 0, 2)
         
         self.motor_sn_labels = []
         self.motor_fw_labels = []
+        self.motor_row_labels = []
         
         for i in range(21):
             row = i + 1
-            grid.addWidget(QLabel(f"Motor {i}"), row, 0)
+            row_label = QLabel(f"{tr('motor')} {i}")
+            self.motor_row_labels.append(row_label)
+            grid.addWidget(row_label, row, 0)
             
             sn_label = QLabel("--")
             self.motor_sn_labels.append(sn_label)
@@ -584,6 +605,9 @@ class SystemConfigPanel(QWidget):
             self.motor_fw_labels.append(fw_label)
             grid.addWidget(fw_label, row, 2)
             
+        # Add a stretching column to push motor info to the left
+        grid.setColumnStretch(3, 1)
+        
         motor_layout.addLayout(grid)
         self.revo3_motor_group.setLayout(motor_layout)
         layout.addWidget(self.revo3_motor_group)
@@ -632,9 +656,30 @@ class SystemConfigPanel(QWidget):
         # Sub-tab names
         self.tabs.setTabText(0, "📋 " + tr("device_info"))
         self.tabs.setTabText(1, "⚙ " + tr("motor_control"))
-        self.tabs.setTabText(2, "📡 " + tr("modbus_baudrate").split("/")[0])
+        
+        self.tabs.setTabText(2, "📡 " + tr("communication"))
         if hasattr(self, 'finger_settings_tab_index'):
             self.tabs.setTabText(self.finger_settings_tab_index, "🖐 " + tr("finger_settings"))
+        if hasattr(self, 'revo3_status_tab_index'):
+            self.tabs.setTabText(self.revo3_status_tab_index, "📊 " + tr("revo3_status"))
+            
+        if hasattr(self, 'lbl_sys_state_title'):
+            self.lbl_sys_state_title.setText(tr("system_state") + ":")
+            self.lbl_error_code_title.setText(tr("error_code") + ":")
+            self.lbl_current_title.setText(tr("current_ma") + ":")
+            self.lbl_voltage_title.setText(tr("voltage_v") + ":")
+            self.lbl_power_title.setText(tr("power_w") + ":")
+            self.lbl_temp_title.setText(tr("temperature_c") + ":")
+            
+            self.revo3_sys_group.setTitle(tr("revo3_status"))
+            self.revo3_motor_group.setTitle(tr("motor_info"))
+            
+            self.lbl_motor_id.setText(tr("motor_id"))
+            self.lbl_motor_sn.setText(tr("v3_sn"))
+            self.lbl_motor_fw.setText(tr("v3_fw"))
+            
+            for i, lbl in enumerate(self.motor_row_labels):
+                lbl.setText(f"{tr('motor')} {i}")
 
     def set_device(self, device, slave_id, device_info, protocol=None, shared_data=None):
         """Set device"""
@@ -859,8 +904,8 @@ class SystemConfigPanel(QWidget):
                 self.sys_state_label.setText(str(sys_status.system_state))
                 self.sys_error_label.setText(str(sys_status.error_code))
                 self.sys_current_label.setText(str(sys_status.current_ma))
-                self.sys_voltage_label.setText(f"{sys_status.voltage_v:.1f}")
-                self.sys_power_label.setText(f"{sys_status.power_w:.1f}")
+                self.sys_voltage_label.setText(f"{sys_status.voltage_v / 1000.0:.1f}")
+                self.sys_power_label.setText(f"{sys_status.power_w / 1000.0:.1f}")
                 self.sys_temp_label.setText(f"{sys_status.temperature_c:.1f}")
             except Exception as e:
                 self._log(f"Failed to load system status: {e}")

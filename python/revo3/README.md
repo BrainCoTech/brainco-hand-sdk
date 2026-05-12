@@ -99,8 +99,12 @@ Trajectory & Teaching APIs:
 |-----|-------------|
 | `revo3_move_joint(slave_id, joint_id, target, T, dt)` | Quintic polynomial single joint move |
 | `revo3_move_joint_with_gains(slave_id, joint_id, target, T, dt, kp, kd)` | Single joint move with custom Kp/Kd |
+| `revo3_move_joint_with_speed(slave_id, joint_id, target, speed, dt)` | Single joint move by speed (rpm) |
+| `revo3_move_joint_with_speed_and_gains(slave_id, joint_id, target, speed, dt, kp, kd)` | Single joint move by speed with custom Kp/Kd |
 | `revo3_move_hand(slave_id, targets, T, dt)` | Full hand synchronized move (21 joints) |
 | `revo3_move_hand_with_gains(slave_id, targets, T, dt, kp, kd)` | Full hand move with custom Kp/Kd |
+| `revo3_move_hand_with_speed(slave_id, targets, speed, dt)` | Full hand move synchronized by speed (rpm) |
+| `revo3_move_hand_with_speed_and_gains(slave_id, targets, speed, dt, kp, kd)` | Full hand move by speed with custom Kp/Kd |
 | `revo3_teach_joint(slave_id, joint_id, dt, T)` | Record single joint (backdrive mode) |
 | `revo3_teach_hand(slave_id, dt, T)` | Record full hand (backdrive mode) |
 | `revo3_replay_joint(slave_id, joint_id, positions, dt, kp, kd)` | Replay recorded single joint |
@@ -366,9 +370,14 @@ online = await ctx.revo3_get_motor_online_status(slave_id)         # int (bitmas
 Host-side quintic polynomial trajectory planning. Generates smooth motion
 with zero velocity/acceleration at start and end.
 
+> **Speed unit:** All speed/velocity parameters use **RPM** (`1 RPM = 6 °/s`).
+
 ```python
 # Single joint: move J3 (Pinky DIP) to 45° over 2 seconds
 await ctx.revo3_move_joint(slave_id, joint_id=3, target=45.0, duration=2.0, dt=0.01)
+
+# Single joint by speed: move J3 to 45° at 30 rpm
+await ctx.revo3_move_joint_with_speed(slave_id, joint_id=3, target=45.0, speed=30.0, dt=0.01)
 
 # Single joint with custom stiffness/damping
 await ctx.revo3_move_joint_with_gains(
@@ -384,6 +393,9 @@ targets[9] = 45.0   # Middle MCP
 targets[13] = 45.0  # Index MCP
 targets[17] = 45.0  # Thumb MCP
 await ctx.revo3_move_hand(slave_id, targets, duration=3.0, dt=0.01)
+
+# Full hand by uniform speed: 20 rpm
+await ctx.revo3_move_hand_with_speed(slave_id, targets, speed=20.0, dt=0.01)
 
 # With custom gains
 await ctx.revo3_move_hand_with_gains(
@@ -690,6 +702,9 @@ Module  Name        Pts    Location
 | `revo3/revo3_teaching.py` | Interactive teaching: record & playback hand movements |
 | `revo3/revo3_dfu.py`      | Firmware upgrade (OTA via Modbus) |
 | `revo3/revo3_timing_test.py` | Single motor timing test w/ DataCollector |
+| `revo3/mit_debug/trajectory_to_c.py` | Convert trajectory JSON → C header for firmware debug |
+| `revo3/jitter_analysis.py` | Analyze trajectory jitter metrics, A/B comparison |
+| `revo3/mit_debug/quintic_trajectory.h` | C header: quintic interpolator for firmware MIT tracking |
 | `demo/hand_touch_revo3.py`   | Tactile sensor full demo               |
 
 ### Run Examples
@@ -709,6 +724,23 @@ python revo3/revo3_teaching.py --save pen_spin.json               # Record and s
 python revo3/revo3_teaching.py --load pen_spin.json --loop 5      # Load and loop playback
 python revo3/revo3_teaching.py --speed 0.5                        # Half-speed playback
 python revo3/revo3_teaching.py --freq 50                          # Record at 50Hz
+
+# Convert trajectory to C header (for firmware-side playback debug)
+python revo3/mit_debug/trajectory_to_c.py trajectory.json                   # Generate trajectory_data.h
+python revo3/mit_debug/trajectory_to_c.py trajectory.json --freq 200         # Resample to 200Hz
+python revo3/mit_debug/trajectory_to_c.py trajectory.json -o my_traj.h       # Custom output path
+
+# Analyze jitter from recorded trajectory
+python revo3/jitter_analysis.py trajectory.json                    # Per-motor jitter report
+python revo3/jitter_analysis.py trajectory.json --plot             # With visualization
+python revo3/jitter_analysis.py baseline.json optimized.json       # A/B comparison
+
+# Firmware C header — quintic trajectory interpolator
+# Copy revo3/mit_debug/quintic_trajectory.h into firmware project, then:
+#   #include "quintic_trajectory.h"
+#   QuinticTraj traj;
+#   quintic_init(&traj, 0.0f, 80.0f, 2.0f);   // 0°→80° in 2s
+#   quintic_get(&traj, t, &pos, &vel);         // call in 200Hz loop
 
 # Tactile sensor
 python demo/hand_touch_revo3.py
