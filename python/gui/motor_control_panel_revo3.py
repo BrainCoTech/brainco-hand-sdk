@@ -89,12 +89,11 @@ REVO3_CARTESIAN_AXES = ["x", "y", "z", "rx", "ry", "rz"]
 
 # Control modes
 MODE_POSITION = 0
-MODE_VELOCITY = 1
-MODE_CURRENT = 2
-MODE_IMPEDANCE = 3
-MODE_DAMPING = 4
-MODE_MIT = 5
-MODE_CARTESIAN = 6
+MODE_CURRENT = 1
+MODE_IMPEDANCE = 2
+MODE_DAMPING = 3
+MODE_MIT = 4
+MODE_TRAJECTORY = 5
 
 # Per-motor position ranges (degrees) based on joint specs
 # Pinky  (M0~M3):  Abd [-15,15], MCP [0,90], PIP [0,90], DIP [0,90]
@@ -171,7 +170,7 @@ def get_motor_close_position(motor_id):
 # Value ranges per mode (user-facing, used as default; position mode overrides per motor)
 MODE_RANGES = {
     MODE_POSITION:  (-30.0, 110.0, 1.0, "°"),  # envelope of all motor ranges
-    MODE_VELOCITY:  (0.0, 1000.0, 10.0, ""),
+    MODE_TRAJECTORY:(-30.0, 110.0, 1.0, "°"),  # same as position
     MODE_CURRENT:   (0.0, 3.0, 0.1, "A"),
     MODE_IMPEDANCE: (0.0, 100.0, 1.0, ""),   # impedance coefficient, param X100
     MODE_DAMPING:   (0.0, 100.0, 1.0, ""),   # damping coefficient, param X100
@@ -294,35 +293,32 @@ class V3DeviceInfoPanel(QWidget):
 
 
 def run_async(coro_fn):
-    """Run async coroutine from Qt callbacks (button clicks etc).
+    """Run async coroutine from Qt callbacks (button clicks etc) in a background thread.
 
     Must pass a zero-arg callable (lambda) that returns a coroutine.
-    PyO3 async methods require a *running* event loop at coroutine-creation
-    time, so we bootstrap via an async wrapper that creates the coroutine
-    inside the already-running loop.
-
-    Example:
-        run_async(lambda: device.v3_set_position(slave_id, 0, 45.0))
-
-    Only use for infrequent user actions, NOT for periodic polling
-    (SharedDataManager handles that).
+    This prevents blocking the PySide6 main GUI thread when executing
+    long-running tasks (like multi-second trajectories).
     """
-    async def _wrapper():
-        return await coro_fn()
-
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(_wrapper())
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return None
-    finally:
-        loop.close()
+    import threading
+    def _run_in_thread():
+        async def _wrapper():
+            return await coro_fn()
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_wrapper())
+        except Exception as e:
+            # Print a clean warning instead of a full crash traceback
+            print(f"[GUI Async Task] Warning/Error: {str(e)}")
+        finally:
+            loop.close()
+            
+    t = threading.Thread(target=_run_in_thread)
+    t.daemon = True
+    t.start()
 
 
 # ============================================================================
-# Motor Slider (shared by Position/Velocity/Current modes)
+# Motor Slider (shared by Position/Current modes)
 # ============================================================================
 
 class V3MotorSlider(QWidget):
@@ -332,7 +328,9 @@ class V3MotorSlider(QWidget):
         super().__init__()
         self.motor_id = motor_id
         self.send_callback = send_callback
+        self.run_callback = None
         self._slider_scale = 10
+        self.live_update = True
         self._setup_ui()
 
     def _setup_ui(self):
@@ -369,6 +367,14 @@ class V3MotorSlider(QWidget):
         self.spin.valueChanged.connect(self._on_spin_changed)
         layout.addWidget(self.spin)
 
+        self.run_btn = QPushButton("▶")
+        self.run_btn.setFixedWidth(24)
+        self.run_btn.setStyleSheet("font-size: 10px; font-weight: bold; padding: 2px;")
+        self.run_btn.setToolTip("Run Trajectory")
+        self.run_btn.clicked.connect(self._on_run_clicked)
+        self.run_btn.hide()
+        layout.addWidget(self.run_btn)
+
         self.status_label = QLabel("--")
         self.status_label.setFixedWidth(55)
         self.status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -376,7 +382,7 @@ class V3MotorSlider(QWidget):
         layout.addWidget(self.status_label)
 
     def set_mode_range(self, min_val, max_val, step, mode=None):
-        if mode == MODE_POSITION:
+        if mode == MODE_POSITION or mode == MODE_TRAJECTORY:
             min_val, max_val = get_motor_position_range(self.motor_id)
         self.slider.blockSignals(True)
         self.spin.blockSignals(True)
@@ -394,13 +400,19 @@ class V3MotorSlider(QWidget):
         self.spin.blockSignals(True)
         self.spin.setValue(float_val)
         self.spin.blockSignals(False)
-        self.send_callback(self.motor_id, float_val)
+        if self.live_update:
+            self.send_callback(self.motor_id, float_val)
 
     def _on_spin_changed(self, value):
         self.slider.blockSignals(True)
         self.slider.setValue(int(value * self._slider_scale))
         self.slider.blockSignals(False)
-        self.send_callback(self.motor_id, value)
+        if self.live_update:
+            self.send_callback(self.motor_id, value)
+
+    def _on_run_clicked(self):
+        if self.run_callback:
+            self.run_callback(self.motor_id, self.spin.value())
 
     def update_diagnostics(self, temp, is_online, err_val=0):
         if not is_online:
@@ -443,7 +455,7 @@ class V3MotorSlider(QWidget):
 
 
 # ============================================================================
-# Finger Group (shared by Position/Velocity/Current modes)
+# Finger Group (shared by Position/Current modes)
 # ============================================================================
 
 class V3FingerGroup(QGroupBox):
@@ -455,6 +467,7 @@ class V3FingerGroup(QGroupBox):
         self.motor_ids = motor_ids
         self.motor_sliders = {}
         self.finger_action_callback = finger_action_callback
+        self.run_finger_callback = None
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         layout = QVBoxLayout()
@@ -475,6 +488,14 @@ class V3FingerGroup(QGroupBox):
         self.close_btn.setStyleSheet("font-size: 13px; font-weight: bold; padding: 4px 14px; min-width: 60px;")
         self.close_btn.clicked.connect(self._on_close)
         header.addWidget(self.close_btn)
+
+        self.run_finger_btn = QPushButton("▶ Run Finger")
+        self.run_finger_btn.setFixedHeight(32)
+        self.run_finger_btn.setStyleSheet("font-size: 13px; font-weight: bold; padding: 4px 10px;")
+        self.run_finger_btn.clicked.connect(self._on_run_finger)
+        self.run_finger_btn.hide()
+        header.addWidget(self.run_finger_btn)
+
         header.addStretch()
         layout.addLayout(header)
 
@@ -490,6 +511,11 @@ class V3FingerGroup(QGroupBox):
     def _on_close(self):
         if self.finger_action_callback:
             self.finger_action_callback(self.finger_name, "close")
+
+    def _on_run_finger(self):
+        if self.run_finger_callback:
+            targets = {mid: slider.spin.value() for mid, slider in self.motor_sliders.items()}
+            self.run_finger_callback(self.finger_name, targets)
 
     def set_mode_range(self, min_val, max_val, step, mode=None):
         for slider in self.motor_sliders.values():
@@ -610,6 +636,14 @@ class V3MitMotorRow(QWidget):
             'kd': self.kd_spin.value(),
         }
         self.send_callback(self.motor_id, params)
+
+    def set_gains_silent(self, kp, kd):
+        self.kp_spin.blockSignals(True)
+        self.kd_spin.blockSignals(True)
+        self.kp_spin.setValue(kp)
+        self.kd_spin.setValue(kd)
+        self.kp_spin.blockSignals(False)
+        self.kd_spin.blockSignals(False)
 
     def update_status(self, value):
         self.status_label.setText(f"{value:.1f}")
@@ -740,7 +774,7 @@ class V3MotorControlPanel(QWidget):
     """Motor Control Panel for Revo3 (23 motors, float values)
 
     Modes:
-      - Position / Velocity / Current: per-motor slider control
+      - Position / Current: per-motor slider control
       - MIT: per-motor impedance control (pos + vel + cur + Kp + Kd)
       - Cartesian: per-finger 6-DoF pose control (x, y, z, rx, ry, rz)
     """
@@ -792,9 +826,9 @@ class V3MotorControlPanel(QWidget):
 
         self.mode_combo = QComboBox()
         self.mode_combo.addItems([
-            tr("mode_position"), tr("mode_speed"), tr("mode_current"),
+            tr("mode_position"), tr("mode_current"),
             "Impedance", "Damping",
-            "MIT", "Cartesian"
+            "MIT", "Trajectory"
         ])
         self.mode_combo.setMinimumWidth(120)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
@@ -882,6 +916,51 @@ class V3MotorControlPanel(QWidget):
         top_layout2.addStretch()
         layout.addLayout(top_layout2)
 
+        # Trajectory Params Toolbar (Hidden by default)
+        self.traj_bar = QWidget()
+        traj_layout = QHBoxLayout()
+        traj_layout.setContentsMargins(0, 0, 0, 0)
+        
+        traj_layout.addWidget(QLabel("T(ms):"))
+        self.spin_T = QSpinBox()
+        self.spin_T.setRange(10, 10000)
+        self.spin_T.setValue(1000)
+        self.spin_T.setFixedWidth(60)
+        traj_layout.addWidget(self.spin_T)
+        
+        traj_layout.addWidget(QLabel("dt(ms):"))
+        self.spin_dt = QSpinBox()
+        self.spin_dt.setRange(1, 100)
+        self.spin_dt.setValue(10)
+        self.spin_dt.setFixedWidth(50)
+        traj_layout.addWidget(self.spin_dt)
+        
+        traj_layout.addWidget(QLabel("Kp:"))
+        self.spin_kp = QDoubleSpinBox()
+        self.spin_kp.setRange(0, 5.0)
+        self.spin_kp.setSingleStep(0.1)
+        self.spin_kp.setValue(1.0)
+        self.spin_kp.setFixedWidth(55)
+        traj_layout.addWidget(self.spin_kp)
+        
+        traj_layout.addWidget(QLabel("Kd:"))
+        self.spin_kd = QDoubleSpinBox()
+        self.spin_kd.setRange(0, 5.0)
+        self.spin_kd.setSingleStep(0.01)
+        self.spin_kd.setValue(0.1)
+        self.spin_kd.setFixedWidth(55)
+        traj_layout.addWidget(self.spin_kd)
+        
+        self.run_all_btn = QPushButton("▶ Run All")
+        self.run_all_btn.setStyleSheet("font-size: 13px; font-weight: bold; padding: 4px 14px; background-color: #27ae60; color: white;")
+        self.run_all_btn.clicked.connect(self._on_run_all)
+        traj_layout.addWidget(self.run_all_btn)
+        traj_layout.addStretch()
+        
+        self.traj_bar.setLayout(traj_layout)
+        self.traj_bar.hide()
+        layout.addWidget(self.traj_bar)
+
         # Stacked widget: page 0 = motor sliders, page 1 = MIT, page 2 = Cartesian
         self.stack = QStackedWidget()
         layout.addWidget(self.stack, 1)
@@ -911,7 +990,10 @@ class V3MotorControlPanel(QWidget):
         for i, name in enumerate(finger_names):
             motor_ids = finger_motors[name]
             group = V3FingerGroup(name, motor_ids, self._on_motor_value_changed, self._on_finger_action)
+            group.run_finger_callback = self._on_run_finger_trajectory
             self.finger_groups[name] = group
+            for mid, slider in group.motor_sliders.items():
+                slider.run_callback = self._on_run_motor_trajectory
             row = 0 if i < 3 else 1
             col = i if i < 3 else i - 3
             grid.addWidget(group, row, col)
@@ -934,9 +1016,40 @@ class V3MotorControlPanel(QWidget):
         scroll.setFrameShape(QFrame.NoFrame)
 
         container = QWidget()
+        vbox = QVBoxLayout()
+        vbox.setSpacing(8)
+        container.setLayout(vbox)
+        
+        # MIT Global Top Bar
+        mit_bar = QHBoxLayout()
+        mit_bar.setContentsMargins(0, 0, 0, 0)
+        
+        mit_bar.addWidget(QLabel("Global Kp:"))
+        self.mit_global_kp = QDoubleSpinBox()
+        self.mit_global_kp.setRange(*MIT_KP_RANGE[:2])
+        self.mit_global_kp.setSingleStep(MIT_KP_RANGE[2])
+        self.mit_global_kp.setValue(1.0)
+        self.mit_global_kp.setFixedWidth(65)
+        mit_bar.addWidget(self.mit_global_kp)
+        
+        mit_bar.addWidget(QLabel("Global Kd:"))
+        self.mit_global_kd = QDoubleSpinBox()
+        self.mit_global_kd.setRange(*MIT_KD_RANGE[:2])
+        self.mit_global_kd.setSingleStep(MIT_KD_RANGE[2])
+        self.mit_global_kd.setValue(0.1)
+        self.mit_global_kd.setFixedWidth(65)
+        mit_bar.addWidget(self.mit_global_kd)
+        
+        apply_btn = QPushButton("Apply Kp/Kd to All")
+        apply_btn.clicked.connect(self._on_mit_apply_all_gains)
+        mit_bar.addWidget(apply_btn)
+        mit_bar.addStretch()
+        
+        vbox.addLayout(mit_bar)
+
         grid = QGridLayout()
         grid.setSpacing(8)
-        container.setLayout(grid)
+        vbox.addLayout(grid)
 
         self.mit_groups = {}
         finger_names = get_v3_finger_names()
@@ -1169,12 +1282,11 @@ class V3MotorControlPanel(QWidget):
     def update_texts(self):
         self.mode_label.setText(tr("mode") + ":")
         self.mode_combo.setItemText(0, tr("mode_position"))
-        self.mode_combo.setItemText(1, tr("mode_speed"))
-        self.mode_combo.setItemText(2, tr("mode_current"))
-        self.mode_combo.setItemText(3, "Impedance")
-        self.mode_combo.setItemText(4, "Damping")
-        self.mode_combo.setItemText(5, "MIT")
-        self.mode_combo.setItemText(6, "Cartesian")
+        self.mode_combo.setItemText(1, tr("mode_current"))
+        self.mode_combo.setItemText(2, "Impedance")
+        self.mode_combo.setItemText(3, "Damping")
+        self.mode_combo.setItemText(4, "MIT")
+        self.mode_combo.setItemText(5, "Trajectory")
         self.open_all_btn.setText(tr("btn_open_all"))
         self.close_all_btn.setText(tr("btn_close_all"))
         self.zero_all_btn.setText(tr("btn_zero_all"))
@@ -1197,22 +1309,33 @@ class V3MotorControlPanel(QWidget):
 
     def _on_mode_changed(self, index):
         self.current_mode = index
-        if index <= MODE_DAMPING:
-            # Position / Velocity / Current / Impedance / Damping -> motor slider page
+        
+        if hasattr(self, 'traj_bar'):
+            if index == MODE_TRAJECTORY:
+                self.traj_bar.show()
+            else:
+                self.traj_bar.hide()
+            
+        if index <= MODE_DAMPING or index == MODE_TRAJECTORY:
+            # Position / Current / Impedance / Damping / Trajectory -> motor slider page
             self.stack.setCurrentIndex(0)
             min_val, max_val, step, _ = MODE_RANGES[index]
+            is_traj = (index == MODE_TRAJECTORY)
             for group in self.finger_groups.values():
                 group.set_mode_range(min_val, max_val, step, index)
+                group.run_finger_btn.setVisible(is_traj)
+                group.open_btn.setVisible(not is_traj)
+                group.close_btn.setVisible(not is_traj)
+                for slider in group.motor_sliders.values():
+                    slider.live_update = not is_traj
+                    slider.run_btn.setVisible(is_traj)
+                    
             # Show open/close buttons only in position mode
             self.open_all_btn.setVisible(index == MODE_POSITION)
             self.close_all_btn.setVisible(index == MODE_POSITION)
 
         elif index == MODE_MIT:
             self.stack.setCurrentIndex(1)
-            self.open_all_btn.setVisible(False)
-            self.close_all_btn.setVisible(False)
-        elif index == MODE_CARTESIAN:
-            self.stack.setCurrentIndex(2)
             self.open_all_btn.setVisible(False)
             self.close_all_btn.setVisible(False)
 
@@ -1232,8 +1355,6 @@ class V3MotorControlPanel(QWidget):
             sid = self.slave_id
             if self.current_mode == MODE_POSITION:
                 await device.v3_set_motor_position(sid, motor_id, value)
-            elif self.current_mode == MODE_VELOCITY:
-                await device.v3_set_motor_velocity(sid, motor_id, value)
             elif self.current_mode == MODE_CURRENT:
                 await device.v3_set_motor_current(sid, motor_id, value)
             elif self.current_mode == MODE_IMPEDANCE:
@@ -1262,6 +1383,13 @@ class V3MotorControlPanel(QWidget):
             )
         except Exception as e:
             print(f"[V3Motor] MIT command failed (motor {motor_id}): {e}")
+
+    def _on_mit_apply_all_gains(self):
+        kp = self.mit_global_kp.value()
+        kd = self.mit_global_kd.value()
+        for group in self.mit_groups.values():
+            for row in group.motor_rows.values():
+                row.set_gains_silent(kp, kd)
 
     def _on_cartesian_value_changed(self, finger_id, pose):
         device = self.device
@@ -1299,16 +1427,12 @@ class V3MotorControlPanel(QWidget):
             # Choose values based on mode
             if self.current_mode == MODE_POSITION:
                 values = status.positions
-            elif self.current_mode == MODE_VELOCITY:
-                values = status.velocities
             elif self.current_mode == MODE_CURRENT:
                 values = status.currents
             elif self.current_mode == MODE_MIT:
                 values = status.positions  # Show position as primary status for MIT
-            elif self.current_mode == MODE_CARTESIAN:
-                # Cartesian mode: no motor-level status to show from buffer
-                # (fingertip poses would need a separate buffer/API)
-                return
+            elif self.current_mode == MODE_TRAJECTORY:
+                values = status.positions
             else:
                 values = []
 
@@ -1423,8 +1547,6 @@ class V3MotorControlPanel(QWidget):
 
             if self.current_mode == MODE_POSITION:
                 run_async(lambda: self.device.v3_set_all_motor_positions(self.slave_id, targets))
-            elif self.current_mode == MODE_VELOCITY:
-                run_async(lambda: self.device.v3_set_all_motor_velocities(self.slave_id, targets))
             elif self.current_mode == MODE_CURRENT:
                 run_async(lambda: self.device.v3_set_all_motor_currents(self.slave_id, targets))
             elif self.current_mode in (MODE_IMPEDANCE, MODE_DAMPING):
@@ -1440,8 +1562,55 @@ class V3MotorControlPanel(QWidget):
             run_async(lambda: self.device.v3_set_all_motor_mit(
                 self.slave_id, targets, targets, targets, targets, targets))
 
-        elif self.current_mode == MODE_CARTESIAN:
-            for group in self.cartesian_groups.values():
-                group.zero_all()
-                fp = sdk.FingertipPose(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-                run_async(lambda: self.device.v3_set_fingertip_pose(self.slave_id, group.finger_id, fp))
+    # ========================================================================
+    # Trajectory Execution
+    # ========================================================================
+    
+    def _get_traj_params(self):
+        """Helper to get global trajectory params"""
+        return {
+            'T': self.spin_T.value() / 1000.0,
+            'dt': self.spin_dt.value() / 1000.0,
+            'kp': self.spin_kp.value(),
+            'kd': self.spin_kd.value()
+        }
+        
+    def _on_run_motor_trajectory(self, motor_id, target):
+        if not self.device: return
+        p = self._get_traj_params()
+        run_async(lambda: self.device.revo3_move_joint_with_gains(
+            self.slave_id, motor_id, target, p['T'], p['dt'], p['kp'], p['kd']
+        ))
+        
+    def _on_run_finger_trajectory(self, finger_name, targets_dict):
+        if not self.device: return
+        p = self._get_traj_params()
+        
+        # Build global targets list
+        targets = [0.0] * get_v3_motor_count()
+        # Read current shared data positions to avoid moving other fingers to 0
+        status = self.shared_data.get_latest_v3_motor() if self.shared_data else None
+        if status:
+            for i in range(get_v3_motor_count()):
+                targets[i] = status.positions[i]
+                
+        # Override with finger targets
+        for mid, val in targets_dict.items():
+            targets[mid] = val
+            
+        run_async(lambda: self.device.revo3_move_hand_with_gains(
+            self.slave_id, targets, p['T'], p['dt'], p['kp'], p['kd']
+        ))
+        
+    def _on_run_all(self):
+        if not self.device or self.current_mode != MODE_TRAJECTORY:
+            return
+        p = self._get_traj_params()
+        targets = [0.0] * get_v3_motor_count()
+        for group in self.finger_groups.values():
+            for mid, slider in group.motor_sliders.items():
+                targets[mid] = slider.spin.value()
+                
+        run_async(lambda: self.device.revo3_move_hand_with_gains(
+            self.slave_id, targets, p['T'], p['dt'], p['kp'], p['kd']
+        ))

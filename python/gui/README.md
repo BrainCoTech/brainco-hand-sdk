@@ -16,6 +16,7 @@ Unified GUI tool for controlling and monitoring Stark dexterous hand devices.
 ### Supported Devices
 - Revo1 Basic / Touch / Advanced / AdvancedTouch
 - Revo2 Basic / Touch / TouchPressure
+- Revo3 Ultra / UltraTouch (21 DoF, Modbus RTU @ 5 Mbps)
 
 ### Language Support
 - English (Default)
@@ -145,6 +146,18 @@ pip install -r requirements.txt
 python main.py
 ```
 
+Revo3 Modbus mode:
+
+```bash
+python main.py --revo3-modbus
+```
+
+Offline development (mock device, no hardware needed):
+
+```bash
+python main.py --mock revo3
+```
+
 Or from parent directory:
 
 ```bash
@@ -191,16 +204,20 @@ gui/
 ├── main_window.py              # Main window
 ├── i18n.py                     # Internationalization
 ├── styles.py                   # UI styles
+├── shared_data.py              # Cross-panel shared state
 ├── connection_panel.py         # Connection panel (auto-detect, CAN scan)
-├── motor_control_panel.py      # Motor control panel
+├── motor_control_panel.py      # Motor control panel (Revo1/2)
+├── motor_control_panel_revo3.py # Motor control panel (Revo3, 21 DoF)
 ├── touch_sensor_panel.py       # Touch sensor panel (charts)
 ├── data_collector_panel.py     # Data collection panel
 ├── action_sequence_panel.py    # Action sequence panel
+├── teaching_panel.py           # Teaching mode panel (record & playback)
 ├── timing_test_panel.py        # Timing test panel
 ├── realtime_monitor_panel.py   # Realtime monitor panel (waveforms)
 ├── hand_visualization.py       # Hand visualization widget
-├── dfu_panel.py                # DFU firmware upgrade panel (NEW)
+├── dfu_panel.py                # DFU firmware upgrade panel
 ├── system_config_panel.py      # System config panel
+├── mock_device.py              # Mock device for offline development
 ├── mock_touch_gui.py           # Standalone offline mock data UI tester
 ├── README.md                   # This file
 └── requirements.txt            # Dependencies

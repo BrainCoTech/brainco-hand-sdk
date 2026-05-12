@@ -128,6 +128,9 @@ class SystemConfigPanel(QWidget):
         # Tab 4: Revo2 Finger Settings
         self._setup_finger_settings_tab()
         
+        # Tab 5: Revo3 System Status
+        self._setup_revo3_status_tab()
+        
         # Log at bottom
         self.log_group = QGroupBox()
         log_layout = QVBoxLayout()
@@ -517,6 +520,86 @@ class SystemConfigPanel(QWidget):
         
         # Store tab index for later show/hide
         self.finger_settings_tab_index = self.tabs.addTab(scroll, "🖐 Revo2 Finger")
+        
+    def _setup_revo3_status_tab(self):
+        """Setup Revo3 System Status and Motor Info tab"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(12)
+        
+        # System Status Group
+        self.revo3_sys_group = QGroupBox("System Status")
+        sys_layout = QGridLayout()
+        sys_layout.setSpacing(8)
+        
+        self.sys_state_label = QLabel("--")
+        self.sys_error_label = QLabel("--")
+        self.sys_current_label = QLabel("--")
+        self.sys_voltage_label = QLabel("--")
+        self.sys_power_label = QLabel("--")
+        self.sys_temp_label = QLabel("--")
+        
+        sys_layout.addWidget(QLabel("System State:"), 0, 0)
+        sys_layout.addWidget(self.sys_state_label, 0, 1)
+        sys_layout.addWidget(QLabel("Error Code:"), 0, 2)
+        sys_layout.addWidget(self.sys_error_label, 0, 3)
+        sys_layout.addWidget(QLabel("Current (mA):"), 1, 0)
+        sys_layout.addWidget(self.sys_current_label, 1, 1)
+        sys_layout.addWidget(QLabel("Voltage (V):"), 1, 2)
+        sys_layout.addWidget(self.sys_voltage_label, 1, 3)
+        sys_layout.addWidget(QLabel("Power (W):"), 2, 0)
+        sys_layout.addWidget(self.sys_power_label, 2, 1)
+        sys_layout.addWidget(QLabel("Temperature (°C):"), 2, 2)
+        sys_layout.addWidget(self.sys_temp_label, 2, 3)
+        
+        self.revo3_sys_group.setLayout(sys_layout)
+        layout.addWidget(self.revo3_sys_group)
+        
+        # Motor Info Group
+        self.revo3_motor_group = QGroupBox("Motor Info")
+        motor_layout = QVBoxLayout()
+        
+        # Grid for motors
+        grid = QGridLayout()
+        grid.setSpacing(8)
+        
+        grid.addWidget(QLabel("Motor ID"), 0, 0)
+        grid.addWidget(QLabel("Serial Number"), 0, 1)
+        grid.addWidget(QLabel("Firmware Version"), 0, 2)
+        
+        self.motor_sn_labels = []
+        self.motor_fw_labels = []
+        
+        for i in range(21):
+            row = i + 1
+            grid.addWidget(QLabel(f"Motor {i}"), row, 0)
+            
+            sn_label = QLabel("--")
+            self.motor_sn_labels.append(sn_label)
+            grid.addWidget(sn_label, row, 1)
+            
+            fw_label = QLabel("--")
+            self.motor_fw_labels.append(fw_label)
+            grid.addWidget(fw_label, row, 2)
+            
+        motor_layout.addLayout(grid)
+        self.revo3_motor_group.setLayout(motor_layout)
+        layout.addWidget(self.revo3_motor_group)
+        
+        # Refresh button
+        refresh_layout = QHBoxLayout()
+        self.refresh_revo3_btn = QPushButton("🔄 Refresh Status & Info")
+        self.refresh_revo3_btn.clicked.connect(self._load_revo3_status)
+        refresh_layout.addWidget(self.refresh_revo3_btn)
+        refresh_layout.addStretch()
+        layout.addLayout(refresh_layout)
+        
+        layout.addStretch()
+        scroll.setWidget(widget)
+        
+        self.revo3_status_tab_index = self.tabs.addTab(scroll, "📊 Revo3 Status")
     
     def update_texts(self):
         """Update texts for i18n"""
@@ -584,6 +667,10 @@ class SystemConfigPanel(QWidget):
         # Load Revo2 finger settings if applicable (only for Modbus/CANFD)
         if self._supports_finger_settings():
             self._load_finger_settings()
+            
+        # Load Revo3 Status if applicable
+        if self._uses_revo3_motor_api():
+            self._load_revo3_status()
     
     def _update_device_specific_ui(self):
         """Show/hide UI elements based on device type"""
@@ -606,6 +693,10 @@ class SystemConfigPanel(QWidget):
         # Finger settings tab only for Revo2
         if hasattr(self, 'finger_settings_tab_index'):
             self.tabs.setTabVisible(self.finger_settings_tab_index, uses_revo2_api)
+            
+        # Revo3 Status Tab
+        if hasattr(self, 'revo3_status_tab_index'):
+            self.tabs.setTabVisible(self.revo3_status_tab_index, self._uses_revo3_motor_api())
     
     def _load_motor_settings(self):
         """Load motor settings from device"""
@@ -751,6 +842,48 @@ class SystemConfigPanel(QWidget):
             self._log("Communication settings loaded")
         except Exception as e:
             self._log(f"Failed to load comm settings: {e}")
+            
+    def _load_revo3_status(self):
+        """Load Revo3 system status and motor info"""
+        if not self.device or not self._uses_revo3_motor_api():
+            return
+        run_async(self._async_load_revo3_status())
+        
+    async def _async_load_revo3_status(self):
+        if not self.device:
+            return
+        try:
+            # Load system status
+            try:
+                sys_status = await self.device.revo3_get_system_status(self.slave_id)
+                self.sys_state_label.setText(str(sys_status.system_state))
+                self.sys_error_label.setText(str(sys_status.error_code))
+                self.sys_current_label.setText(str(sys_status.current_ma))
+                self.sys_voltage_label.setText(f"{sys_status.voltage_v:.1f}")
+                self.sys_power_label.setText(f"{sys_status.power_w:.1f}")
+                self.sys_temp_label.setText(f"{sys_status.temperature_c:.1f}")
+            except Exception as e:
+                self._log(f"Failed to load system status: {e}")
+            
+            # Load Motor SNs
+            try:
+                sns = await self.device.revo3_get_all_motor_sns(self.slave_id)
+                for i in range(min(21, len(sns))):
+                    self.motor_sn_labels[i].setText(sns[i])
+            except Exception as e:
+                self._log(f"Failed to load motor SNs: {e}")
+                
+            # Load Motor FWs
+            try:
+                fws = await self.device.revo3_get_motor_fw_versions(self.slave_id)
+                for i in range(min(21, len(fws))):
+                    self.motor_fw_labels[i].setText(str(fws[i]))
+            except Exception as e:
+                self._log(f"Failed to load motor FWs: {e}")
+                
+            self._log("Revo3 status loaded")
+        except Exception as e:
+            self._log(f"Failed to load Revo3 status: {e}")
     
     # ========== Motor Settings Handlers ==========
     

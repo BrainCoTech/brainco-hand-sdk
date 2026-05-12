@@ -67,7 +67,7 @@ class DfuOverlay(QWidget):
 class MainWindow(QMainWindow):
     """Modern Main Window"""
 
-    def __init__(self, revo3_modbus=False):
+    def __init__(self, revo3_modbus=False, mock_type=None):
         super().__init__()
         self.i18n = get_i18n()
         self.i18n.language_changed.connect(self._on_language_changed)
@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
         self.slave_id = 1
         self.protocol = None
         self.revo3_modbus = revo3_modbus
+        self.mock_type = mock_type
 
         # Shared data manager for all panels
         self.shared_data = SharedDataManager()
@@ -114,7 +115,7 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(16)
 
         # Connection panel at top
-        self.connection_panel = ConnectionPanel(revo3_modbus=self.revo3_modbus)
+        self.connection_panel = ConnectionPanel(revo3_modbus=self.revo3_modbus, mock_type=self.mock_type)
         self.connection_panel.connected.connect(self._on_connected)
         self.connection_panel.about_to_disconnect.connect(self._on_about_to_disconnect)
         self.connection_panel.disconnected.connect(self._on_disconnected)
@@ -381,6 +382,13 @@ class MainWindow(QMainWindow):
 
         # Get hardware type once
         hw_type = getattr(device_info, 'hardware_type', None) if device_info else None
+        print(f"DEBUG: hw_type={hw_type}, is_revo3={uses_revo3_motor_api(hw_type) if hw_type else False}")
+        
+        # Update title if mock
+        if "Mock" in protocol:
+            self.setWindowTitle(f"Revo Control Panel (MOCK) - {protocol}")
+        else:
+            self.setWindowTitle(f"Revo Control Panel")
 
         # Enable tabs
         self.tabs.setEnabled(True)

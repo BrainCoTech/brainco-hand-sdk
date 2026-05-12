@@ -34,6 +34,8 @@ def main():
     parser = argparse.ArgumentParser(description="Stark SDK GUI")
     parser.add_argument("--revo3-modbus", action="store_true",
                         help="Only detect Revo3 Modbus devices (hides other protocols)")
+    parser.add_argument("--mock", nargs="?", const="revo3", default=None,
+                        help="Run in mock mode for UI testing. Options: revo3, revo2, revo2-touch, etc. Default: revo3")
     args = parser.parse_args()
 
 
@@ -55,7 +57,7 @@ def main():
     # app.setStyleSheet(DARK_THEME)
     
     # Create and show main window
-    window = MainWindow(revo3_modbus=args.revo3_modbus)
+    window = MainWindow(revo3_modbus=args.revo3_modbus, mock_type=args.mock)
     window.show()
     
     sys.exit(app.exec())

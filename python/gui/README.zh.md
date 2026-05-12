@@ -16,6 +16,7 @@
 ### 支持的设备
 - Revo1 基础版 (Basic) / 触觉版 (Touch) / 进阶版 (Advanced) / 进阶触觉版 (AdvancedTouch)
 - Revo2 基础版 (Basic) / 电容触觉版 (Touch) / 模量触觉版 (TouchPressure)
+- Revo3 Ultra / UltraTouch (21自由度, Modbus RTU @ 5 Mbps)
 
 ### 语言支持
 - English (默认)
@@ -153,6 +154,18 @@ python main.py
 python -m gui.main
 ```
 
+Revo3 Modbus 模式：
+
+```bash
+python main.py --revo3-modbus
+```
+
+离线开发（模拟设备，无需硬件）：
+
+```bash
+python main.py --mock revo3
+```
+
 ### 推荐工作流测试
 
 1. **连接硬件 (Connect Device)**
@@ -189,16 +202,20 @@ gui/
 ├── main_window.py              # 顶层窗口窗体
 ├── i18n.py                     # 国际化语言支持包
 ├── styles.py                   # UI QSS 样式常量表
+├── shared_data.py              # 跨面板共享状态管理
 ├── connection_panel.py         # 连接面板业务 (支持一键检测和 CAN 嗅探扫描)
-├── motor_control_panel.py      # 电机驱动主板
+├── motor_control_panel.py      # 电机驱动主板 (Revo1/2)
+├── motor_control_panel_revo3.py # 电机驱动主板 (Revo3, 21自由度)
 ├── touch_sensor_panel.py       # 触觉核心面板 (可视化与波形)
 ├── data_collector_panel.py     # 数据集采集业务
 ├── action_sequence_panel.py    # 动作宏录制面板
+├── teaching_panel.py           # 示教模式面板（录制与回放）
 ├── timing_test_panel.py        # 延迟与压力吞吐测试面板
 ├── realtime_monitor_panel.py   # 实时监控台 (动态全局高频波形显示)
 ├── hand_visualization.py       # OpenGL/3D GUI 手部虚拟映射工具
-├── dfu_panel.py                # DFU 固件全自动升级模块 (NEW)
+├── dfu_panel.py                # DFU 固件全自动升级模块
 ├── system_config_panel.py      # 硬件元系统控制面板
+├── mock_device.py              # 模拟设备（离线开发调试）
 ├── mock_touch_gui.py           # 离线伪造数据（独立脱网压测仪）测试专用程序
 ├── README.md                   # 英文说明文档
 ├── README.zh.md                # 也就是阁下正在阅读的这份本尊文档

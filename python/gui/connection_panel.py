@@ -281,7 +281,7 @@ class ConnectionPanel(QWidget):
     about_to_disconnect = Signal()  # Emitted before closing device, so DataCollector can stop first
     disconnected = Signal()
 
-    def __init__(self, revo3_modbus=False):
+    def __init__(self, revo3_modbus=False, mock_type=None):
         super().__init__()
         self.ctx = None
         self.slave_id = None
@@ -289,9 +289,16 @@ class ConnectionPanel(QWidget):
         self.worker = None
         self._thread: QThread | None = None
         self.revo3_modbus = revo3_modbus
+        self.mock_type = mock_type
 
         self._setup_ui()
         self.update_texts()
+
+        if self.mock_type:
+            # Bypass auto-detect and jump directly to mock connect
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, self._connect_mock)
+            return
 
         # Auto-detect on startup
         if sdk and hasattr(sdk, 'auto_detect'):
@@ -316,6 +323,9 @@ class ConnectionPanel(QWidget):
             self.protocol_combo.setVisible(False)
         else:
             self.protocol_combo.addItems(["Auto Detect", "Modbus/RS485", "Protobuf", "CAN 2.0", "CANFD", "EtherCAT"])
+            if self.mock_type:
+                self.proto_label.setVisible(False)
+                self.protocol_combo.setVisible(False)
         self.protocol_combo.setMinimumWidth(120)
         self.protocol_combo.currentTextChanged.connect(self._on_protocol_changed)
         layout.addWidget(self.protocol_combo)
@@ -484,6 +494,11 @@ class ConnectionPanel(QWidget):
         self.disconnect_btn.setEnabled(False)
         self.disconnect_btn.setMinimumHeight(36)
         layout.addWidget(self.disconnect_btn)
+        
+        if self.mock_type:
+            self.auto_detect_btn.setVisible(False)
+            self.connect_btn.setVisible(False)
+            self.disconnect_btn.setVisible(False)
 
         # Status indicator
         self.status_indicator = QLabel("● " + tr("status_disconnected"))
@@ -788,3 +803,40 @@ class ConnectionPanel(QWidget):
 
         self.status_label.setText("")
         self.disconnected.emit()
+
+    def _connect_mock(self):
+        """Connect to mock device for UI debugging"""
+        from .mock_device import MockDeviceContext
+        hw_type = sdk.StarkHardwareType.Revo3Ultra
+        
+        m_type = self.mock_type.lower()
+        if m_type == "revo1":
+            hw_type = sdk.StarkHardwareType.Revo1Basic
+        elif m_type == "revo1-touch":
+            hw_type = sdk.StarkHardwareType.Revo1Touch
+        elif m_type == "revo2":
+            hw_type = sdk.StarkHardwareType.Revo2Basic
+        elif m_type == "revo2-touch":
+            hw_type = sdk.StarkHardwareType.Revo2Touch
+        elif m_type == "revo2-pressure":
+            hw_type = sdk.StarkHardwareType.Revo2TouchPressure
+        elif m_type == "revo2-force3d":
+            hw_type = sdk.StarkHardwareType.Revo2TouchForce3D
+        elif m_type == "revo3":
+            hw_type = sdk.StarkHardwareType.Revo3Ultra
+        elif m_type == "revo3-touch":
+            hw_type = sdk.StarkHardwareType.Revo3UltraTouch
+            
+        ctx = MockDeviceContext(hw_type)
+        slave_id = 1
+        protocol = f"Mock ({self.mock_type})"
+        
+        # We must create device_info to pass to the success callback
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            device_info = loop.run_until_complete(ctx.get_device_info(slave_id))
+        finally:
+            loop.close()
+            
+        self._on_connect_success(ctx, slave_id, device_info, protocol)

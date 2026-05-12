@@ -3,7 +3,7 @@
  * @brief Stark Revo3 Motor Control Demo
  *
  * Demonstrates Revo3 motor control APIs:
- *   - Control modes: position, velocity, current, MIT impedance, damping
+ *   - Control modes: position, current, MIT impedance, damping
  *   - Single motor and multi-joint control
  *   - MIT mode: τ = Kp*(P_des - P_act) + Kd*(V_des - V_act) + T_ff
  *   - Fingertip cartesian control (6-DoF per finger)
@@ -63,6 +63,21 @@ void demo_device_info(DeviceHandler *handle, uint8_t slave_id) {
     uint32_t online_status = stark_revo3_get_motor_online_status(handle, slave_id);
     if (online_status != 0xFFFFFFFF) {
         printf("  Motor Online Status: 0x%06X\n", online_status);
+    }
+
+    // Motor SN (motor 0)
+    const char *motor_sn = stark_revo3_get_motor_sn(handle, slave_id, 0);
+    if (motor_sn) {
+        printf("  Motor 0 SN: %s\n", motor_sn);
+        free_string(motor_sn);
+    }
+
+    // Motor firmware versions
+    uint16_t fw_versions[21];
+    if (stark_revo3_get_motor_fw_versions(handle, slave_id, fw_versions) == 0) {
+        printf("  Motor FW versions (first 5):");
+        for (int i = 0; i < 5; i++) printf(" %d", fw_versions[i]);
+        printf("\n");
     }
 }
 
@@ -193,6 +208,7 @@ void demo_new_impedance_damping(DeviceHandler *handle, uint8_t slave_id) {
     msleep(500);
 }
 
+
 void demo_new_teaching_mode(DeviceHandler *handle, uint8_t slave_id) {
     printf("\n=== Teaching Mode ===\n");
 
@@ -260,6 +276,22 @@ int main(int argc, char *argv[]) {
     demo_new_batch_mit(ctx.handle, ctx.slave_id);
     demo_new_impedance_damping(ctx.handle, ctx.slave_id);
     demo_new_teaching_mode(ctx.handle, ctx.slave_id);
+
+    // System status
+    printf("\n=== System Status ===\n");
+    CRevo3SystemStatus *sys_status = stark_revo3_get_system_status(ctx.handle, ctx.slave_id);
+    if (sys_status) {
+        const char *state_str = sys_status->system_state == 0 ? "Normal" : "Fault";
+        printf("  State: %s (%d)\n", state_str, sys_status->system_state);
+        printf("  Error: %d\n", sys_status->error_code);
+        printf("  Current: %d mA\n", sys_status->current_ma);
+        printf("  Voltage: %d V\n", sys_status->voltage_v);
+        printf("  Power:   %d W\n", sys_status->power_w);
+        printf("  Temp:    %d °C\n", sys_status->temperature_c);
+        free_revo3_system_status(sys_status);
+    } else {
+        printf("  Failed to read system status\n");
+    }
 
     demo_status_monitor(ctx.handle, ctx.slave_id, 5);
 

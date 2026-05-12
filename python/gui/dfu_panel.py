@@ -36,6 +36,7 @@ DEFAULT_FIRMWARE_PATHS = {
     "revo1_touch": OTA_DIR / "touch" / "FW_MotorController_Release_SecureOTA_V1.8.53.F.ota",
     "revo1_advanced": OTA_DIR / "stark2" / "Revo1.8_V1.0.3.C_2602031800.bin",
     "revo2_485_canfd": OTA_DIR / "stark2" / "Revo2_V1.0.20.U_2601091030.bin",
+    "revo3": OTA_DIR / "stark3" / "placeholder.bin",
 }
 
 # DFU State names
@@ -59,6 +60,7 @@ FIRMWARE_TYPES = {
     "Revo2TouchPressure": {"name": "Revo2 Touch Pressure", "default_path": DEFAULT_FIRMWARE_PATHS.get("revo2_485_canfd")},
     "Revo2TouchForce3D": {"name": "Revo2 Touch Force3D", "default_path": DEFAULT_FIRMWARE_PATHS.get("revo2_485_canfd")},
     "Revo2TouchArrayPressure": {"name": "Revo2 Touch ArrayPressure", "default_path": DEFAULT_FIRMWARE_PATHS.get("revo2_485_canfd")},
+    "Revo3": {"name": "Revo3 (Stark3)", "default_path": DEFAULT_FIRMWARE_PATHS.get("revo3")},
 }
 
 

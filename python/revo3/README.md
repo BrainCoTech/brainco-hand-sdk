@@ -19,6 +19,8 @@ Revo3 (V3) 21-DoF Dexterous Hand — Motor Control & Tactile Sensor API
   - [Current Control](#current-control)
   - [MIT Impedance Control](#mit-impedance-control)
   - [Fingertip Cartesian Control](#fingertip-cartesian-control)
+  - [Trajectory Control](#trajectory-control)
+  - [Teaching Mode](#teaching-mode)
   - [Motor Settings](#motor-settings)
 - [Tactile Sensor](#tactile-sensor)
   - [Module Enable/Disable](#module-enabledisable)
@@ -90,6 +92,19 @@ Extended APIs (prefixed with `revo3_`):
 | `revo3_get_motor_fw_versions()` | Motor firmware versions [21] |
 | `revo3_get_hardware_version()` | Hardware version string |
 | `revo3_get_motor_online_status()` | Motor online bitmask |
+
+Trajectory & Teaching APIs:
+
+| API | Description |
+|-----|-------------|
+| `revo3_move_joint(slave_id, joint_id, target, T, dt)` | Quintic polynomial single joint move |
+| `revo3_move_joint_with_gains(slave_id, joint_id, target, T, dt, kp, kd)` | Single joint move with custom Kp/Kd |
+| `revo3_move_hand(slave_id, targets, T, dt)` | Full hand synchronized move (21 joints) |
+| `revo3_move_hand_with_gains(slave_id, targets, T, dt, kp, kd)` | Full hand move with custom Kp/Kd |
+| `revo3_teach_joint(slave_id, joint_id, dt, T)` | Record single joint (backdrive mode) |
+| `revo3_teach_hand(slave_id, dt, T)` | Record full hand (backdrive mode) |
+| `revo3_replay_joint(slave_id, joint_id, positions, dt, kp, kd)` | Replay recorded single joint |
+| `revo3_replay_hand(slave_id, trajectory, dt, kp, kd)` | Replay recorded full hand |
 
 ---
 
@@ -344,6 +359,56 @@ temp = await ctx.revo3_get_motor_temperature(slave_id, motor_id)   # int, °C
 sn = await ctx.revo3_get_motor_sn(slave_id, motor_id)              # str
 hw_ver = await ctx.revo3_get_hardware_version(slave_id)            # str
 online = await ctx.revo3_get_motor_online_status(slave_id)         # int (bitmask)
+```
+
+### Trajectory Control
+
+Host-side quintic polynomial trajectory planning. Generates smooth motion
+with zero velocity/acceleration at start and end.
+
+```python
+# Single joint: move J3 (Pinky DIP) to 45° over 2 seconds
+await ctx.revo3_move_joint(slave_id, joint_id=3, target=45.0, duration=2.0, dt=0.01)
+
+# Single joint with custom stiffness/damping
+await ctx.revo3_move_joint_with_gains(
+    slave_id, joint_id=1, target=60.0,
+    duration=1.5, dt=0.01, kp=5.0, kd=0.5
+)
+
+# Full hand: move all 21 joints simultaneously
+targets = [0.0] * 21
+targets[1] = 45.0   # Pinky MCP
+targets[5] = 45.0   # Ring MCP
+targets[9] = 45.0   # Middle MCP
+targets[13] = 45.0  # Index MCP
+targets[17] = 45.0  # Thumb MCP
+await ctx.revo3_move_hand(slave_id, targets, duration=3.0, dt=0.01)
+
+# With custom gains
+await ctx.revo3_move_hand_with_gains(
+    slave_id, targets, duration=3.0, dt=0.01, kp=5.0, kd=0.5
+)
+```
+
+### Teaching Mode
+
+Backdrive recording: joints become compliant (zero torque), positions are
+sampled at `dt` interval for `T` seconds, then replayed with MIT control.
+
+```python
+# Record single joint for 5 seconds at 50Hz
+recorded = await ctx.revo3_teach_joint(slave_id, joint_id=3, dt=0.02, duration=5.0)
+# → List[float], e.g. 250 position samples
+
+# Replay the recorded trajectory
+await ctx.revo3_replay_joint(slave_id, joint_id=3, positions=recorded, dt=0.02, kp=3.0, kd=0.3)
+
+# Full hand record + replay
+trajectory = await ctx.revo3_teach_hand(slave_id, dt=0.02, duration=5.0)
+# → List[List[float]], e.g. 250 frames × 21 joints
+
+await ctx.revo3_replay_hand(slave_id, trajectory=trajectory, dt=0.02, kp=3.0, kd=0.3)
 ```
 
 ---
@@ -620,9 +685,11 @@ Module  Name        Pts    Location
 
 | Script                    | Description                            |
 |---------------------------|----------------------------------------|
-| `revo3/revo3_motor.py`    | Motor control demo (all 5 modes)       |
+| `revo3/revo3_motor.py`    | Motor control demo (position, current, MIT) |
+| `revo3/revo3_trajectory.py` | Trajectory control & teaching mode demo |
+| `revo3/revo3_teaching.py` | Interactive teaching: record & playback hand movements |
+| `revo3/revo3_dfu.py`      | Firmware upgrade (OTA via Modbus) |
 | `revo3/revo3_timing_test.py` | Single motor timing test w/ DataCollector |
-| `revo3/revo3_teaching.py` | Teaching mode: record & playback hand movements |
 | `demo/hand_touch_revo3.py`   | Tactile sensor full demo               |
 
 ### Run Examples
@@ -660,6 +727,7 @@ python gui/main.py --revo3-modbus
 | LED Switch (register 104) | `set_led_enabled()` removed |
 | RS485 4Mbps baudrate | Use 2Mbps or 5Mbps |
 | Admittance control (mode 3) | Use Impedance (4) or Damping (5) |
+| PositionTime control (mode 6) | Use `revo3_move_hand()` (host-side quintic) |
 | MaxAcceleration (register 115) | `v3_set_max_acceleration()` raises error |
 
 ## Motor Status Bitmask (V1.4)

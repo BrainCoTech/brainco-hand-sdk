@@ -2,7 +2,7 @@
 Revo3 (V3) Motor Control Example - 21 DoF Dexterous Hand
 
 Demonstrates V3-specific motor control APIs:
-  - Control modes: position, velocity, current, MIT impedance
+  - Control modes: position, current, MIT impedance
   - Single motor and batch motor control
   - MIT mode: τ = Kp*(P_des - P_act) + Kd*(V_des - V_act) + T_ff
   - Motor status monitoring
@@ -33,7 +33,6 @@ async def main(port_name=None):
     await demo_device_info(client, slave_id)
     await demo_motor_status(client, slave_id)
     await demo_position_control(client, slave_id)
-    await demo_velocity_control(client, slave_id)
     await demo_current_control(client, slave_id)
     await demo_new_device_info(client, slave_id)
     await demo_new_single_joint(client, slave_id)
@@ -48,6 +47,7 @@ async def main(port_name=None):
     await demo_new_motor_info(client, slave_id)
     await demo_new_motor_params(client, slave_id)
     await demo_new_teaching_mode(client, slave_id)
+    await demo_system_status(client, slave_id)
     await demo_status_monitor(client, slave_id, count=5)
 
     # Cleanup
@@ -106,18 +106,6 @@ async def demo_position_control(client, slave_id):
     await client.v3_set_all_motor_positions(slave_id, target)
     await asyncio.sleep(0.5)
 
-
-async def demo_velocity_control(client, slave_id):
-    """Velocity control demo"""
-    logger.info("=== Velocity Control ===")
-
-    logger.info("  Motor 0 velocity -> 100")
-    await client.v3_set_motor_velocity(slave_id, 0, 100.0)
-    await asyncio.sleep(0.5)
-
-    # Stop
-    await client.v3_set_motor_velocity(slave_id, 0, 0.0)
-    await asyncio.sleep(0.2)
 
 
 async def demo_current_control(client, slave_id):
@@ -370,6 +358,35 @@ async def demo_new_teaching_mode(client, slave_id):
     logger.info("  Exiting teaching mode...")
     await client.v3_set_teaching_mode(slave_id, False)
     await asyncio.sleep(0.5)
+
+
+async def demo_system_status(client, slave_id):
+    """System status monitoring (registers 1800-1804)"""
+    logger.info("=== [New] System Status ===")
+
+    try:
+        status = await client.revo3_get_system_status(slave_id)
+        state_str = "Normal" if status.system_state == 0 else "Fault"
+        error_strs = {0: "None", 1: "CommError", 2: "NoCalibration", 3: "TempAbnormal"}
+        error_str = error_strs.get(status.error_code, f"Unknown({status.error_code})")
+        logger.info(f"  System State: {state_str} ({status.system_state})")
+        logger.info(f"  Error Code:   {error_str} ({status.error_code})")
+        logger.info(f"  Current:      {status.current_ma} mA")
+        logger.info(f"  Voltage:      {status.voltage_v} V")
+        logger.info(f"  Power:        {status.power_w} W")
+        logger.info(f"  Temperature:  {status.temperature_c} °C")
+    except Exception as e:
+        logger.info(f"  System status: (error: {e})")
+
+    # Individual register reads
+    try:
+        current = await client.revo3_get_system_current(slave_id)
+        voltage = await client.revo3_get_system_voltage(slave_id)
+        power = await client.revo3_get_system_power(slave_id)
+        temp = await client.revo3_get_system_temperature(slave_id)
+        logger.info(f"  [Individual] {current}mA, {voltage}V, {power}W, {temp}°C")
+    except Exception as e:
+        logger.info(f"  Individual reads: (error: {e})")
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ static const char* FIRMWARE_REVO1_BASIC = "../ota_bin/modbus/FW_MotorController_
 static const char* FIRMWARE_REVO1_TOUCH = "../ota_bin/touch/FW_MotorController_Release_SecureOTA_V1.8.53.F.ota";
 static const char* FIRMWARE_REVO1_ADVANCED = "../ota_bin/stark2/Revo1.8_V1.0.3.C_2602031800.bin";
 static const char* FIRMWARE_REVO2_485_CANFD = "../ota_bin/stark2/Revo2_V1.0.20.U_2601091030.bin";
+static const char* FIRMWARE_REVO3 = "../ota_bin/stark3/placeholder.bin";
 
 /**
  * @brief Select firmware path based on hardware type
@@ -41,6 +42,10 @@ static const char* FIRMWARE_REVO2_485_CANFD = "../ota_bin/stark2/Revo2_V1.0.20.U
  * @return Firmware path or NULL if unknown
  */
 const char* select_firmware(StarkHardwareType hw_type) {
+    // Check Revo3 first (uses separate motor API)
+    if (stark_uses_revo3_motor_api(hw_type)) {
+        return FIRMWARE_REVO3;
+    }
     switch (hw_type) {
         case STARK_HARDWARE_TYPE_REVO1_BASIC:
             return FIRMWARE_REVO1_BASIC;
@@ -67,6 +72,7 @@ void print_usage(const char* prog_name) {
     printf("  Revo1 Touch:          %s\n", FIRMWARE_REVO1_TOUCH);
     printf("  Revo1 Advanced/Touch: %s\n", FIRMWARE_REVO1_ADVANCED);
     printf("  Revo2 (485/CANFD):    %s\n", FIRMWARE_REVO2_485_CANFD);
+    printf("  Revo3 (Stark3):       %s\n", FIRMWARE_REVO3);
     printf("\nExamples:\n");
     printf("  %s                           # Auto-detect, auto-select firmware\n", prog_name);
     printf("  %s firmware.bin              # Auto-detect, custom firmware\n", prog_name);

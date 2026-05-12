@@ -1,5 +1,14 @@
 # BrainCo RevoHand SDK Examples Changelog
 
+## v1.4.3 (2026/05/11)
+
+### 🚀 New Features
+- **Revo3 Smooth Trajectory Control**: Added host-side trajectory interpolation support (`hand_trajectory_revo3.cpp`, `revo3_trajectory.py`) for smooth multi-joint motion execution.
+- **Revo3 OTA Support**: Added Revo3 Device Firmware Upgrade (DFU) capabilities with CLI tools and GUI panel integration.
+- **Revo3 System Status Monitoring**: Added APIs (`revo3_get_system_status`) to retrieve whole-hand diagnostic metrics including voltage, current, power, temperature, and system fault codes.
+
+---
+
 ## v1.4.0 (2026/04/15)
 
 ### 🚀 Revo3 Support

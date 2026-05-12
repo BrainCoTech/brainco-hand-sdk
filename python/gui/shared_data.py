@@ -231,6 +231,10 @@ class SharedDataManager(QObject):
         if not self._device or not sdk or self.is_running:
             return False
         
+        # Handle mock device
+        if hasattr(self._device, 'is_mock') and self._device.is_mock:
+            return self._start_mock_collector()
+
         # Determine frequency based on platform
         is_linux = platform.system() == "Linux"
         motor_freq = 2000 if is_linux else 200
@@ -341,6 +345,10 @@ class SharedDataManager(QObject):
         
         self._update_timer.stop()
         
+        if hasattr(self, '_mock_timer') and self._mock_timer:
+            self._mock_timer.stop()
+            self._mock_timer = None
+        
         if self.data_collector:
             self.data_collector.stop()
             self.data_collector.wait()
@@ -348,6 +356,43 @@ class SharedDataManager(QObject):
         
         self.is_running = False
         print("[SharedDataManager] Stopped")
+
+    def _start_mock_collector(self):
+        """Start a mock data generator loop"""
+        from .mock_device import MockV3MotorStatusData, MockMotorStatusData
+        from PySide6.QtCore import QTimer
+        import math
+        import time
+
+        self.is_running = True
+        self._mock_timer = QTimer()
+        self._start_time = time.time()
+        
+        def emit_mock_data():
+            if not self.is_running:
+                return
+            t = time.time() - self._start_time
+            if self._is_revo3:
+                data = MockV3MotorStatusData()
+                for i in range(21):
+                    data.positions[i] = int(math.sin(t * 2 + i * 0.5) * 1000 + 1000)
+                    data.currents[i] = int(abs(math.cos(t * 2 + i * 0.5) * 500))
+                    data.temperatures[i] = int(30 + math.sin(t * 0.1 + i) * 10)
+                self.v3_motor_updated.emit(data)
+            else:
+                data = MockMotorStatusData()
+                for i in range(6):
+                    data.positions[i] = int(math.sin(t * 2 + i * 0.5) * 1000 + 1000)
+                    data.currents[i] = int(abs(math.cos(t * 2 + i * 0.5) * 500))
+                self.motor_updated.emit(data)
+                
+            # Todo: touch mock data if needed
+
+        self._mock_timer.timeout.connect(emit_mock_data)
+        self._mock_timer.start(50)  # 20Hz
+        print("[SharedDataManager] Started Mock DataCollector")
+        return True
+
     
     def _emit_updates(self):
         """Emit update signals for connected panels"""
