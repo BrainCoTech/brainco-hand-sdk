@@ -529,5 +529,3 @@ STARK_CAN_BACKEND=zlg make run revo2_canfd
 - 触觉设备需要在读取传感器数据前调用 `stark_enable_touch_sensor()`
 
 ---
-
-**版本：** 兼容 Stark SDK v1.4.0

@@ -197,7 +197,7 @@ class Force6DWidget(QWidget):
             
             value_lbl = QLabel("0.00")
             value_lbl.setStyleSheet(
-                "font-size: 18px; font-family: 'Menlo','Monaco',monospace; "
+                "font-size: 18px; font-family: 'Courier New'; "
                 "color: #2c3e50; background: #ecf0f1; padding: 4px 8px; border-radius: 4px;"
             )
             value_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -223,7 +223,7 @@ class Force6DWidget(QWidget):
             
             value_lbl = QLabel("0.000")
             value_lbl.setStyleSheet(
-                "font-size: 18px; font-family: 'Menlo','Monaco',monospace; "
+                "font-size: 18px; font-family: 'Courier New'; "
                 "color: #2c3e50; background: #ecf0f1; padding: 4px 8px; border-radius: 4px;"
             )
             value_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)

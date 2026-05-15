@@ -87,7 +87,7 @@ async def run_timing_test(client, slave_id, motor_buffer, motor_id, num_cycles, 
 
     # Move to initial position
     logger.info("Moving to initial position (all open)...")
-    await client.v3_set_all_motor_positions(slave_id, open_positions)
+    await client.revo3_set_all_motor_positions(slave_id, open_positions)
     await asyncio.sleep(2.0)
 
     close_times = []
@@ -101,7 +101,7 @@ async def run_timing_test(client, slave_id, motor_buffer, motor_id, num_cycles, 
         # === CLOSE ===
         logger.info(f"  CLOSE: M{motor_id} 0° → {close_angle}°")
         motor_buffer.clear()
-        await client.v3_set_all_motor_positions(slave_id, close_positions)
+        await client.revo3_set_all_motor_positions(slave_id, close_positions)
 
         elapsed, pos, reached, reads = await measure_movement(
             motor_buffer, motor_id, close_angle, timeout
@@ -115,7 +115,7 @@ async def run_timing_test(client, slave_id, motor_buffer, motor_id, num_cycles, 
         # === OPEN ===
         logger.info(f"  OPEN:  M{motor_id} {close_angle}° → 0°")
         motor_buffer.clear()
-        await client.v3_set_all_motor_positions(slave_id, open_positions)
+        await client.revo3_set_all_motor_positions(slave_id, open_positions)
 
         elapsed, pos, reached, reads = await measure_movement(
             motor_buffer, motor_id, OPEN_ANGLE, timeout
@@ -206,8 +206,8 @@ async def main(port_name=None, motor_id=DEFAULT_MOTOR_ID, num_cycles=DEFAULT_NUM
         motor_freq = 2000 if is_linux else 200
         logger.info(f"DataCollector motor_frequency={motor_freq}Hz ({platform.system()})")
 
-        motor_buffer = libstark.V3MotorStatusBuffer(max_size=1000)
-        collector = libstark.DataCollector.new_v3_basic(
+        motor_buffer = libstark.Revo3MotorStatusBuffer(max_size=1000)
+        collector = libstark.DataCollector.new_revo3_basic(
             ctx=client,
             motor_buffer=motor_buffer,
             slave_id=slave_id,

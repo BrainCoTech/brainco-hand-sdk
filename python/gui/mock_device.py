@@ -17,7 +17,7 @@ class MockV3SystemStatus:
         self.power_w = 29.4
         self.temperature_c = 35.2
 
-class MockV3MotorStatusData:
+class MockRevo3MotorStatusData:
     def __init__(self):
         self.positions = [0] * 21
         self.speeds = [0] * 21
@@ -97,7 +97,7 @@ class MockDeviceContext:
         status.temperature_c = 35.0 + math.cos(t * 0.5) * 2.0
         return status
         
-    async def v3_get_system_status_expanded(self, slave_id):
+    async def revo3_get_system_status_expanded(self, slave_id):
         status = await self.revo3_get_system_status(slave_id)
         return status, 0x1FFFFF
         
@@ -116,7 +116,7 @@ class MockDeviceContext:
     async def revo3_get_all_motor_temperatures(self, slave_id):
         return [35.0 for _ in range(21)]
         
-    async def v3_get_all_motor_errors(self, slave_id):
+    async def revo3_get_all_motor_errors(self, slave_id):
         return [0 for _ in range(21)]
         
     async def get_turbo_mode_enabled(self, slave_id):

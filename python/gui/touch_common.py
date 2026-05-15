@@ -148,7 +148,7 @@ class HeatmapChart(QWidget):
         header.addStretch()
         self.stats_label = QLabel("max: 0  sum: 0  avg: 0")
         self.stats_label.setStyleSheet(
-            "font-size: 14px; font-family: 'Menlo','Monaco','Courier New',monospace; color: #eee;"
+            "font-size: 14px; font-family: 'Courier New'; color: #eee;"
         )
         header.addWidget(self.stats_label)
         layout.addWidget(header_frame)
@@ -203,7 +203,7 @@ class HeatmapChart(QWidget):
                 r_idx, c_idx = self._get_coords(i)
                 if r_idx < self.rows and c_idx < self.cols:
                     txt = pg.TextItem(str(i + 1), color='w', anchor=(0.5, 0.5))
-                    txt.setFont(pg.QtGui.QFont('Menlo', 11))
+                    txt.setFont(pg.QtGui.QFont('Courier New', 11))
                     txt.setPos(c_idx + 0.5, r_idx + 0.5)
                     self.plot_widget.addItem(txt)
                     self.text_items.append(txt)
@@ -332,7 +332,7 @@ def build_status_cards(parent_layout, sensor_names, sensor_colors, is_compact=Fa
         val_label.setFixedWidth(50)
         val_label.setAlignment(Qt.AlignRight)
         val_label.setStyleSheet(
-            "font-family: 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 13px;"
+            "font-family: 'Courier New'; font-size: 13px;"
         )
         card_layout.addWidget(val_label)
         sensor_labels.append(val_label)

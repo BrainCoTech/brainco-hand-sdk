@@ -9,7 +9,7 @@ Workflow:
 
 Key differences from CLI version:
   - Uses QTimer instead of asyncio loops for recording/playback.
-  - Reads motor data from SharedDataManager's v3_motor_buffer.
+  - Reads motor data from SharedDataManager's revo3_motor_buffer.
   - All async SDK calls use run_async() wrapper (same as motor_control_panel_revo3).
 """
 
@@ -163,36 +163,24 @@ def enter_teaching_mode(device, slave_id):
     """Enter teaching mode - hand becomes compliant (zero torque)."""
     # Set Impedance mode and zero stiffness
     try:
-        run_async(lambda: device.v3_set_ctrl_mode_all(slave_id, 4))
-        time.sleep(0.1)
-        zeros = [0.0] * 21
-        pos = run_async(lambda: device.v3_get_all_motor_positions(slave_id))
-        pos = pos[:21] if pos and len(pos) >= 21 else list(zeros)
-        run_async(lambda: device.revo3_set_all_mit_batch(
-            slave_id,
-            zeros,  # Kp
-            zeros,  # Kd
-            pos,    # Position
-            zeros,  # Velocity
-            zeros   # Torque FF
-        ))
+        run_async(lambda: device.revo3_set_teaching_mode(slave_id, True))
     except Exception as e:
-        print(f"[Teaching] MIT zeroing skipped: {e}")
+        print(f"[Teaching] Enter mode failed: {e}")
 
 
 def exit_teaching_mode(device, slave_id, restore_positions=None):
     """Exit teaching mode and restore motor control."""
     try:
-        run_async(lambda: device.v3_set_ctrl_mode_all(slave_id, 0))
+        run_async(lambda: device.revo3_set_teaching_mode(slave_id, False))
         time.sleep(0.1)
     except Exception as e:
         print(f"[Teaching] Restore position mode skipped: {e}")
 
     if restore_positions is not None:
-        run_async(lambda: device.v3_set_all_motor_positions(slave_id, restore_positions))
+        run_async(lambda: device.revo3_set_all_motor_positions(slave_id, restore_positions))
     else:
         target = [0.0] * _get_motor_count()
-        run_async(lambda: device.v3_set_all_motor_positions(slave_id, target))
+        run_async(lambda: device.revo3_set_all_motor_positions(slave_id, target))
 
     time.sleep(0.3)
 
@@ -409,7 +397,7 @@ class TeachingPanel(QWidget):
             QTextEdit {{
                 background-color: #1e1e2e;
                 color: #cdd6f4;
-                font-family: 'Menlo', 'Consolas', monospace;
+                font-family: 'Courier New';
                 font-size: 12px;
                 border: 1px solid {COLORS['border']};
                 border-radius: 4px;
@@ -519,8 +507,8 @@ class TeachingPanel(QWidget):
         # Save initial positions
         try:
             latest = None
-            if self.shared_data.v3_motor_buffer:
-                latest = self.shared_data.v3_motor_buffer.peek_latest()
+            if self.shared_data.revo3_motor_buffer:
+                latest = self.shared_data.revo3_motor_buffer.peek_latest()
             if latest and hasattr(latest, 'positions'):
                 self._initial_positions = list(latest.positions)
                 pos_preview = " ".join([f"{self._initial_positions[i]:.1f}" for i in range(min(5, len(self._initial_positions)))])
@@ -559,10 +547,10 @@ class TeachingPanel(QWidget):
 
     def _on_record_tick(self):
         """Called by timer to capture one frame."""
-        if not self.shared_data or not self.shared_data.v3_motor_buffer:
+        if not self.shared_data or not self.shared_data.revo3_motor_buffer:
             return
 
-        latest = self.shared_data.v3_motor_buffer.peek_latest()
+        latest = self.shared_data.revo3_motor_buffer.peek_latest()
         if latest and hasattr(latest, 'positions'):
             positions = list(latest.positions)
             self._trajectory.add_frame(positions)
@@ -637,7 +625,7 @@ class TeachingPanel(QWidget):
     def _prepare_playback(self):
         """Set up motor control mode for playback."""
         try:
-            run_async(lambda: self.device.v3_set_ctrl_mode_all(self.slave_id, 0))
+            run_async(lambda: self.device.revo3_set_teaching_mode(self.slave_id, False))
             time.sleep(0.1)
         except Exception:
             pass
@@ -696,7 +684,7 @@ class TeachingPanel(QWidget):
             pos = list(positions)[:21]
 
             try:
-                run_async(lambda: self.device.v3_set_all_motor_positions(self.slave_id, pos))
+                run_async(lambda: self.device.revo3_set_all_motor_positions(self.slave_id, pos))
             except Exception as e:
                 self._log(f"⚠ Playback error at frame {send_idx}: {e}")
 
@@ -724,7 +712,7 @@ class TeachingPanel(QWidget):
             # Return to initial position
             if self._initial_positions:
                 try:
-                    run_async(lambda: self.device.v3_set_all_motor_positions(
+                    run_async(lambda: self.device.revo3_set_all_motor_positions(
                         self.slave_id, self._initial_positions
                     ))
                 except Exception:

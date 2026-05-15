@@ -47,7 +47,7 @@ class CollectorWorker(QObject):
         self.is_running = True
 
         self.motor_buffer = None
-        self.v3_motor_buffer = None
+        self.revo3_motor_buffer = None
         self.touch_buffer = None
         self.data_collector = None
 
@@ -78,11 +78,11 @@ class CollectorWorker(QObject):
             buffer_size = self.duration * motor_freq * 2  # 2x for safety
 
             if self.is_revo3:
-                # Revo3: 23 motors, float values, V3 touch sensor
-                self.v3_motor_buffer = sdk.V3MotorStatusBuffer(max_size=buffer_size)
-                self.data_collector = sdk.DataCollector.new_v3_basic(
+                # Revo3: 23 motors, float values, Revo3 touch sensor
+                self.revo3_motor_buffer = sdk.Revo3MotorStatusBuffer(max_size=buffer_size)
+                self.data_collector = sdk.DataCollector.new_revo3_basic(
                     self.device,
-                    self.v3_motor_buffer,
+                    self.revo3_motor_buffer,
                     slave_id=self.slave_id,
                     motor_frequency=motor_freq,
                     enable_stats=False
@@ -126,7 +126,7 @@ class CollectorWorker(QObject):
                     break
 
                 # Report progress
-                buf = self.v3_motor_buffer if self.is_revo3 else self.motor_buffer
+                buf = self.revo3_motor_buffer if self.is_revo3 else self.motor_buffer
                 current_count = buf.len() if buf else 0
                 self.progress.emit(current_count, total_samples, elapsed)
 
@@ -141,7 +141,7 @@ class CollectorWorker(QObject):
             has_touch = not self.is_revo3 and self.collect_touch and self.device_info and self.device_info.is_touch()
             self._write_csv(filename, has_touch)
 
-            buf = self.v3_motor_buffer if self.is_revo3 else self.motor_buffer
+            buf = self.revo3_motor_buffer if self.is_revo3 else self.motor_buffer
             final_count = buf.len() if buf else 0
             self.finished.emit(True, f"Collection completed, {final_count} records")
 
@@ -221,11 +221,11 @@ class CollectorWorker(QObject):
         self.log_message.emit(f"CSV write completed: {len(motor_data)} rows")
 
     def _write_csv_v3(self, filename):
-        """Write V3 (Revo3) motor data to CSV - 23 motors with float values"""
-        if not self.v3_motor_buffer:
-            self.log_message.emit("No V3 motor buffer available")
+        """Write Revo3 (Revo3) motor data to CSV - 23 motors with float values"""
+        if not self.revo3_motor_buffer:
+            self.log_message.emit("No Revo3 motor buffer available")
             return
-        motor_data = self.v3_motor_buffer.pop_all()
+        motor_data = self.revo3_motor_buffer.pop_all()
 
         n = REVO3_MOTOR_COUNT
         with open(filename, 'w') as f:
@@ -265,7 +265,7 @@ class CollectorWorker(QObject):
 
                 f.write(",".join(row) + "\n")
 
-        self.log_message.emit(f"CSV write completed: {len(motor_data)} rows (V3, {n} motors)")
+        self.log_message.emit(f"CSV write completed: {len(motor_data)} rows (Revo3, {n} motors)")
 
 
 class DataCollectorPanel(QWidget):
@@ -431,7 +431,7 @@ class DataCollectorPanel(QWidget):
         """Set device - uses SharedDataManager for device state"""
         self.shared_data = shared_data
 
-        # Detect V3 device
+        # Detect Revo3 device
         self._is_revo3 = False
         if device_info:
             hw_type = getattr(device_info, 'hardware_type', None)

@@ -193,7 +193,7 @@ class GlobalForceWidget(QWidget):
             n.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {color};")
             v = QLabel("0.00")
             v.setStyleSheet(
-                "font-size: 14px; font-family: 'Menlo','Monaco',monospace; color: #ecf0f1;"
+                "font-size: 14px; font-family: 'Courier New'; color: #ecf0f1;"
             )
             v.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             vgrid.addWidget(n, 0, col * 2)
@@ -207,7 +207,7 @@ class GlobalForceWidget(QWidget):
             n.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {color};")
             v = QLabel("0.000")
             v.setStyleSheet(
-                "font-size: 12px; font-family: 'Menlo','Monaco',monospace; "
+                "font-size: 12px; font-family: 'Courier New'; "
                 f"color: {COLORS.get('text_muted', '#aaa')};"
             )
             v.setAlignment(Qt.AlignRight | Qt.AlignVCenter)

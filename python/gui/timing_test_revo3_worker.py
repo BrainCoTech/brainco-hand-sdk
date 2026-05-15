@@ -60,12 +60,14 @@ REVO3_CLOSE_POSITION = 80.0   # Default close for standard flex joints [0, 90°]
 REVO3_THRESHOLD_RATIO = 0.90  # 90% threshold
 
 # Per-joint safe close positions (hardware register spec):
-#   Reg 240–260: min pos (X100), Reg 270–290: max pos (X100)
+#   Reg 240–260: min pos, Reg 270–290: max pos
 #   joint  0, 4, 8, 12 (side-swing) : [-15°, 15°]  → test at 12°
-#   joint  1-3, 5-7, 9-11, 13-15, 17-18 (flex) : [0°, 90°] → test at 80°
-#   joint 16 (thumb root)   : [0°,  50°] → test at 40°
-#   joint 19 (thumb diff-1) : [0°, 105°] → test at 90°
-#   joint 20 (thumb diff-2) : [0°, 120°] → test at 100°
+#   joint  1-3, 5-7, 9-11, 13-15 (flex) : [-20°, 90°] → test at 80°
+#   joint 16 (thumb root)   : [-30°, 90°] → test at 80°
+#   joint 17 (thumb MCP)    : [-10°, 90°] → test at 80°
+#   joint 18 (thumb IP)     : [-10°, 103°] → test at 90°
+#   joint 19 (thumb diff-1) : [0°, 110°] → test at 100°
+#   joint 20 (thumb diff-2) : [0°, 75°] → test at 65°
 REVO3_JOINT_CLOSE_POSITIONS: dict = {
     # Side-swing joints (±15°)
     0: 12.0, 4: 12.0, 8: 12.0, 12: 12.0,
@@ -74,21 +76,21 @@ REVO3_JOINT_CLOSE_POSITIONS: dict = {
     5: 80.0, 6: 80.0, 7: 80.0,
     9: 80.0, 10: 80.0, 11: 80.0,
     13: 80.0, 14: 80.0, 15: 80.0,
-    17: 80.0, 18: 80.0,
+    17: 80.0, 18: 90.0,
     # Thumb special joints
-    16: 40.0,    # [0, 50°]  — thumb root
-    19: 90.0,    # [0, 105°] — thumb diff-1
-    20: 100.0,   # [0, 120°] — thumb diff-2
+    16: 80.0,    # [-30°, 90°]  — thumb root
+    19: 100.0,   # [0°, 110°] — thumb diff-1
+    20: 65.0,    # [0°, 75°]  — thumb diff-2
 }
 
 
-def get_v3_joint_close_position(joint_id: int) -> float:
+def get_revo3_joint_close_position(joint_id: int) -> float:
     """Return the safe test close position (degrees) for a given REVO3 joint."""
     return REVO3_JOINT_CLOSE_POSITIONS.get(joint_id, REVO3_CLOSE_POSITION)
 
 
 # ── Speed test targets ────────────────────────────────────────────────────────
-# Reg 300–320: min speed (X100), Reg 321–341: max speed (X100)
+# Reg 300–320: min speed, Reg 321–341: max speed
 # Default range: 0–110 rpm (unidirectional)
 REVO3_SPEED_TARGET    = 80.0   # Forward test target (rpm)
 REVO3_SPEED_OPEN      = 0.0    # Stop / reset (rpm). Min=0 per hardware spec.
@@ -102,7 +104,7 @@ REVO3_CURRENT_OPEN      = -300.0  # Reverse target (mA)
 REVO3_CURRENT_THRESHOLD = 0.80    # Accept if ≥80% of target
 
 # ── Colors ────────────────────────────────────────────────────────────────────
-def _generate_v3_motor_colors():
+def _generate_revo3_motor_colors():
     """Generate per-motor colors (21 total), grouped by finger."""
     finger_base_colors = {
         "Thumb":  (255, 107, 107),
@@ -130,7 +132,7 @@ def _generate_v3_motor_colors():
     return colors
 
 
-REVO3_MOTOR_COLORS = _generate_v3_motor_colors()
+REVO3_MOTOR_COLORS = _generate_revo3_motor_colors()
 
 REVO3_FINGER_COLORS = [
     (255, 107, 107),   # Thumb  — Red
@@ -147,9 +149,9 @@ class TimingTestRevo3Worker(QObject):
     """Worker thread for Revo3 (21 joints) timing tests.
 
     Supports three view/control modes:
-      Position — v3_set_motor_position, tracks position feedback
-      Speed    — v3_set_motor_velocity, tracks velocity feedback
-      Current  — v3_set_motor_current,  tracks current feedback
+      Position — revo3_set_motor_position, tracks position feedback
+      Speed    — revo3_set_motor_velocity, tracks velocity feedback
+      Current  — revo3_set_motor_current,  tracks current feedback
 
     Uses SharedDataManager for all motor feedback (no direct polling).
     Sends control commands at ~200 Hz during measurement for proper tracking.
@@ -205,46 +207,47 @@ class TimingTestRevo3Worker(QObject):
 
     # ── Low-level control ─────────────────────────────────────────────────────
 
-    async def _v3_set_all_positions(self, positions):
+    async def _revo3_set_all_positions(self, positions):
         """Set all REVO3 motor positions (21 values, float degrees)."""
-        await self.device.v3_set_all_motor_positions(self.slave_id, positions)
+        await self.device.revo3_set_all_motor_positions(self.slave_id, positions)
 
-    async def _v3_set_all_velocities(self, velocities):
+    async def _revo3_set_all_velocities(self, velocities):
         """Set all REVO3 motor velocities (21 values, rpm)."""
-        await self.device.v3_set_all_motor_velocities(self.slave_id, velocities)
+        await self.device.revo3_set_all_motor_velocities(self.slave_id, velocities)
 
-    async def _v3_set_all_currents(self, currents):
+    async def _revo3_set_all_currents(self, currents):
         """Set all REVO3 motor currents (21 values, mA)."""
-        await self.device.v3_set_all_motor_currents(self.slave_id, currents)
+        await self.device.revo3_set_all_motor_currents(self.slave_id, currents)
 
-    async def _v3_set_joints_position(self, joint_ids: list, target_deg: float):
+    async def _revo3_set_joints_position(self, joint_ids: list, target_deg: float):
         """Set a subset of joints to the same target position (per-joint API)."""
         for jid in joint_ids:
-            await self.device.v3_set_motor_position(self.slave_id, jid, target_deg)
+            await self.device.revo3_set_motor_position(self.slave_id, jid, target_deg)
 
-    async def _v3_set_joints_velocity(self, joint_ids: list, target_vel: float):
-        """Set a subset of joints to the same target velocity (rpm, per-joint API)."""
-        for jid in joint_ids:
-            await self.device.v3_set_motor_velocity(self.slave_id, jid, target_vel)
+    # TBD: 是否保留
+    # async def _revo3_set_joints_velocity(self, joint_ids: list, target_vel: float):
+    #     """Set a subset of joints to the same target velocity (rpm, per-joint API)."""
+    #     for jid in joint_ids:
+    #         await self.device.revo3_set_motor_velocity(self.slave_id, jid, target_vel)
 
-    async def _v3_set_joints_current(self, joint_ids: list, target_cur: float):
+    async def _revo3_set_joints_current(self, joint_ids: list, target_cur: float):
         """Set a subset of joints to the same target current (mA, per-joint API)."""
         for jid in joint_ids:
-            await self.device.v3_set_motor_current(self.slave_id, jid, target_cur)
+            await self.device.revo3_set_motor_current(self.slave_id, jid, target_cur)
 
     # ── Feedback ──────────────────────────────────────────────────────────────
 
-    def _v3_get_motor_data(self):
+    def _revo3_get_motor_data(self):
         """Return (positions, velocities, currents) lists from SharedDataManager."""
         zero = [0.0] * REVO3_MOTOR_COUNT
         if not self.shared_data:
             return zero, zero, zero
-        v3_motor = self.shared_data.get_latest_v3_motor()
-        if v3_motor:
+        revo3_motor = self.shared_data.get_latest_revo3_motor()
+        if revo3_motor:
             self._total_read_count += 1
-            pos = list(v3_motor.positions)  if hasattr(v3_motor, 'positions')  and v3_motor.positions  else list(zero)
-            vel = list(v3_motor.velocities) if hasattr(v3_motor, 'velocities') and v3_motor.velocities else list(zero)
-            cur = list(v3_motor.currents)   if hasattr(v3_motor, 'currents')   and v3_motor.currents   else list(zero)
+            pos = list(revo3_motor.positions)  if hasattr(revo3_motor, 'positions')  and revo3_motor.positions  else list(zero)
+            vel = list(revo3_motor.velocities) if hasattr(revo3_motor, 'velocities') and revo3_motor.velocities else list(zero)
+            cur = list(revo3_motor.currents)   if hasattr(revo3_motor, 'currents')   and revo3_motor.currents   else list(zero)
             return pos, vel, cur
         return list(zero), list(zero), list(zero)
 
@@ -281,19 +284,19 @@ class TimingTestRevo3Worker(QObject):
         if mode == "Speed":
             target_fwd = [REVO3_SPEED_TARGET] * n
             target_rev = [REVO3_SPEED_OPEN]   * n
-            init_cmd   = lambda: self._v3_set_all_velocities([0.0] * REVO3_MOTOR_COUNT)
+            init_cmd   = lambda: self._revo3_set_all_velocities([0.0] * REVO3_MOTOR_COUNT)
             label_fwd  = f"FORWARD: 0 → {REVO3_SPEED_TARGET} rpm"
             label_rev  = f"REVERSE: {REVO3_SPEED_TARGET} → {REVO3_SPEED_OPEN} rpm"
         elif mode == "Current":
             target_fwd = [REVO3_CURRENT_TARGET] * n
             target_rev = [REVO3_CURRENT_OPEN]   * n
-            init_cmd   = lambda: self._v3_set_all_currents([0.0] * REVO3_MOTOR_COUNT)
+            init_cmd   = lambda: self._revo3_set_all_currents([0.0] * REVO3_MOTOR_COUNT)
             label_fwd  = f"FORWARD: 0 → {REVO3_CURRENT_TARGET} mA"
             label_rev  = f"REVERSE: {REVO3_CURRENT_TARGET} → {REVO3_CURRENT_OPEN} mA"
         else:  # Position — per-joint safe targets (21 joints only)
-            target_fwd = [get_v3_joint_close_position(jid) for jid in range(n)]
+            target_fwd = [get_revo3_joint_close_position(jid) for jid in range(n)]
             target_rev = [REVO3_OPEN_POSITION] * n
-            init_cmd   = lambda: self._v3_set_all_positions(
+            init_cmd   = lambda: self._revo3_set_all_positions(
                 [REVO3_OPEN_POSITION] * REVO3_MOTOR_COUNT)
             label_fwd  = "CLOSE: all joints → per-joint close target"
             label_rev  = "OPEN: all joints → 0°"
@@ -347,16 +350,16 @@ class TimingTestRevo3Worker(QObject):
         if self.signal_type == "Sine":
             self.log_message.emit("Moving to initial state (0)...")
             if mode == "Speed":
-                await self._v3_set_joints_velocity(joint_ids, 0.0)
+                await self._revo3_set_joints_velocity(joint_ids, 0.0)
             elif mode == "Current":
-                await self._v3_set_joints_current(joint_ids, 0.0)
+                await self._revo3_set_joints_current(joint_ids, 0.0)
             elif mode == "MIT":
                 for jid in joint_ids:
-                    await self.device.v3_set_motor_mit(
+                    await self.device.revo3_set_motor_mit(
                         self.slave_id, jid, 0.0, 0.0, 0.0, self.mit_kp, self.mit_kd)
             else:
                 for jid in joint_ids:
-                    await self.device.v3_set_motor_position(self.slave_id, jid, 0.0)
+                    await self.device.revo3_set_motor_position(self.slave_id, jid, 0.0)
             await asyncio.sleep(1.0)
             await self._run_sine_loop(joint_ids, mode, self.mit_kp, self.mit_kd)
             self.log_message.emit("\nSine wave tracking completed.")
@@ -366,7 +369,7 @@ class TimingTestRevo3Worker(QObject):
 
         if mode == "Speed":
             self.log_message.emit("Moving to initial state (0 rpm)...")
-            await self._v3_set_joints_velocity(joint_ids, 0.0)
+            await self._revo3_set_joints_velocity(joint_ids, 0.0)
             await asyncio.sleep(2.0)
             for cycle in range(self.num_cycles):
                 if not self.is_running:
@@ -383,7 +386,7 @@ class TimingTestRevo3Worker(QObject):
 
         elif mode == "Current":
             self.log_message.emit("Moving to initial state (0 mA)...")
-            await self._v3_set_joints_current(joint_ids, 0.0)
+            await self._revo3_set_joints_current(joint_ids, 0.0)
             await asyncio.sleep(2.0)
             for cycle in range(self.num_cycles):
                 if not self.is_running:
@@ -401,14 +404,14 @@ class TimingTestRevo3Worker(QObject):
         elif mode == "MIT":   # Impedance / force-position hybrid
             kp = self.mit_kp
             kd = self.mit_kd
-            close_targets = {jid: get_v3_joint_close_position(jid) for jid in joint_ids}
+            close_targets = {jid: get_revo3_joint_close_position(jid) for jid in joint_ids}
             open_targets  = {jid: REVO3_OPEN_POSITION for jid in joint_ids}
             first_id  = joint_ids[0] if joint_ids else 0
             close_deg = close_targets.get(first_id, REVO3_CLOSE_POSITION)
             self.log_message.emit(
                 f"Moving to initial state (MIT 0°, kp={kp}, kd={kd})...")
             for jid in joint_ids:
-                await self.device.v3_set_motor_mit(
+                await self.device.revo3_set_motor_mit(
                     self.slave_id, jid, 0.0, 0.0, 0.0, kp, kd)
             await asyncio.sleep(2.0)
             for cycle in range(self.num_cycles):
@@ -428,13 +431,13 @@ class TimingTestRevo3Worker(QObject):
                 self.log_message.emit(f"  Open time: {t:.3f}s")
 
         else:  # Position — per-joint safe targets
-            close_targets = {jid: get_v3_joint_close_position(jid) for jid in joint_ids}
+            close_targets = {jid: get_revo3_joint_close_position(jid) for jid in joint_ids}
             open_targets  = {jid: REVO3_OPEN_POSITION for jid in joint_ids}
             first_id  = joint_ids[0] if joint_ids else 0
             close_deg = close_targets.get(first_id, REVO3_CLOSE_POSITION)
             self.log_message.emit("Moving to initial position (0°)...")
             for jid in joint_ids:
-                await self.device.v3_set_motor_position(self.slave_id, jid, REVO3_OPEN_POSITION)
+                await self.device.revo3_set_motor_position(self.slave_id, jid, REVO3_OPEN_POSITION)
             await asyncio.sleep(2.0)
             for cycle in range(self.num_cycles):
                 if not self.is_running:
@@ -475,7 +478,7 @@ class TimingTestRevo3Worker(QObject):
             f"Playing Sine Wave ({freq}Hz, {self.num_cycles} cycles = {total_duration:.1f}s)...")
 
         if mode in ("Position", "MIT"):
-            close_targets = {jid: get_v3_joint_close_position(jid) for jid in joint_ids}
+            close_targets = {jid: get_revo3_joint_close_position(jid) for jid in joint_ids}
 
         # Track the latest reference command (updated at ctrl rate, emitted at chart rate)
         curr_ref_p = [0.0] * REVO3_MOTOR_COUNT
@@ -507,29 +510,29 @@ class TimingTestRevo3Worker(QObject):
                         curr_ref_p[jid] = p_des
                         curr_ref_v[jid] = v_des_rpm
                         if mode == "MIT":
-                            await self.device.v3_set_motor_mit(
+                            await self.device.revo3_set_motor_mit(
                                 self.slave_id, jid, p_des, v_des_rpm, 0.0, kp, kd)
                         else:
-                            await self.device.v3_set_motor_position(
+                            await self.device.revo3_set_motor_position(
                                 self.slave_id, jid, p_des)
 
                 elif mode == "Speed":
                     val = REVO3_SPEED_TARGET * math.sin(phase)
                     for jid in joint_ids:
                         curr_ref_v[jid] = val
-                    await self._v3_set_joints_velocity(joint_ids, val)
+                    await self._revo3_set_joints_velocity(joint_ids, val)
 
                 elif mode == "Current":
                     val = REVO3_CURRENT_TARGET * math.sin(phase)
                     for jid in joint_ids:
                         curr_ref_c[jid] = val
-                    await self._v3_set_joints_current(joint_ids, val)
+                    await self._revo3_set_joints_current(joint_ids, val)
 
                 last_ctrl_time = elapsed
 
             # Emit chart data at ~50 Hz
             if elapsed - last_emit_time >= 0.02:
-                all_pos, all_vel, all_cur = self._v3_get_motor_data()
+                all_pos, all_vel, all_cur = self._revo3_get_motor_data()
                 self.data_point.emit(all_pos, all_vel, all_cur)
                 self.ref_point.emit(list(curr_ref_p), list(curr_ref_v), list(curr_ref_c))
                 last_emit_time = elapsed
@@ -556,7 +559,7 @@ class TimingTestRevo3Worker(QObject):
 
         start_time = time.time()
         for jid in joint_ids:
-            await self.device.v3_set_motor_mit(
+            await self.device.revo3_set_motor_mit(
                 self.slave_id, jid, targets.get(jid, 0.0), 0.0, 0.0, kp, kd)
 
         last_emit_time  = 0.0
@@ -571,11 +574,11 @@ class TimingTestRevo3Worker(QObject):
             try:
                 if elapsed - last_ctrl_time >= ctrl_interval:
                     for jid in joint_ids:
-                        await self.device.v3_set_motor_mit(
+                        await self.device.revo3_set_motor_mit(
                             self.slave_id, jid, targets.get(jid, 0.0), 0.0, 0.0, kp, kd)
                     last_ctrl_time = elapsed
 
-                all_pos, all_vel, all_cur = self._v3_get_motor_data()
+                all_pos, all_vel, all_cur = self._revo3_get_motor_data()
 
                 if elapsed - last_emit_time >= 0.02:
                     self.data_point.emit(all_pos, all_vel, all_cur)
@@ -647,13 +650,13 @@ class TimingTestRevo3Worker(QObject):
 
         start_time = time.time()
         if mode == "Speed":
-            await self._v3_set_all_velocities(padded_fwd)
+            await self._revo3_set_all_velocities(padded_fwd)
             threshold_ratio = REVO3_SPEED_THRESHOLD
         elif mode == "Current":
-            await self._v3_set_all_currents(padded_fwd)
+            await self._revo3_set_all_currents(padded_fwd)
             threshold_ratio = REVO3_CURRENT_THRESHOLD
         else:
-            await self._v3_set_all_positions(padded_fwd)
+            await self._revo3_set_all_positions(padded_fwd)
             threshold_ratio = REVO3_THRESHOLD_RATIO
 
         last_emit_time  = 0.0
@@ -668,14 +671,14 @@ class TimingTestRevo3Worker(QObject):
             try:
                 if elapsed - last_ctrl_time >= ctrl_interval:
                     if mode == "Speed":
-                        await self._v3_set_all_velocities(padded_fwd)
+                        await self._revo3_set_all_velocities(padded_fwd)
                     elif mode == "Current":
-                        await self._v3_set_all_currents(padded_fwd)
+                        await self._revo3_set_all_currents(padded_fwd)
                     else:
-                        await self._v3_set_all_positions(padded_fwd)
+                        await self._revo3_set_all_positions(padded_fwd)
                     last_ctrl_time = elapsed
 
-                all_pos, all_vel, all_cur = self._v3_get_motor_data()
+                all_pos, all_vel, all_cur = self._revo3_get_motor_data()
 
                 if elapsed - last_emit_time >= 0.02:
                     self.data_point.emit(all_pos, all_vel, all_cur)
@@ -722,13 +725,13 @@ class TimingTestRevo3Worker(QObject):
 
         start_time = time.time()
         if mode == "Speed":
-            await self._v3_set_joints_velocity(joint_ids, target)
+            await self._revo3_set_joints_velocity(joint_ids, target)
             threshold_ratio = REVO3_SPEED_THRESHOLD
         elif mode == "Current":
-            await self._v3_set_joints_current(joint_ids, target)
+            await self._revo3_set_joints_current(joint_ids, target)
             threshold_ratio = REVO3_CURRENT_THRESHOLD
         else:
-            await self._v3_set_joints_position(joint_ids, target)
+            await self._revo3_set_joints_position(joint_ids, target)
             threshold_ratio = REVO3_THRESHOLD_RATIO
 
         last_emit_time  = 0.0
@@ -742,15 +745,15 @@ class TimingTestRevo3Worker(QObject):
 
             try:
                 if elapsed - last_ctrl_time >= ctrl_interval:
-                    if mode == "Speed":
-                        await self._v3_set_joints_velocity(joint_ids, target)
-                    elif mode == "Current":
-                        await self._v3_set_joints_current(joint_ids, target)
+                    # if mode == "Speed": # TBD: 是否保留
+                        # await self._revo3_set_joints_velocity(joint_ids, target)
+                    if mode == "Current":
+                        await self._revo3_set_joints_current(joint_ids, target)
                     else:
-                        await self._v3_set_joints_position(joint_ids, target)
+                        await self._revo3_set_joints_position(joint_ids, target)
                     last_ctrl_time = elapsed
 
-                all_pos, all_vel, all_cur = self._v3_get_motor_data()
+                all_pos, all_vel, all_cur = self._revo3_get_motor_data()
 
                 if elapsed - last_emit_time >= 0.02:
                     self.data_point.emit(all_pos, all_vel, all_cur)
@@ -796,7 +799,7 @@ class TimingTestRevo3Worker(QObject):
 
         start_time = time.time()
         for jid in joint_ids:
-            await self.device.v3_set_motor_position(
+            await self.device.revo3_set_motor_position(
                 self.slave_id, jid, targets.get(jid, 0.0))
 
         last_emit_time  = 0.0
@@ -810,11 +813,11 @@ class TimingTestRevo3Worker(QObject):
             try:
                 if elapsed - last_ctrl_time >= ctrl_interval:
                     for jid in joint_ids:
-                        await self.device.v3_set_motor_position(
+                        await self.device.revo3_set_motor_position(
                             self.slave_id, jid, targets.get(jid, 0.0))
                     last_ctrl_time = elapsed
 
-                all_pos, all_vel, all_cur = self._v3_get_motor_data()
+                all_pos, all_vel, all_cur = self._revo3_get_motor_data()
 
                 if elapsed - last_emit_time >= 0.02:
                     self.data_point.emit(all_pos, all_vel, all_cur)

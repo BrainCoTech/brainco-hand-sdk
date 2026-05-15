@@ -717,5 +717,3 @@ For technical support:
 - Touch-enabled devices require `stark_enable_touch_sensor()` before reading sensor datads
 
 ---
-
-**Version:** Compatible with Stark SDK v1.4.0

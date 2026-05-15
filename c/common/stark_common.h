@@ -199,6 +199,24 @@ void cleanup_device_context(DeviceContext* ctx);
 bool init_modbus(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_t slave_id);
 
 /**
+ * @brief Initialize a Revo1-series device via Modbus with a Revo1 default hardware type.
+ * The exact hardware type can still be refined later by `stark_get_device_info()`.
+ */
+bool init_modbus_revo1(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_t slave_id);
+
+/**
+ * @brief Initialize a Revo2-series device via Modbus with a Revo2 default hardware type.
+ * The exact hardware type can still be refined later by `stark_get_device_info()`.
+ */
+bool init_modbus_revo2(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_t slave_id);
+
+/**
+ * @brief Initialize a Revo3-series device via Modbus with a Revo3 default hardware type.
+ * The exact hardware type can still be refined later by `stark_get_device_info()`.
+ */
+bool init_modbus_revo3(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_t slave_id);
+
+/**
  * @brief Initialize device via Protobuf protocol
  * Protobuf uses fixed baudrate 115200 and slave_id range 10-254.
  * Position range is 0-100 internally (SDK converts from 0-1000).

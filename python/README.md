@@ -24,54 +24,27 @@ Complete Python SDK and examples for BrainCo RevoHand devices (Revo1, Revo2, and
 
 ## 📦 Installation
 
-### Install from PyPI
+### Recommended: Install from PyPI
 
-```bash
-pip3 install bc-stark-sdk
-```
-
-### Install from OSS (China Mirror)
-
-For users in China or when PyPI is slow, use the install script or download `.whl` directly from Alibaba Cloud OSS:
-
-```bash
-# Use install script (auto-detect platform)
-bash install_whl.sh 1.4.5 # Replace with actual version if needed
-```
-
-Or manually download and install:
-
-```bash
-# macOS (Apple Silicon)
-pip3 install https://app.brainco.cn/universal/bc-stark-sdk/libs/v[VERSION]/bc_stark_sdk-[VERSION]-cp38-abi3-macosx_11_0_arm64.whl
-
-# macOS (Intel)
-pip3 install https://app.brainco.cn/universal/bc-stark-sdk/libs/v[VERSION]/bc_stark_sdk-[VERSION]-cp38-abi3-macosx_10_12_x86_64.whl
-
-# Linux (x86_64)
-pip3 install https://app.brainco.cn/universal/bc-stark-sdk/libs/v[VERSION]/bc_stark_sdk-[VERSION]-cp38-abi3-manylinux_2_34_x86_64.whl
-
-# Linux (arm64)
-pip3 install https://app.brainco.cn/universal/bc-stark-sdk/libs/v[VERSION]/bc_stark_sdk-[VERSION]-cp38-abi3-manylinux_2_34_aarch64.whl
-
-# Windows (x86_64)
-pip3 install https://app.brainco.cn/universal/bc-stark-sdk/libs/v[VERSION]/bc_stark_sdk-[VERSION]-cp38-abi3-win_amd64.whl
-```
-
-> **Note:** Replace `[VERSION]` with the desired version (e.g., `1.4.5`). The `abi3-cp38` tag means the wheel is compatible with Python 3.8+.
-
-### Install Other Dependencies
+We have published the SDK to PyPI. The easiest way to install the SDK and its dependencies is directly via `pip`:
 
 ```bash
 cd python
 pip3 install -r requirements.txt
 ```
 
-### Dependencies
+### Alternative: Install from OSS (Direct Download)
 
-- `bc-stark-sdk>=1.4.0` - BrainCo Stark SDK core library
-- `asyncio>=3.4.3` - Asynchronous I/O support
-- `colorlog>=6.9.0` - Colored logging output
+If you have issues accessing PyPI or are in an isolated network, you can use our installation script to pull the pre-compiled core SDK directly from our Alibaba Cloud OSS:
+
+```bash
+# 1. Auto-detect platform and install the core SDK
+bash install_whl.sh
+
+# 2. Install the remaining dependencies
+cd python
+pip3 install -r requirements.txt
+```
 
 ## 🚀 Quick Start
 
@@ -708,6 +681,3 @@ Need help? Reach out to us through the following channels:
 - 💡 **References**: Check the example code in subdirectories and review the API documentation above
 - 💬 **Direct Support**: Contact the BrainCo technical support team
 
----
-
-**Version:** Requires `bc-stark-sdk >= 1.4.5`

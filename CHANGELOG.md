@@ -1,11 +1,18 @@
 # BrainCo RevoHand SDK Examples Changelog
 
-## v1.4.5 (2026/05/12)
+## v1.5.1 (2026/05/15)
 
 ### 🚀 New Features
 - **Revo3 Smooth Trajectory Control**: Added host-side trajectory interpolation support (`hand_trajectory_revo3.cpp`, `revo3_trajectory.py`) for smooth multi-joint motion execution.
 - **Revo3 OTA Support**: Added Revo3 Device Firmware Upgrade (DFU) capabilities with CLI tools and GUI panel integration.
 - **Revo3 System Status Monitoring**: Added APIs (`revo3_get_system_status`) to retrieve whole-hand diagnostic metrics including voltage, current, power, temperature, and system fault codes.
+
+### 🔧 Improvements & Fixes
+- **Revo3 API Refactoring**: Renamed legacy `V3` API prefixes to `Revo3` across Python SDK and C++ demos for consistent nomenclature.
+- **Motor Protection**: Migrated deprecated `max_continuous_current` API to `global_protect_current` for Revo3 devices.
+- **Baudrate Detection Fix**: Fixed Revo3 Modbus initial baudrate detection by pre-setting hardware context via `get_device_info`.
+- **GUI Enhancements**: Updated Revo3 motor position limits, added fractional movement controls, and fixed UI interactions during DFU upgrades.
+- **ABI Compatibility**: Standardized `Baudrate` enum values for strict ascending order (SDK v1.5.1+).
 
 ---
 

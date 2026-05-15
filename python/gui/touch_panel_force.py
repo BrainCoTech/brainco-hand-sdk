@@ -120,7 +120,7 @@ class ForceTorqueFingerChart(QWidget):
                 name_lbl = QLabel(f"{name}:")
                 name_lbl.setStyleSheet(f"font-size: 10px; font-weight: bold; color: rgb({r_c},{g_c},{b_c});")
                 val_lbl = QLabel("0.00")
-                val_lbl.setStyleSheet("font-size: 10px; font-family: 'Menlo','Monaco',monospace; color: #eee;")
+                val_lbl.setStyleSheet("font-size: 10px; font-family: 'Courier New'; color: #eee;")
                 val_lbl.setAlignment(Qt.AlignLeft)
 
                 force_vals_layout.addWidget(name_lbl)
@@ -170,7 +170,7 @@ class ForceTorqueFingerChart(QWidget):
                 name_lbl = QLabel(f"{name}:")
                 name_lbl.setStyleSheet(f"font-size: 10px; font-weight: bold; color: rgb({r_c},{g_c},{b_c});")
                 val_lbl = QLabel("0.00")
-                val_lbl.setStyleSheet("font-size: 10px; font-family: 'Menlo','Monaco',monospace; color: #eee;")
+                val_lbl.setStyleSheet("font-size: 10px; font-family: 'Courier New'; color: #eee;")
                 val_lbl.setAlignment(Qt.AlignLeft)
 
                 torque_vals_layout.addWidget(name_lbl)

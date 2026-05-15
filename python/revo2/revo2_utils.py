@@ -71,6 +71,10 @@ async def open_modbus_revo2(port_name=None, quick=True):
     # set_latency_by_com_or_serial(detected_port_name)
     # Establish Modbus connection
     client: libstark.DeviceContext = await modbus_open(detected_port_name, baudrate)
+    await client.set_hardware_type(slave_id, libstark.StarkHardwareType.Revo2Basic)
+    logger.info(
+        f"Preset hardware type to {libstark.StarkHardwareType.Revo2Basic} for Revo2 Modbus open"
+    )
 
     # Get device information
     device_info: libstark.DeviceInfo = await client.get_device_info(slave_id)
@@ -260,4 +264,3 @@ async def trajectory_control_task(
         sleep_time = ctrl_interval - (elapsed / 1000.0)
         if sleep_time > 0:
             await asyncio.sleep(sleep_time)
-

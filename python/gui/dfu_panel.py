@@ -1,45 +1,54 @@
-"""DFU - Device Firmware Upgrade Panel"""
+"""DFU - Device Firmware Upgrade Panel
+
+Runs DFU in a dedicated Qt worker thread so the GUI can stay responsive
+without spawning a separate Python process.
+"""
 
 import asyncio
-import sys
+import inspect
 import os
+import sys
 from pathlib import Path
-
 from typing import Optional, TYPE_CHECKING
+
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
-    QPushButton, QLabel, QLineEdit,
-    QFileDialog, QProgressBar, QComboBox, QMessageBox
+    QComboBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal, QThread, QObject, QTimer
 
 from .i18n import tr
 from .styles import COLORS
 
 # Add parent directory to path for SDK import
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from common_imports import sdk, logger
+from common_imports import sdk
 
 if TYPE_CHECKING:
     from .shared_data import SharedDataManager
 
-# DfuState enum from SDK
 DfuState = sdk.DfuState
 
-# Firmware paths configuration
 SCRIPT_DIR = Path(__file__).resolve().parent
 OTA_DIR = SCRIPT_DIR.parent / "ota_bin"
 
-# Default firmware file paths
 DEFAULT_FIRMWARE_PATHS = {
     "revo1_basic": OTA_DIR / "modbus" / "FW_MotorController_Release_SecureOTA_0.1.7.C.ota",
     "revo1_touch": OTA_DIR / "touch" / "FW_MotorController_Release_SecureOTA_V1.8.53.F.ota",
     "revo1_advanced": OTA_DIR / "stark2" / "Revo1.8_V1.0.3.C_2602031800.bin",
     "revo2_485_canfd": OTA_DIR / "stark2" / "Revo2_V1.0.20.U_2601091030.bin",
-    "revo3": OTA_DIR / "stark3" / "placeholder.bin",
+    "revo3": OTA_DIR / "stark3" / "revo23-fw-V0.0.4-2605111016.bin",
 }
 
-# DFU State names
 DFU_STATE_NAMES = {
     0: "dfu_state_idle",
     1: "dfu_state_starting",
@@ -49,7 +58,6 @@ DFU_STATE_NAMES = {
     5: "dfu_state_aborted",
 }
 
-# Firmware type mapping
 FIRMWARE_TYPES = {
     "Revo1Basic": {"name": "Revo1 Basic", "default_path": DEFAULT_FIRMWARE_PATHS.get("revo1_basic")},
     "Revo1Touch": {"name": "Revo1 Touch", "default_path": DEFAULT_FIRMWARE_PATHS.get("revo1_touch")},
@@ -65,163 +73,126 @@ FIRMWARE_TYPES = {
 
 
 class DfuWorker(QObject):
-    """DFU upgrade worker thread"""
-    progress = Signal(int)  # percent 0-100
-    state_changed = Signal(int)  # state enum value
-    finished = Signal(bool, str)  # success, message
+    """Run DFU in a background thread and forward updates with Qt signals."""
 
-    def __init__(self, device, slave_id, firmware_path):
+    progress = Signal(int)
+    state_changed = Signal(int)
+    finished = Signal(bool, str)
+
+    def __init__(self, device, slave_id: int, firmware_path: str, wait_secs: int = 180):
         super().__init__()
         self.device = device
         self.slave_id = slave_id
         self.firmware_path = firmware_path
-        self.last_state = 0
-        self.dfu_completed = False
-        self.dfu_failed = False
+        self.wait_secs = wait_secs
 
     def run(self):
-        """Execute DFU upgrade with event loop"""
+        loop = None
         try:
-            print(f"\n[DFU] Starting upgrade: {self.firmware_path}")
-
-            # Create and set event loop for this thread
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-
-            try:
-                # start_dfu returns a coroutine, need to await it
-                async def run_dfu_async():
-                    # Call start_dfu and await the result
-                    await self.device.start_dfu(
-                        self.slave_id,
-                        self.firmware_path,
-                        180,  # wait_secs (3 minutes timeout)
-                        self._on_dfu_state,
-                        self._on_dfu_progress
-                    )
-
-                    # Wait for final state (Completed or Aborted)
-                    # start_dfu may return before final state callback arrives
-                    # Wait up to 60 seconds for completion
-                    wait_count = 0
-                    while not self.dfu_completed and not self.dfu_failed and wait_count < 120:
-                        await asyncio.sleep(0.5)
-                        wait_count += 1
-                        if wait_count % 10 == 0:
-                            print(f"[DFU] Waiting for completion... ({wait_count * 0.5}s)")
-
-                loop.run_until_complete(run_dfu_async())
-            finally:
-                loop.close()
-
-            print(f"\n[DFU] Upgrade finished, state: {DFU_STATE_NAMES.get(self.last_state, self.last_state)}")
-
-            # Check final state
-            if self.dfu_completed:
-                self.finished.emit(True, tr("dfu_success_reboot"))
-            elif self.dfu_failed:
-                self.finished.emit(False, tr("dfu_aborted"))
-            else:
-                self.finished.emit(False, tr("dfu_timeout").format(state=tr(DFU_STATE_NAMES.get(self.last_state, "dfu_state_unknown"))))
-
+            loop.run_until_complete(self._run_dfu(loop))
         except Exception as e:
             import traceback
+
             traceback.print_exc()
-            self.finished.emit(False, tr("dfu_fail_msg").format(error=str(e)))
+            self.finished.emit(False, str(e))
+        finally:
+            if loop is not None:
+                loop.close()
 
-    def _on_dfu_state(self, slave_id, state):
-        """DFU state callback - called from SDK thread"""
-        try:
-            # Convert to DfuState enum if it's an int
-            if isinstance(state, int):
-                dfu_state = DfuState(state)
-                state_val = state
-            else:
-                dfu_state = state
-                state_val = dfu_state.int_value
+    async def _run_dfu(self, loop: asyncio.AbstractEventLoop):
+        done_event = asyncio.Event()
+        result = {"done": False, "success": False, "message": ""}
 
-            self.last_state = state_val
-            state_name = tr(DFU_STATE_NAMES.get(state_val, "dfu_state_unknown"))
-            print(f"[DFU] State: {state_name}")
+        def finish(success: bool, message: str):
+            if result["done"]:
+                return
+            result["done"] = True
+            result["success"] = success
+            result["message"] = message
+            if loop.is_closed():
+                return
+            loop.call_soon_threadsafe(done_event.set)
 
-            # Track completion/failure using enum
-            if dfu_state == DfuState.Completed:
-                self.dfu_completed = True
-            elif dfu_state == DfuState.Aborted:
-                self.dfu_failed = True
+        def on_dfu_state(slave_id: int, state: int):
+            self.state_changed.emit(state)
 
-            # Emit signal (thread-safe via Qt queued connection)
-            self.state_changed.emit(state_val)
-        except Exception as e:
-            print(f"[DFU] State callback error: {e}")
+            try:
+                dfu_state = sdk.DfuState(state)
+            except Exception:
+                dfu_state = None
 
-    def _on_dfu_progress(self, slave_id, progress):
-        """DFU progress callback - called from SDK thread"""
-        try:
-            # Progress is a float 0.0-1.0, convert to percent
-            if isinstance(progress, float) and progress <= 1.0:
-                percent = int(progress * 100)
-            else:
-                percent = int(progress)
+            if dfu_state == sdk.DfuState.Completed:
+                finish(True, "")
+            elif dfu_state == sdk.DfuState.Aborted:
+                finish(False, "DFU aborted by device")
 
-            # Print progress like hand_dfu.py
-            if percent >= 100:
-                print(f"\r[DFU] Slave {slave_id} progress: 100%")
-            else:
-                print(f"[DFU] Slave {slave_id} progress: {percent}%\r", end="", flush=True)
-
-            # Emit signal (thread-safe via Qt queued connection)
+        def on_dfu_progress(slave_id: int, progress: float):
+            percent = max(0, min(100, int(progress * 100)))
             self.progress.emit(percent)
-        except Exception as e:
-            print(f"[DFU] Progress callback error: {e}")
+
+        start_result = self.device.start_dfu(
+            self.slave_id,
+            self.firmware_path,
+            self.wait_secs,
+            on_dfu_state,
+            on_dfu_progress,
+        )
+
+        if asyncio.isfuture(start_result) or inspect.isawaitable(start_result):
+            await start_result
+
+        if not done_event.is_set():
+            try:
+                await asyncio.wait_for(done_event.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                finish(True, "")
+
+        self.finished.emit(result["success"], result["message"])
 
 
 class DfuPanel(QWidget):
-    """DFU Firmware Upgrade Panel
-    
-    Uses SharedDataManager for device state.
-    """
+    """DFU firmware upgrade panel."""
 
     dfu_started = Signal()
-    dfu_finished = Signal(bool)  # success
+    dfu_finished = Signal(bool)
 
     def __init__(self):
         super().__init__()
-        self.shared_data: Optional['SharedDataManager'] = None
-        self.worker: Optional[DfuWorker] = None
-        self._thread: Optional[QThread] = None
-
+        self.shared_data: Optional["SharedDataManager"] = None
+        self._dfu_thread: Optional[QThread] = None
+        self._dfu_worker: Optional[DfuWorker] = None
         self._setup_ui()
-    
-    # Properties to get device state from shared_data
+
     @property
     def device(self):
         return self.shared_data.device if self.shared_data else None
-    
+
     @property
     def slave_id(self):
         return self.shared_data.slave_id if self.shared_data else 1
-    
+
     @property
     def device_info(self):
         return self.shared_data.device_info if self.shared_data else None
 
     def _setup_ui(self):
-        """Setup UI"""
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
         layout.setContentsMargins(16, 16, 16, 16)
 
-        # Warning banner
         warning_frame = QGroupBox()
-        warning_frame.setStyleSheet("""
+        warning_frame.setStyleSheet(
+            """
             QGroupBox {
                 background-color: #fff3cd;
                 border: 1px solid #ffc107;
                 border-radius: 8px;
                 padding: 12px;
             }
-        """)
+            """
+        )
         warning_layout = QVBoxLayout(warning_frame)
 
         self.warning_title_label = QLabel(tr("dfu_warning_title"))
@@ -235,7 +206,6 @@ class DfuPanel(QWidget):
 
         layout.addWidget(warning_frame)
 
-        # Device info
         self.device_group = QGroupBox(tr("device_info"))
         device_layout = QHBoxLayout(self.device_group)
 
@@ -248,13 +218,11 @@ class DfuPanel(QWidget):
         device_layout.addStretch()
         layout.addWidget(self.device_group)
 
-        # Firmware selection
-        self.firmware_group = QGroupBox(tr("firmware_file"))
-        firmware_layout = QVBoxLayout(self.firmware_group)
+        firmware_group = QGroupBox(tr("firmware_selection"))
+        firmware_layout = QVBoxLayout(firmware_group)
 
-        # Firmware type
         type_layout = QHBoxLayout()
-        self.firmware_type_label = QLabel(tr("hardware_type") + ":")
+        self.firmware_type_label = QLabel(tr("firmware_type") + ":")
         type_layout.addWidget(self.firmware_type_label)
 
         self.firmware_type_combo = QComboBox()
@@ -262,150 +230,139 @@ class DfuPanel(QWidget):
             self.firmware_type_combo.addItem(info["name"], key)
         self.firmware_type_combo.currentIndexChanged.connect(self._on_type_changed)
         type_layout.addWidget(self.firmware_type_combo, 1)
-
         firmware_layout.addLayout(type_layout)
 
-        # Firmware file
-        file_layout = QHBoxLayout()
-        self.firmware_file_label = QLabel(tr("firmware_file") + ":")
-        file_layout.addWidget(self.firmware_file_label)
+        path_layout = QHBoxLayout()
+        self.firmware_path_label = QLabel(tr("firmware_path") + ":")
+        path_layout.addWidget(self.firmware_path_label)
 
         self.firmware_path_edit = QLineEdit()
-        self.firmware_path_edit.setPlaceholderText(tr("dfu_select_file") + " (.bin)")
-        file_layout.addWidget(self.firmware_path_edit, 1)
+        self.firmware_path_edit.setReadOnly(True)
+        path_layout.addWidget(self.firmware_path_edit, 1)
 
         self.browse_btn = QPushButton(tr("btn_browse"))
         self.browse_btn.clicked.connect(self._browse_firmware)
-        file_layout.addWidget(self.browse_btn)
+        path_layout.addWidget(self.browse_btn)
 
-        firmware_layout.addLayout(file_layout)
-        layout.addWidget(self.firmware_group)
+        firmware_layout.addLayout(path_layout)
+        layout.addWidget(firmware_group)
 
-        # Progress section
-        self.progress_group = QGroupBox(tr("dfu_progress"))
-        progress_layout = QVBoxLayout(self.progress_group)
+        progress_group = QGroupBox(tr("upgrade_progress"))
+        progress_layout = QVBoxLayout(progress_group)
 
-        # Status label (large, prominent)
-        self.status_label = QLabel(tr("dfu_status_waiting"))
-        self.status_label.setStyleSheet(f"""
-            font-size: 16px;
-            font-weight: bold;
-            color: {COLORS['text_primary']};
-            padding: 8px;
-        """)
-        self.status_label.setAlignment(Qt.AlignCenter)
-        progress_layout.addWidget(self.status_label)
-
-        # Progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setMinimumHeight(30)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 2px solid #3498db;
-                border-radius: 5px;
+        self.progress_bar.setStyleSheet(
+            f"""
+            QProgressBar {{
+                border: 2px solid {COLORS['border']};
+                border-radius: 8px;
                 text-align: center;
+                font-size: 14px;
                 font-weight: bold;
-            }
-            QProgressBar::chunk {
-                background-color: #3498db;
-            }
-        """)
+                background-color: {COLORS['bg_light']};
+            }}
+            QProgressBar::chunk {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 {COLORS['accent']}, stop:1 {COLORS['success']});
+                border-radius: 6px;
+            }}
+            """
+        )
         progress_layout.addWidget(self.progress_bar)
 
-        # State label
-        self.state_label = QLabel(tr("dfu_status_idle"))
-        self.state_label.setStyleSheet(f"color: {COLORS['text_muted']};")
+        self.status_label = QLabel(tr("dfu_ready"))
+        self.status_label.setStyleSheet(
+            f"font-size: 16px; font-weight: bold; color: {COLORS['text_primary']}; padding: 8px;"
+        )
+        self.status_label.setAlignment(Qt.AlignCenter)
+        progress_layout.addWidget(self.status_label)
+
+        self.state_label = QLabel(tr("dfu_state_prefix") + tr("dfu_state_idle"))
+        self.state_label.setStyleSheet(f"color: {COLORS['text_secondary']}; padding: 4px;")
         self.state_label.setAlignment(Qt.AlignCenter)
         progress_layout.addWidget(self.state_label)
 
-        layout.addWidget(self.progress_group)
+        layout.addWidget(progress_group)
 
-        # Control buttons
         btn_layout = QHBoxLayout()
-        
+
         self.start_btn = QPushButton(tr("btn_start_upgrade"))
-        self.start_btn.setMinimumHeight(50)
-        self.start_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #28a745;
+        self.start_btn.setMinimumHeight(40)
+        self.start_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: {COLORS['accent']};
                 color: white;
+                border: none;
+                border-radius: 8px;
                 font-size: 16px;
                 font-weight: bold;
-                border-radius: 8px;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-            QPushButton:disabled {
-                background-color: #6c757d;
-            }
-        """)
+                padding: 8px 24px;
+            }}
+            QPushButton:hover {{
+                background-color: {COLORS['accent_hover']};
+            }}
+            QPushButton:disabled {{
+                background-color: {COLORS['border']};
+                color: {COLORS['text_secondary']};
+            }}
+            """
+        )
         self.start_btn.clicked.connect(self._start_upgrade)
-        btn_layout.addWidget(self.start_btn, 3)
-        
-        # Reset button (for stuck DFU state)
-        self.reset_btn = QPushButton(tr("btn_reset_state"))
-        self.reset_btn.setMinimumHeight(50)
-        self.reset_btn.setToolTip(tr("dfu_reset_tooltip"))
-        self.reset_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: white;
-                font-size: 14px;
-                border-radius: 8px;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-        """)
-        self.reset_btn.clicked.connect(self._reset_dfu_state)
-        btn_layout.addWidget(self.reset_btn, 1)
-        
-        layout.addLayout(btn_layout)
+        btn_layout.addWidget(self.start_btn)
 
+        self.reset_btn = QPushButton(tr("btn_reset_dfu"))
+        self.reset_btn.setMinimumHeight(40)
+        self.reset_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: {COLORS['warning']};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                padding: 8px 16px;
+            }}
+            QPushButton:hover {{
+                background-color: #e67e22;
+            }}
+            """
+        )
+        self.reset_btn.clicked.connect(self._reset_dfu_state)
+        btn_layout.addWidget(self.reset_btn)
+
+        layout.addLayout(btn_layout)
         layout.addStretch()
 
-        # Initialize
         self._on_type_changed(0)
-        self._update_warning_text()
-
-    def _update_warning_text(self):
-        """Update warning text based on current language"""
-        self.warning_text_label.setText(
-            f"• {tr('dfu_warning_1')}\n"
-            f"• {tr('dfu_warning_2')}\n"
-            f"• {tr('dfu_warning_3')}"
-        )
 
     def update_texts(self):
-        """Update texts for i18n"""
         self.warning_title_label.setText(tr("dfu_warning_title"))
-        self._update_warning_text()
+        self.warning_text_label.setText(f"{tr('dfu_warning_1')}\n{tr('dfu_warning_2')}\n{tr('dfu_warning_3')}")
         self.device_group.setTitle(tr("device_info"))
-        self.firmware_group.setTitle(tr("firmware_file"))
-        self.firmware_type_label.setText(tr("hardware_type") + ":")
-        self.firmware_file_label.setText(tr("firmware_file") + ":")
+        self.firmware_type_label.setText(tr("firmware_type") + ":")
+        self.firmware_path_label.setText(tr("firmware_path") + ":")
         self.browse_btn.setText(tr("btn_browse"))
-        self.progress_group.setTitle(tr("dfu_progress"))
         self.start_btn.setText(tr("btn_start_upgrade"))
-        self.reset_btn.setText(tr("btn_reset_state"))
+        self.reset_btn.setText(tr("btn_reset_dfu"))
         self.reset_btn.setToolTip(tr("dfu_reset_tooltip"))
 
     def set_device(self, device, slave_id, device_info, shared_data=None):
-        """Set device"""
         self.shared_data = shared_data
 
         if device_info:
             hw_type = str(device_info.hardware_type).replace("StarkHardwareType.", "")
             self.device_type_label.setText(f"{tr('device_type')}: {hw_type}")
-            self.firmware_version_label.setText(f"{tr('current_firmware')}: {device_info.firmware_version}")
+            self.firmware_version_label.setText(
+                f"{tr('current_firmware')}: {device_info.firmware_version}"
+            )
 
-            # Auto-select firmware type
             for i in range(self.firmware_type_combo.count()):
                 key = self.firmware_type_combo.itemData(i)
-                if key and hw_type in key:
+                if key and (hw_type in key or hw_type.startswith(key)):
                     self.firmware_type_combo.setCurrentIndex(i)
                     break
         else:
@@ -413,7 +370,6 @@ class DfuPanel(QWidget):
             self.firmware_version_label.setText(tr("current_firmware_none"))
 
     def _on_type_changed(self, index):
-        """Firmware type changed"""
         key = self.firmware_type_combo.currentData()
         if key and key in FIRMWARE_TYPES:
             info = FIRMWARE_TYPES[key]
@@ -424,17 +380,22 @@ class DfuPanel(QWidget):
                 self.firmware_path_edit.clear()
 
     def _browse_firmware(self):
-        """Browse for firmware file"""
         filename, _ = QFileDialog.getOpenFileName(
-            self, tr("select_firmware_file_title"), "", "Binary Files (*.bin *.ota);;All Files (*)"
+            self,
+            tr("select_firmware_file_title"),
+            "",
+            "Binary Files (*.bin *.ota);;All Files (*)",
         )
         if filename:
             self.firmware_path_edit.setText(filename)
 
     def _start_upgrade(self):
-        """Start firmware upgrade"""
         if not self.device:
             QMessageBox.warning(self, tr("error_title"), tr("error_no_device"))
+            return
+
+        if self._dfu_thread is not None:
+            QMessageBox.warning(self, tr("error_title"), tr("dfu_status_warning"))
             return
 
         firmware_path = self.firmware_path_edit.text()
@@ -442,55 +403,71 @@ class DfuPanel(QWidget):
             QMessageBox.warning(self, tr("error_title"), tr("error_invalid_file"))
             return
 
-        # Confirm
         reply = QMessageBox.question(
-            self, tr("dfu_confirm_title"),
+            self,
+            tr("dfu_confirm_title"),
             tr("dfu_confirm_msg"),
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.No,
         )
-
         if reply != QMessageBox.Yes:
             return
 
-        # Disable UI
         self.start_btn.setEnabled(False)
         self.browse_btn.setEnabled(False)
         self.firmware_type_combo.setEnabled(False)
 
-        # Reset progress
         self.progress_bar.setValue(0)
         self.status_label.setText(tr("dfu_upgrading"))
-        self.status_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: #3498db; padding: 8px;")
+        self.status_label.setStyleSheet(
+            "font-size: 16px; font-weight: bold; color: #3498db; padding: 8px;"
+        )
         self.state_label.setText(tr("dfu_state_prefix") + tr("dfu_state_starting"))
 
-        # Start worker
-        self._thread = QThread()
-        self.worker = DfuWorker(self.device, self.slave_id, firmware_path)
-        self.worker.moveToThread(self._thread)
-
-        self._thread.started.connect(self.worker.run)
-        self.worker.progress.connect(self._on_progress)
-        self.worker.state_changed.connect(self._on_state_changed)
-        self.worker.finished.connect(self._on_finished)
-        self.worker.finished.connect(self._thread.quit)
+        if self.shared_data:
+            self.shared_data.stop()
 
         self.dfu_started.emit()
-        self._thread.start()
+        self._launch_worker(firmware_path)
 
-    def _on_progress(self, percent):
-        """Progress update"""
+    def _launch_worker(self, firmware_path: str):
+        self._dfu_thread = QThread(self)
+        self._dfu_worker = DfuWorker(self.device, self.slave_id, firmware_path)
+        self._dfu_worker.moveToThread(self._dfu_thread)
+
+        self._dfu_thread.started.connect(self._dfu_worker.run)
+        self._dfu_worker.progress.connect(self._on_progress)
+        self._dfu_worker.state_changed.connect(self._on_state_changed)
+        self._dfu_worker.finished.connect(self._on_worker_finished)
+        self._dfu_worker.finished.connect(self._dfu_thread.quit)
+        self._dfu_thread.finished.connect(self._cleanup_worker)
+
+        self._dfu_thread.start()
+
+    def _on_progress(self, percent: int):
         self.progress_bar.setValue(percent)
         self.status_label.setText(tr("dfu_upgrading_progress").format(percent=percent))
 
-    def _on_state_changed(self, state):
-        """DFU state changed"""
-        state_name = tr(DFU_STATE_NAMES.get(state, "dfu_state_unknown"))
+    def _on_state_changed(self, state: int):
+        state_key = DFU_STATE_NAMES.get(state, "dfu_state_unknown")
+        if state_key == "dfu_state_unknown":
+            state_name = tr(state_key).format(state=state)
+        else:
+            state_name = tr(state_key)
         self.state_label.setText(tr("dfu_state_prefix") + state_name)
 
+    def _on_worker_finished(self, success: bool, message: str):
+        self._on_finished(success, message if not success else tr("dfu_success_reboot"))
+
+    def _cleanup_worker(self):
+        if self._dfu_worker is not None:
+            self._dfu_worker.deleteLater()
+            self._dfu_worker = None
+        if self._dfu_thread is not None:
+            self._dfu_thread.deleteLater()
+            self._dfu_thread = None
+
     def _on_finished(self, success, message):
-        """Upgrade finished"""
-        # Re-enable UI
         self.start_btn.setEnabled(True)
         self.browse_btn.setEnabled(True)
         self.firmware_type_combo.setEnabled(True)
@@ -500,44 +477,52 @@ class DfuPanel(QWidget):
         if success:
             self.progress_bar.setValue(100)
             self.status_label.setText(tr("dfu_success_short"))
-            self.status_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: #28a745; padding: 8px;")
+            self.status_label.setStyleSheet(
+                "font-size: 16px; font-weight: bold; color: #28a745; padding: 8px;"
+            )
             self.state_label.setText(tr("dfu_state_prefix") + tr("dfu_state_completed"))
-            # No dialog - just show status in panel
         else:
             self.status_label.setText(tr("dfu_failed_short"))
-            self.status_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: #dc3545; padding: 8px;")
-            # Delay dialog to let UI update first
-            QTimer.singleShot(100, lambda: QMessageBox.warning(self, tr("error_title"), message))
+            self.status_label.setStyleSheet(
+                "font-size: 16px; font-weight: bold; color: #dc3545; padding: 8px;"
+            )
+            QTimer.singleShot(
+                100, lambda: QMessageBox.warning(self, tr("error_title"), message)
+            )
 
     def _reset_dfu_state(self):
-        """Reset DFU state (for recovery from stuck states)"""
         if not self.device:
             QMessageBox.warning(self, tr("error_title"), tr("error_no_device"))
             return
-        
+
         try:
-            import asyncio
             device = self.device
             slave_id = self.slave_id
-            
+
             async def do_reset():
                 await device.reset_dfu_state(slave_id)
-            
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 loop.run_until_complete(do_reset())
             finally:
                 loop.close()
-            
-            # Reset UI
+
             self.progress_bar.setValue(0)
             self.status_label.setText(tr("dfu_state_reset"))
-            self.status_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {COLORS['text_primary']}; padding: 8px;")
+            self.status_label.setStyleSheet(
+                f"font-size: 16px; font-weight: bold; color: {COLORS['text_primary']}; padding: 8px;"
+            )
             self.state_label.setText(tr("dfu_state_prefix") + tr("dfu_state_idle"))
-            
-            QMessageBox.information(self, tr("dfu_reset_success_title"), tr("dfu_reset_success_msg"))
+
+            QMessageBox.information(
+                self, tr("dfu_reset_success_title"), tr("dfu_reset_success_msg")
+            )
         except Exception as e:
             import traceback
+
             traceback.print_exc()
-            QMessageBox.warning(self, tr("error_title"), tr("dfu_reset_fail_msg").format(error=str(e)))
+            QMessageBox.warning(
+                self, tr("error_title"), tr("dfu_reset_fail_msg").format(error=str(e))
+            )

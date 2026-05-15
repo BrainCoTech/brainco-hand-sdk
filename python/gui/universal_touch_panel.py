@@ -51,7 +51,7 @@ class UniversalTouchPanel(QWidget):
         if is_capacitive_touch(hw_type):
             self._set_mode('capacitive', device, slave_id, device_info, shared_data)
         else:
-            # Everything else (Pressure, Force3D, ArrayPressure, V3 Tactical) routes to advanced panel
+            # Everything else (Pressure, Force3D, ArrayPressure, Revo3 Tactical) routes to advanced panel
             self._set_mode('advanced', device, slave_id, device_info, shared_data)
             
     def _set_mode(self, mode: str, device=None, slave_id=None, device_info=None, shared_data=None):

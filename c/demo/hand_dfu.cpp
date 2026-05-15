@@ -29,12 +29,23 @@
 static std::atomic<bool> g_dfu_completed(false);
 static std::atomic<bool> g_dfu_failed(false);
 
+// ============================================================================
+// WARNING: ABI COMPATIBILITY NOTE (SDK v1.5.1+)
+// The underlying integer values of the `Baudrate` enum have been reordered 
+// to be strictly ascending. Specifically:
+//   - STARK_BAUDRATE_BAUD3MBPS = 6
+//   - STARK_BAUDRATE_BAUD5MBPS = 7 (previously was 6)
+// If you are using pre-compiled binaries that hardcode or expect BAUD5MBPS 
+// to be 6, you MUST recompile your C/C++ application against the new 
+// stark-sdk.h header to ensure correct baudrate configuration.
+// ============================================================================
+
 // Default firmware paths (relative to executable)
 static const char* FIRMWARE_REVO1_BASIC = "../ota_bin/modbus/FW_MotorController_Release_SecureOTA_0.1.7.C.ota";
 static const char* FIRMWARE_REVO1_TOUCH = "../ota_bin/touch/FW_MotorController_Release_SecureOTA_V1.8.53.F.ota";
 static const char* FIRMWARE_REVO1_ADVANCED = "../ota_bin/stark2/Revo1.8_V1.0.3.C_2602031800.bin";
 static const char* FIRMWARE_REVO2_485_CANFD = "../ota_bin/stark2/Revo2_V1.0.20.U_2601091030.bin";
-static const char* FIRMWARE_REVO3 = "../ota_bin/stark3/placeholder.bin";
+static const char* FIRMWARE_REVO3 = "../ota_bin/stark3/revo23-fw-V0.0.4-2605111016.bin";
 
 /**
  * @brief Select firmware path based on hardware type
@@ -85,22 +96,22 @@ void print_usage(const char* prog_name) {
 
 int main(int argc, char const *argv[]) {
     printf("=== Universal DFU ===\n\n");
-    
+
     // Initialize logging
     init_logging(LOG_LEVEL_INFO);
 
     // Parse arguments and initialize device
     DeviceContext ctx;
     memset(&ctx, 0, sizeof(ctx));
-    
+
     int arg_idx = 1;
-    
+
     // Check for help
     if (argc > 1 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
         print_usage(argv[0]);
         return 0;
     }
-    
+
     if (!parse_args_and_init(&ctx, argc, argv, &arg_idx)) {
         print_usage(argv[0]);
         return -1;

@@ -32,7 +32,7 @@ revo3_ota_bin_path = os.path.join(
     parent_dir,
     "ota_bin",
     "stark3",
-    "placeholder.bin",  # Replace with actual firmware file
+    "revo23-fw-V0.0.4-2605111016.bin",  # Replace with actual firmware file
 )
 
 # Global variables for asynchronous event handling

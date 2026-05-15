@@ -344,7 +344,7 @@ class SystemConfigPanel(QWidget):
         modbus_layout = QHBoxLayout()
         modbus_layout.addWidget(QLabel("Baudrate:"))
         self.modbus_baud_combo = QComboBox()
-        self.modbus_baud_combo.addItems(["115200", "460800", "1000000", "2000000", "5000000"])
+        self.modbus_baud_combo.addItems(["115200", "460800", "1 Mbps", "2 Mbps", "3 Mbps", "5 Mbps"])
         modbus_layout.addWidget(self.modbus_baud_combo)
         self.modbus_baud_btn = QPushButton("Set")
         self.modbus_baud_btn.clicked.connect(self._set_modbus_baudrate)
@@ -854,7 +854,7 @@ class SystemConfigPanel(QWidget):
                     
                     # Select current value in combo box
                     baud_map = {
-                        "115200": 0, "460800": 1, "1Mbps": 2, "2Mbps": 3, "5Mbps": 4
+                        "115200": 0, "460800": 1, "1Mbps": 2, "2Mbps": 3, "3Mbps": 4, "5Mbps": 5
                     }
                     idx = baud_map.get(baud_display, -1)
                     if idx >= 0:
@@ -1125,7 +1125,18 @@ class SystemConfigPanel(QWidget):
             return
         try:
             self._log(f"Setting Modbus baudrate: {baud_text}...")
-            baudrate = int_to_baudrate(int(baud_text))
+            
+            # Map human-readable text to enum
+            baud_map_enum = {
+                "115200": sdk.Baudrate.Baud115200,
+                "460800": sdk.Baudrate.Baud460800,
+                "1 Mbps": sdk.Baudrate.Baud1Mbps,
+                "2 Mbps": sdk.Baudrate.Baud2Mbps,
+                "3 Mbps": sdk.Baudrate.Baud3Mbps,
+                "5 Mbps": sdk.Baudrate.Baud5Mbps,
+            }
+            baudrate = baud_map_enum.get(baud_text)
+            
             if baudrate:
                 await self.device.set_serialport_baudrate(self.slave_id, baudrate)
                 self._log(f"Modbus baudrate set to {baud_text} ✓")

@@ -1,7 +1,7 @@
 """V1/V2 Timing Test Worker
 
 Handles Revo1/Revo2 (6-DOF, motor values 0-1000) timing tests.
-For V3 (23-DOF, float degrees/rpm/mA) see timing_test_worker_v3.py.
+For Revo3 (23-DOF, float degrees/rpm/mA) see timing_test_worker_v3.py.
 """
 
 import asyncio

@@ -1,6 +1,6 @@
 # BrainCo 灵巧手 SDK 开发示例
 
-[![版本](https://img.shields.io/badge/版本-v1.4.0-blue.svg)](VERSION)
+[![版本](https://img.shields.io/badge/版本-v1.5.1-blue.svg)](VERSION)
 [![许可证](https://img.shields.io/badge/许可证-专有-red.svg)]()
 
 [English](README.md) | [中文](README.zh.md)
@@ -109,10 +109,6 @@ Python 开发示例支持多种通信协议：
 ### 运行 Python 示例
 
 每个示例目录都包含独立的 README 文件，提供具体的使用说明。
-
-## 📝 版本信息
-
-当前 SDK 版本：**v1.4.0**
 
 更新历史请查看 [CHANGELOG](CHANGELOG.md) 文件。
 

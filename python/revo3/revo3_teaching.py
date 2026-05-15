@@ -151,7 +151,7 @@ async def enter_teaching_mode(client, slave_id):
     logger.info("Entering teaching mode (zero-torque)...")
 
     try:
-        await client.v3_set_teaching_mode(slave_id, True)
+        await client.revo3_set_teaching_mode(slave_id, True)
     except Exception as e:
         logger.error(f"Failed to enter teaching mode: {e}")
 
@@ -167,17 +167,17 @@ async def exit_teaching_mode(client, slave_id, restore_positions=None):
     logger.info("Exiting teaching mode...")
 
     try:
-        await client.v3_set_teaching_mode(slave_id, False)
+        await client.revo3_set_teaching_mode(slave_id, False)
         await asyncio.sleep(0.1)
     except Exception as e:
         logger.error(f"Failed to exit teaching mode: {e}")
 
     if restore_positions is not None:
-        await client.v3_set_all_motor_positions(slave_id, restore_positions)
+        await client.revo3_set_all_motor_positions(slave_id, restore_positions)
         logger.info(f"✅ Restored to initial positions")
     else:
         target = [0.0] * REVO3_MOTOR_COUNT
-        await client.v3_set_all_motor_positions(slave_id, target)
+        await client.revo3_set_all_motor_positions(slave_id, target)
         logger.info(f"✅ Reset to zero position")
 
     await asyncio.sleep(0.5)
@@ -189,7 +189,7 @@ async def record_trajectory(client, slave_id, motor_buffer, record_freq, result_
     Args:
         client: Modbus client
         slave_id: Device slave ID
-        motor_buffer: V3MotorStatusBuffer for reading positions
+        motor_buffer: Revo3MotorStatusBuffer for reading positions
         record_freq: Target recording frequency in Hz
         result_holder: dict with key 'trajectory' to store result (survives cancellation)
     """
@@ -266,8 +266,8 @@ async def playback_trajectory(client, slave_id, trajectory, speed=1.0, motor_buf
     # --- MUST INITIALIZE RIGIDITY BEFORE PLAYBACK ---
     if True:
         try:
-            # Ensure it is in Position Control mode
-            await client.v3_set_ctrl_mode_all(slave_id, 0)
+            # Exit teaching mode (switch back to position control)
+            await client.revo3_set_teaching_mode(slave_id, False)
             await asyncio.sleep(0.1)
         except Exception:
             pass
@@ -282,7 +282,7 @@ async def playback_trajectory(client, slave_id, trajectory, speed=1.0, motor_buf
         while len(pos_init) < REVO3_MOTOR_COUNT:
             pos_init.append(0.0)
 
-        await client.v3_set_all_motor_mit(slave_id, zeros, pos_init, zeros, kps, kds)
+        await client.revo3_set_all_motor_mit(slave_id, zeros, pos_init, zeros, kps, kds)
         await asyncio.sleep(0.1)
 
     playback_start = time.perf_counter()
@@ -307,7 +307,7 @@ async def playback_trajectory(client, slave_id, trajectory, speed=1.0, motor_buf
             pos = pos[:21]
 
             # Send positions
-            await client.v3_set_all_motor_positions(slave_id, pos)
+            await client.revo3_set_all_motor_positions(slave_id, pos)
             frame_idx = i
 
             # Print progress every 2 seconds
@@ -364,7 +364,7 @@ async def interactive_session(client, slave_id, motor_buffer, collector,
         logger.info("Phase 1: Save Initial State")
         logger.info("=" * 60)
 
-        status = await client.v3_get_motor_status_data(slave_id)
+        status = await client.revo3_get_motor_status_data(slave_id)
         initial_positions = list(status.positions)
         logger.info(f"Initial positions (first 5): {[f'{p:.1f}' for p in initial_positions[:5]]}")
 
@@ -460,11 +460,11 @@ async def interactive_session(client, slave_id, motor_buffer, collector,
 
             # Return to initial position after playback
             if not load_path:
-                await client.v3_set_all_motor_positions(slave_id, initial_positions)
+                await client.revo3_set_all_motor_positions(slave_id, initial_positions)
             else:
                 # If loaded from file, go to first frame position
                 first_pos = trajectory.frames[0][1]
-                await client.v3_set_all_motor_positions(slave_id, first_pos)
+                await client.revo3_set_all_motor_positions(slave_id, first_pos)
             await asyncio.sleep(0.5)
 
     logger.info("\n✅ Teaching session complete!")
@@ -503,8 +503,8 @@ async def main(port_name=None, record_freq=DEFAULT_RECORD_FREQ,
         is_linux = platform.system() == "Linux"
         collector_freq = COLLECTOR_FREQ_LINUX if is_linux else COLLECTOR_FREQ
 
-        motor_buffer = libstark.V3MotorStatusBuffer(max_size=2000)
-        collector = libstark.DataCollector.new_v3_basic(
+        motor_buffer = libstark.Revo3MotorStatusBuffer(max_size=2000)
+        collector = libstark.DataCollector.new_revo3_basic(
             ctx=client,
             motor_buffer=motor_buffer,
             slave_id=slave_id,
@@ -546,7 +546,7 @@ async def main(port_name=None, record_freq=DEFAULT_RECORD_FREQ,
         if client:
             try:
                 target = [0.0] * REVO3_MOTOR_COUNT
-                await client.v3_set_all_motor_positions(slave_id, target)
+                await client.revo3_set_all_motor_positions(slave_id, target)
             except Exception:
                 pass
             try:

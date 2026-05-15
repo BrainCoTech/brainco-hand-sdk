@@ -1,12 +1,12 @@
 /**
  * @file hand_monitor_v3.cpp
- * @brief Revo3 (V3) Real-time Data Monitor
+ * @brief Revo3 (Revo3) Real-time Data Monitor
  *
  * Demonstrates DataCollector-based continuous data collection for Revo3:
  *
  * Modes:
- *   motor  - Motor-only (data_collector_new_v3_basic + CV3MotorStatusBuffer)
- *   touch  - Motor + Touch (data_collector_new_v3_full + CV3MotorStatusBuffer + CV3TouchDataBuffer)
+ *   motor  - Motor-only (data_collector_new_revo3_basic + CRevo3MotorStatusBuffer)
+ *   touch  - Motor + Touch (data_collector_new_revo3_full + CRevo3MotorStatusBuffer + CRevo3TouchDataBuffer)
  *
  * Build: make hand_monitor_v3.exe
  * Run:   ./hand_monitor_v3.exe              # Auto-detect, motor only
@@ -39,7 +39,7 @@
 typedef enum {
     REVO3_MODE_MOTOR = 0,
     REVO3_MODE_TOUCH,
-} V3CollectionMode;
+} Revo3CollectionMode;
 
 static const char *MODULE_NAMES[] = {
     "Palm",
@@ -67,15 +67,15 @@ void signal_handler(int signum) {
 }
 
 // ============================================================================
-// V3 Motor-Only Collection Loop
+// Revo3 Motor-Only Collection Loop
 // ============================================================================
 
-void run_v3_motor_collection(
+void run_revo3_motor_collection(
     CDataCollector* collector,
-    CV3MotorStatusBuffer* motor_buffer
+    CRevo3MotorStatusBuffer* motor_buffer
 ) {
     const int MAX_DATA = 2000;
-    CV3MotorStatusData* data = (CV3MotorStatusData*)malloc(sizeof(CV3MotorStatusData) * MAX_DATA);
+    CRevo3MotorStatusData* data = (CRevo3MotorStatusData*)malloc(sizeof(CRevo3MotorStatusData) * MAX_DATA);
     if (!data) {
         fprintf(stderr, "[ERROR] Failed to allocate motor data array.\n");
         return;
@@ -87,10 +87,10 @@ void run_v3_motor_collection(
         usleep(200 * 1000); // 200ms print interval
         loop_count++;
 
-        size_t buffer_len = v3_motor_buffer_len(motor_buffer);
+        size_t buffer_len = revo3_motor_buffer_len(motor_buffer);
         if (buffer_len == 0) continue;
 
-        int count = v3_motor_buffer_pop_all(motor_buffer, data, MAX_DATA);
+        int count = revo3_motor_buffer_pop_all(motor_buffer, data, MAX_DATA);
         if (count <= 0) continue;
 
         auto latest = &data[count - 1];
@@ -128,21 +128,21 @@ void run_v3_motor_collection(
 }
 
 // ============================================================================
-// V3 Motor + Touch (Buffered) Collection Loop
+// Revo3 Motor + Touch (Buffered) Collection Loop
 // ============================================================================
 
-void run_v3_full_collection(
+void run_revo3_full_collection(
     CDataCollector* collector,
-    CV3MotorStatusBuffer* motor_buffer,
-    CV3TouchDataBuffer* touch_buffer
+    CRevo3MotorStatusBuffer* motor_buffer,
+    CRevo3TouchDataBuffer* touch_buffer
 ) {
     const int MAX_MOTOR_DATA = 2000;
     const int MAX_TOUCH_DATA = 200;
 
-    CV3MotorStatusData* motor_data =
-        (CV3MotorStatusData*)malloc(sizeof(CV3MotorStatusData) * MAX_MOTOR_DATA);
-    CV3TouchData* touch_data =
-        (CV3TouchData*)malloc(sizeof(CV3TouchData) * MAX_TOUCH_DATA);
+    CRevo3MotorStatusData* motor_data =
+        (CRevo3MotorStatusData*)malloc(sizeof(CRevo3MotorStatusData) * MAX_MOTOR_DATA);
+    CRevo3TouchData* touch_data =
+        (CRevo3TouchData*)malloc(sizeof(CRevo3TouchData) * MAX_TOUCH_DATA);
 
     if (!motor_data || !touch_data) {
         fprintf(stderr, "[ERROR] Failed to allocate data arrays.\n");
@@ -158,10 +158,10 @@ void run_v3_full_collection(
         loop_count++;
 
         // Motor data
-        int motor_count = v3_motor_buffer_pop_all(motor_buffer, motor_data, MAX_MOTOR_DATA);
+        int motor_count = revo3_motor_buffer_pop_all(motor_buffer, motor_data, MAX_MOTOR_DATA);
 
         // Touch data
-        int touch_count = v3_touch_buffer_pop_all(touch_buffer, touch_data, MAX_TOUCH_DATA);
+        int touch_count = revo3_touch_buffer_pop_all(touch_buffer, touch_data, MAX_TOUCH_DATA);
 
         printf("[%3d] Motor: %d | Touch: %d\n",
                loop_count,
@@ -233,13 +233,13 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Verify V3 device
+    // Verify Revo3 device
     if (!stark_uses_revo3_motor_api(ctx.hw_type)) {
-        printf("[WARN] Device is not Revo3 (hw_type=%d). V3 APIs may not work.\n", ctx.hw_type);
+        printf("[WARN] Device is not Revo3 (hw_type=%d). Revo3 APIs may not work.\n", ctx.hw_type);
     }
 
     // Parse mode from remaining args
-    V3CollectionMode mode = REVO3_MODE_MOTOR;
+    Revo3CollectionMode mode = REVO3_MODE_MOTOR;
     if (arg_idx < argc) {
         if (strcmp(argv[arg_idx], "touch") == 0) {
             mode = REVO3_MODE_TOUCH;
@@ -252,47 +252,47 @@ int main(int argc, char *argv[]) {
         printf("[INFO] Touch frequency: %d Hz\n", REVO3_TOUCH_FREQ);
     }
 
-    // Create V3 motor buffer
-    auto motor_buffer = v3_motor_buffer_new(2000);
+    // Create Revo3 motor buffer
+    auto motor_buffer = revo3_motor_buffer_new(2000);
     if (!motor_buffer) {
-        fprintf(stderr, "[ERROR] Failed to create V3 motor buffer.\n");
+        fprintf(stderr, "[ERROR] Failed to create Revo3 motor buffer.\n");
         cleanup_device_context(&ctx);
         return 1;
     }
 
-    // Create V3 touch buffer (only for touch mode)
-    CV3TouchDataBuffer* touch_buffer = NULL;
+    // Create Revo3 touch buffer (only for touch mode)
+    CRevo3TouchDataBuffer* touch_buffer = NULL;
     if (mode == REVO3_MODE_TOUCH) {
         printf("[INFO] Enabling all touch modules...\n");
-        stark_v3_set_all_touch_modules_enabled(ctx.handle, ctx.slave_id, 0x7FF);
+        stark_revo3_set_all_touch_modules_enabled(ctx.handle, ctx.slave_id, 0x7FF);
         usleep(500 * 1000);
 
-        touch_buffer = v3_touch_buffer_new(200);
+        touch_buffer = revo3_touch_buffer_new(200);
         if (!touch_buffer) {
-            fprintf(stderr, "[ERROR] Failed to create V3 touch buffer.\n");
-            v3_motor_buffer_free(motor_buffer);
+            fprintf(stderr, "[ERROR] Failed to create Revo3 touch buffer.\n");
+            revo3_motor_buffer_free(motor_buffer);
             cleanup_device_context(&ctx);
             return 1;
         }
     }
 
-    // Create V3 data collector
+    // Create Revo3 data collector
     CDataCollector* collector = NULL;
     if (mode == REVO3_MODE_TOUCH) {
-        collector = data_collector_new_v3_full(
+        collector = data_collector_new_revo3_full(
             ctx.handle, motor_buffer, touch_buffer,
             ctx.slave_id, REVO3_MOTOR_FREQ, REVO3_TOUCH_FREQ, 1
         );
     } else {
-        collector = data_collector_new_v3_basic(
+        collector = data_collector_new_revo3_basic(
             ctx.handle, motor_buffer, ctx.slave_id, REVO3_MOTOR_FREQ, 1
         );
     }
 
     if (!collector) {
-        fprintf(stderr, "[ERROR] Failed to create V3 data collector.\n");
-        if (touch_buffer) v3_touch_buffer_free(touch_buffer);
-        v3_motor_buffer_free(motor_buffer);
+        fprintf(stderr, "[ERROR] Failed to create Revo3 data collector.\n");
+        if (touch_buffer) revo3_touch_buffer_free(touch_buffer);
+        revo3_motor_buffer_free(motor_buffer);
         cleanup_device_context(&ctx);
         return 1;
     }
@@ -301,8 +301,8 @@ int main(int argc, char *argv[]) {
     if (data_collector_start(collector) != 0) {
         fprintf(stderr, "[ERROR] Failed to start data collector.\n");
         data_collector_free(collector);
-        if (touch_buffer) v3_touch_buffer_free(touch_buffer);
-        v3_motor_buffer_free(motor_buffer);
+        if (touch_buffer) revo3_touch_buffer_free(touch_buffer);
+        revo3_motor_buffer_free(motor_buffer);
         cleanup_device_context(&ctx);
         return 1;
     }
@@ -312,10 +312,10 @@ int main(int argc, char *argv[]) {
     // Run collection loop
     switch (mode) {
         case REVO3_MODE_MOTOR:
-            run_v3_motor_collection(collector, motor_buffer);
+            run_revo3_motor_collection(collector, motor_buffer);
             break;
         case REVO3_MODE_TOUCH:
-            run_v3_full_collection(collector, motor_buffer, touch_buffer);
+            run_revo3_full_collection(collector, motor_buffer, touch_buffer);
             break;
     }
 
@@ -323,8 +323,8 @@ int main(int argc, char *argv[]) {
     printf("[INFO] Stopping data collector...\n");
     data_collector_stop(collector);
     data_collector_free(collector);
-    if (touch_buffer) v3_touch_buffer_free(touch_buffer);
-    v3_motor_buffer_free(motor_buffer);
+    if (touch_buffer) revo3_touch_buffer_free(touch_buffer);
+    revo3_motor_buffer_free(motor_buffer);
     cleanup_device_context(&ctx);
 
     printf("[INFO] Done!\n");

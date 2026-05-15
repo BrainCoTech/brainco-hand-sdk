@@ -3,7 +3,7 @@ set -e
 
 # BrainCo Stark SDK - Install .whl from OSS
 # Usage: bash install_whl.sh [version]
-# Example: bash install_whl.sh 1.4.5
+# Example: bash install_whl.sh 1.5.1
 
 OSS_BASE="https://app.brainco.cn/universal/bc-stark-sdk/libs"
 
@@ -13,7 +13,7 @@ if [ -n "$1" ]; then
 elif [ -f "Cargo.toml" ]; then
   VERSION=$(grep '^version =' Cargo.toml | head -1 | awk -F'"' '{print $2}')
 else
-  VERSION="1.4.5"
+  VERSION="1.5.1"
 fi
 
 echo "Installing bc-stark-sdk v${VERSION}..."

@@ -249,11 +249,11 @@ class FingerDetailWidget(QWidget):
                 if color:
                     val_label.setStyleSheet(
                         f"font-weight: bold; color: {color}; font-size: 14px; "
-                        "font-family: 'Menlo','Monaco','Courier New',monospace;"
+                        "font-family: 'Courier New';"
                     )
                 else:
                     val_label.setStyleSheet(
-                        "font-size: 14px; font-family: 'Menlo','Monaco','Courier New',monospace;"
+                        "font-size: 14px; font-family: 'Courier New';"
                     )
                 row.addWidget(val_label)
                 row.addStretch()
@@ -281,7 +281,7 @@ class FingerDetailWidget(QWidget):
                 
                 v_label = QLabel("Fx=0.00  Fy=0.00  Fz=0.00")
                 v_label.setStyleSheet(
-                    "font-family: 'Menlo','Monaco','Courier New',monospace; font-size: 13px; color: #ddd;"
+                    "font-family: 'Courier New'; font-size: 13px; color: #ddd;"
                 )
                 row.addWidget(v_label)
                 row.addStretch()
@@ -303,7 +303,7 @@ class FingerDetailWidget(QWidget):
             
             self.finger_total_label = QLabel("Fx=0.00  Fy=0.00  Fz=0.00")
             self.finger_total_label.setStyleSheet(
-                "font-family: 'Menlo','Monaco','Courier New',monospace; font-size: 14px; "
+                "font-family: 'Courier New'; font-size: 14px; "
                 "font-weight: bold; color: #ecf0f1;"
             )
             status_layout.addWidget(self.finger_total_label)
@@ -311,7 +311,7 @@ class FingerDetailWidget(QWidget):
             if self.sensor_count > 1:
                 self.finger_torque_label = QLabel("Mx=0.000  My=0.000  Mz=0.000")
                 self.finger_torque_label.setStyleSheet(
-                    "font-family: 'Menlo','Monaco','Courier New',monospace; font-size: 13px; "
+                    "font-family: 'Courier New'; font-size: 13px; "
                     f"color: {COLORS.get('text_muted', '#bbb')};"
                 )
                 status_layout.addWidget(self.finger_torque_label)
@@ -634,7 +634,7 @@ class CapacitiveTouchPanel(QWidget):
             force_label = QLabel("0.00 N")
             force_label.setFixedWidth(60)
             force_label.setAlignment(Qt.AlignRight)
-            force_label.setStyleSheet("font-family: 'Menlo', 'Monaco', 'Courier New', monospace;")
+            force_label.setStyleSheet("font-family: 'Courier New';")
             card_layout.addWidget(force_label)
             self.finger_force_labels.append(force_label)
             

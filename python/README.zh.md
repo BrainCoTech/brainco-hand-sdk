@@ -24,18 +24,29 @@ BrainCo 灵巧手设备（Revo1, Revo2 和 Revo3 系列）的完整 Python SDK �
 
 ## 📦 安装
 
+### 推荐：直接通过 PyPI 安装
+
+我们已将 SDK 发布至 PyPI，直接使用 `pip` 配合 `requirements.txt` 安装即可获取所有依赖项：
+
 ```bash
 cd python
-
-# 安装依赖
+# 若国内下载缓慢，可追加 -i 参数使用清华源等国内镜像：
+# pip3 install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip3 install -r requirements.txt
 ```
 
-### 依赖包
+### 备选：通过安装脚本从 OSS 下载
 
-- `bc-stark-sdk>=1.4.0` - BrainCo Stark SDK 核心库
-- `asyncio>=3.4.3` - 异步 I/O 支持
-- `colorlog>=6.9.0` - 彩色日志输出
+如果你所在网络受到限制或暂时无法连接任何 PyPI 镜像源，可以使用提供的脚本直接从 BrainCo 的阿里云 OSS 下载预编译的核心 SDK：
+
+```bash
+# 1. 自动检测平台并安装核心 SDK
+bash install_whl.sh
+
+# 2. 安装其余开源依赖
+cd python
+pip3 install -r requirements.txt
+```
 
 ## 🚀 快速开始
 
@@ -632,6 +643,3 @@ SDK 现在内置了一套完整的原生跨平台 PyQt6 可视化调试程序 `g
 - 💡 **参考文档**: 请优先查看子目录中的示例代码或查阅全文 API 文档
 - 💬 **人工客服**: 直接联系 BrainCo 官方技术支持团队
 
----
-
-**版本:** 要求 `bc-stark-sdk >= 1.4.5`

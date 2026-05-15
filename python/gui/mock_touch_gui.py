@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from gui.touch_panel_force import ForceTouchSubPanel
 from gui.touch_panel_pressure import PressureTouchSubPanel
-from gui.touch_panel_revo3 import V3TouchSubPanel
+from gui.touch_panel_revo3 import Revo3TouchSubPanel
 
 class MockDataGenerator:
     def __init__(self):
@@ -54,9 +54,9 @@ class MockDataGenerator:
         
         return summary, details
 
-    def get_v3_data(self):
-        """Mock V3 Touch Data: 16 summary, 11 modules array"""
-        class DummyV3Data:
+    def get_revo3_data(self):
+        """Mock Revo3 Touch Data: 16 summary, 11 modules array"""
+        class DummyRevo3Data:
             def __init__(self, summary, modules):
                 self.summary = summary
                 self.modules = modules
@@ -70,7 +70,7 @@ class MockDataGenerator:
             pts = [int(math.sin(self.t*2 + x*0.1) * 30 + 30) & 0xFFFF for x in range(c)]
             modules.append(pts)
             
-        return DummyV3Data(summary, modules)
+        return DummyRevo3Data(summary, modules)
 
 
 class MockWindow(QMainWindow):
@@ -89,9 +89,9 @@ class MockWindow(QMainWindow):
         self.pressure_panel = PressureTouchSubPanel()
         self.tabs.addTab(self.pressure_panel, "Revo2: Pressure Arrays")
         
-        # 3. V3 Touch (High-Res Arrays)
-        self.v3_panel = V3TouchSubPanel()
-        self.tabs.addTab(self.v3_panel, "Revo3: V3 Touch (High-Res)")
+        # 3. Revo3 Touch (High-Res Arrays)
+        self.revo3_panel = Revo3TouchSubPanel()
+        self.tabs.addTab(self.revo3_panel, "Revo3: Revo3 Touch (High-Res)")
         
         self.setCentralWidget(self.tabs)
         
@@ -113,9 +113,9 @@ class MockWindow(QMainWindow):
         self.pressure_panel.update_summary(summ)
         self.pressure_panel.update_detail(det)
         
-        # 3. Update V3
-        v3_obj = self.mock_gen.get_v3_data()
-        self.v3_panel.update_data(v3_obj)
+        # 3. Update Revo3
+        revo3_obj = self.mock_gen.get_revo3_data()
+        self.revo3_panel.update_data(revo3_obj)
 
 if __name__ == "__main__":
     import signal

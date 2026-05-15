@@ -46,6 +46,10 @@ async def open_modbus_revo1(port_name = None, quick = True):
 
     # Establish Modbus connection
     client: libstark.DeviceContext = await modbus_open(detected_port_name, baudrate)
+    await client.set_hardware_type(slave_id, libstark.StarkHardwareType.Revo1Basic)
+    logger.info(
+        f"Preset hardware type to {libstark.StarkHardwareType.Revo1Basic} for Revo1 Modbus open"
+    )
 
     # Get device information
     device_info: libstark.DeviceInfo = await client.get_device_info(slave_id)

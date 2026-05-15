@@ -1,8 +1,8 @@
 /**
  * @file hand_touch_v3.cpp
- * @brief Stark Revo3 (V3) Touch / Tactile Sensor Demo
+ * @brief Stark Revo3 (Revo3) Touch / Tactile Sensor Demo
  *
- * Demonstrates V3-specific touch sensor APIs:
+ * Demonstrates Revo3-specific touch sensor APIs:
  *   - Enable/disable touch modules (11 modules: palm + 5 fingers × 2 pads)
  *   - Set data output type (AD raw / calibrated)
  *   - Read summary force values (16 pads)
@@ -80,11 +80,11 @@ void demo_enable_modules(DeviceHandler *handle, uint8_t slave_id) {
     // Enable all 11 modules at once (bits 0~10 = 0x7FF)
     uint16_t all_bits = 0x7FF;
     printf("  Enabling all modules: 0x%03X\n", all_bits);
-    stark_v3_set_all_touch_modules_enabled(handle, slave_id, all_bits);
+    stark_revo3_set_all_touch_modules_enabled(handle, slave_id, all_bits);
     msleep(500);
 
     // Read back enable state
-    uint16_t enabled_bits = stark_v3_get_all_touch_modules_enabled(handle, slave_id);
+    uint16_t enabled_bits = stark_revo3_get_all_touch_modules_enabled(handle, slave_id);
     printf("  Enabled modules: 0x%03X\n", enabled_bits);
     for (int i = 0; i < REVO3_TOUCH_MODULE_COUNT; i++) {
         const char *state = (enabled_bits & (1 << i)) ? "ON" : "OFF";
@@ -93,42 +93,42 @@ void demo_enable_modules(DeviceHandler *handle, uint8_t slave_id) {
 
     // Toggle single module (Palm)
     printf("\n  --- Single module toggle (Palm) ---\n");
-    int is_enabled = stark_v3_get_touch_module_enabled(handle, slave_id, 0);
+    int is_enabled = stark_revo3_get_touch_module_enabled(handle, slave_id, 0);
     printf("  Palm enabled: %d\n", is_enabled);
 
     // Disable Palm
-    stark_v3_set_touch_module_enabled(handle, slave_id, 0, false);
+    stark_revo3_set_touch_module_enabled(handle, slave_id, 0, false);
     msleep(100);
-    is_enabled = stark_v3_get_touch_module_enabled(handle, slave_id, 0);
+    is_enabled = stark_revo3_get_touch_module_enabled(handle, slave_id, 0);
     printf("  Palm enabled (after disable): %d\n", is_enabled);
 
     // Re-enable Palm
-    stark_v3_set_touch_module_enabled(handle, slave_id, 0, true);
+    stark_revo3_set_touch_module_enabled(handle, slave_id, 0, true);
     msleep(100);
-    is_enabled = stark_v3_get_touch_module_enabled(handle, slave_id, 0);
+    is_enabled = stark_revo3_get_touch_module_enabled(handle, slave_id, 0);
     printf("  Palm enabled (after re-enable): %d\n", is_enabled);
 }
 
 void demo_data_type(DeviceHandler *handle, uint8_t slave_id) {
     printf("\n=== Touch Data Type ===\n");
 
-    int data_type = stark_v3_get_touch_data_type(handle, slave_id);
+    int data_type = stark_revo3_get_touch_data_type(handle, slave_id);
     printf("  Current data type: %d (%s)\n", data_type,
            data_type == 1 ? "Calibrated" : "AD Raw");
 
     // Set to calibrated
     printf("  Setting data type to calibrated (1)...\n");
-    stark_v3_set_touch_data_type(handle, slave_id, 1);
+    stark_revo3_set_touch_data_type(handle, slave_id, 1);
     msleep(100);
-    data_type = stark_v3_get_touch_data_type(handle, slave_id);
+    data_type = stark_revo3_get_touch_data_type(handle, slave_id);
     printf("  Data type after set: %d (%s)\n", data_type,
            data_type == 1 ? "Calibrated" : "AD Raw");
 
     // Set to AD raw
     printf("  Setting data type to AD raw (0)...\n");
-    stark_v3_set_touch_data_type(handle, slave_id, 0);
+    stark_revo3_set_touch_data_type(handle, slave_id, 0);
     msleep(100);
-    data_type = stark_v3_get_touch_data_type(handle, slave_id);
+    data_type = stark_revo3_get_touch_data_type(handle, slave_id);
     printf("  Data type after set: %d (%s)\n", data_type,
            data_type == 1 ? "Calibrated" : "AD Raw");
 }
@@ -137,7 +137,7 @@ void demo_read_summary(DeviceHandler *handle, uint8_t slave_id) {
     printf("\n=== Touch Summary (16 pads) ===\n");
 
     uint16_t summary[REVO3_TOUCH_SUMMARY_COUNT];
-    if (stark_v3_get_touch_summary(handle, slave_id, summary) == 0) {
+    if (stark_revo3_get_touch_summary(handle, slave_id, summary) == 0) {
         for (int i = 0; i < REVO3_TOUCH_SUMMARY_COUNT; i++) {
             printf("  [%2d] %-20s: %5u\n", i, SUMMARY_PAD_NAMES[i], summary[i]);
         }
@@ -153,7 +153,7 @@ void demo_read_module_data(DeviceHandler *handle, uint8_t slave_id) {
         uint16_t data[64];  // max buffer (palm has ~46 points)
         uint16_t count = 0;
 
-        if (stark_v3_get_touch_module_data(handle, slave_id, module_id, data, &count) == 0) {
+        if (stark_revo3_get_touch_module_data(handle, slave_id, module_id, data, &count) == 0) {
             // Calculate sum and max
             uint32_t sum = 0;
             uint16_t max_val = 0;
@@ -176,12 +176,12 @@ void demo_clear_pressure(DeviceHandler *handle, uint8_t slave_id) {
 
     // Clear single module (Palm)
     printf("  Clearing Palm (module 0) pressure data...\n");
-    stark_v3_reset_touch_pressure(handle, slave_id, 0);
+    stark_revo3_reset_touch_pressure(handle, slave_id, 0);
     msleep(100);
 
     // Clear all modules
     printf("  Clearing all modules pressure data...\n");
-    stark_v3_reset_all_touch_pressure(handle, slave_id);
+    stark_revo3_reset_all_touch_pressure(handle, slave_id);
     msleep(100);
 
     printf("  Pressure data cleared.\n");
@@ -192,7 +192,7 @@ void demo_continuous_monitor(DeviceHandler *handle, uint8_t slave_id, int count)
 
     uint16_t summary[REVO3_TOUCH_SUMMARY_COUNT];
     for (int i = 0; i < count && keep_running; i++) {
-        if (stark_v3_get_touch_summary(handle, slave_id, summary) == 0) {
+        if (stark_revo3_get_touch_summary(handle, slave_id, summary) == 0) {
             printf("  [%3d]", i);
             for (int j = 0; j < REVO3_TOUCH_SUMMARY_COUNT; j++) {
                 printf(" %4u", summary[j]);
@@ -217,10 +217,10 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Verify V3 device
+    // Verify Revo3 device
     if (!stark_uses_revo3_motor_api(ctx.hw_type)) {
         printf("Warning: Device is not Revo3 (hw_type=%d)\n", ctx.hw_type);
-        printf("V3 Touch APIs may not work correctly on this device.\n");
+        printf("Revo3 Touch APIs may not work correctly on this device.\n");
     }
 
     // Run demos

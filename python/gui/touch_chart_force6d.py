@@ -156,7 +156,7 @@ class Force6DChart(QWidget):
 
                 val_lbl = QLabel("0.00")
                 val_lbl.setStyleSheet(
-                    "font-size: 12px; font-family: 'Menlo','Monaco','Courier New',monospace; "
+                    "font-size: 12px; font-family: 'Courier New'; "
                     "color: #eee;"
                 )
                 val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)

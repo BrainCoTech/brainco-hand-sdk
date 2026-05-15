@@ -53,7 +53,7 @@ async def demo_single_joint_move(client, slave_id):
     dt = 0.01  # 100Hz control
 
     # Read initial position
-    status = await client.v3_get_motor_status_data(slave_id)
+    status = await client.revo3_get_motor_status_data(slave_id)
     logger.info(f"  J{joint_id} initial: {status.positions[joint_id]:.2f}°")
 
     logger.info(f"  Moving J{joint_id} to {target}° over {duration}s...")
@@ -61,7 +61,7 @@ async def demo_single_joint_move(client, slave_id):
 
     # Verify
     await asyncio.sleep(0.2)
-    status = await client.v3_get_motor_status_data(slave_id)
+    status = await client.revo3_get_motor_status_data(slave_id)
     final_pos = status.positions[joint_id]
     error = abs(target - final_pos)
     logger.info(f"  Final: {final_pos:.2f}° (error: {error:.2f}°) {'✅' if error < 5.0 else '⚠️'}")
@@ -84,7 +84,7 @@ async def demo_single_joint_custom_gains(client, slave_id):
     await client.revo3_move_joint_with_gains(slave_id, joint_id, target, 1.5, 0.01, kp, kd)
 
     await asyncio.sleep(0.2)
-    status = await client.v3_get_motor_status_data(slave_id)
+    status = await client.revo3_get_motor_status_data(slave_id)
     logger.info(f"  Final: {status.positions[joint_id]:.2f}°")
 
     # Move back
@@ -104,7 +104,7 @@ async def demo_single_joint_move_with_speed(client, slave_id):
     await client.revo3_move_joint_with_speed(slave_id, joint_id, target, speed, 0.01)
 
     await asyncio.sleep(0.2)
-    status = await client.v3_get_motor_status_data(slave_id)
+    status = await client.revo3_get_motor_status_data(slave_id)
     logger.info(f"  Final: {status.positions[joint_id]:.2f}°")
 
     # Move back
@@ -128,7 +128,7 @@ async def demo_full_hand_move(client, slave_id):
 
     # Verify
     await asyncio.sleep(0.5)
-    status = await client.v3_get_motor_status_data(slave_id)
+    status = await client.revo3_get_motor_status_data(slave_id)
     logger.info("  Final MCP positions:")
     for jid in mcp_joints:
         pos = status.positions[jid]
@@ -157,7 +157,7 @@ async def demo_full_hand_move_with_speed(client, slave_id):
 
     # Verify
     await asyncio.sleep(0.5)
-    status = await client.v3_get_motor_status_data(slave_id)
+    status = await client.revo3_get_motor_status_data(slave_id)
     logger.info("  Final PIP positions:")
     for jid in pip_joints:
         pos = status.positions[jid]

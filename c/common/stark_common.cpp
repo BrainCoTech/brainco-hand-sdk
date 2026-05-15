@@ -441,6 +441,15 @@ bool init_modbus(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_
     }
     
     ctx->slave_id = slave_id;
+
+    // Preset a series-level hardware type so API branching is correct even
+    // before SN-based get_device_info() has a chance to refine the exact model.
+    StarkHardwareType preset_hw_type =
+        ctx->hw_type_override != 0 ? ctx->hw_type_override : STARK_HARDWARE_TYPE_REVO2_BASIC;
+    stark_set_hardware_type(ctx->handle, slave_id, preset_hw_type);
+    ctx->hw_type = preset_hw_type;
+    printf("  Preset hardware type: %s (%d)\n",
+           get_hardware_type_name_str(preset_hw_type), preset_hw_type);
     
     // Print override info if set
     if (ctx->hw_type_override != 0) {
@@ -474,6 +483,42 @@ bool init_modbus(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_
         ctx->touch_freq = 10;
     #endif
     return true;
+}
+
+static bool init_modbus_with_series_default(
+    DeviceContext* ctx,
+    const char* port,
+    uint32_t baudrate,
+    uint8_t slave_id,
+    StarkHardwareType default_hw_type) {
+    StarkHardwareType saved_override = ctx->hw_type_override;
+    if (saved_override == 0) {
+        ctx->hw_type_override = default_hw_type;
+    }
+
+    bool ok = init_modbus(ctx, port, baudrate, slave_id);
+
+    if (saved_override == 0) {
+        ctx->hw_type_override = (StarkHardwareType)0;
+    } else {
+        ctx->hw_type_override = saved_override;
+    }
+    return ok;
+}
+
+bool init_modbus_revo1(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_t slave_id) {
+    return init_modbus_with_series_default(
+        ctx, port, baudrate, slave_id, STARK_HARDWARE_TYPE_REVO1_BASIC);
+}
+
+bool init_modbus_revo2(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_t slave_id) {
+    return init_modbus_with_series_default(
+        ctx, port, baudrate, slave_id, STARK_HARDWARE_TYPE_REVO2_BASIC);
+}
+
+bool init_modbus_revo3(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_t slave_id) {
+    return init_modbus_with_series_default(
+        ctx, port, baudrate, slave_id, STARK_HARDWARE_TYPE_REVO3_ULTRA);
 }
 
 bool init_protobuf(DeviceContext* ctx, const char* port, uint8_t slave_id) {
@@ -824,8 +869,13 @@ bool init_revo3(DeviceContext* ctx, const char* port) {
     ctx->slave_id = config->slave_id;
     free_device_config(config);
 
-    // Default to Revo3 Basic (auto_detect_modbus_revo3 guarantees V3)
-    ctx->hw_type = STARK_HARDWARE_TYPE_REVO3_BASIC;
+    // Preset a Revo3-series hardware type before get_device_info() refines it.
+    StarkHardwareType preset_hw_type =
+        ctx->hw_type_override != 0 ? ctx->hw_type_override : STARK_HARDWARE_TYPE_REVO3_ULTRA;
+    stark_set_hardware_type(ctx->handle, ctx->slave_id, preset_hw_type);
+    ctx->hw_type = preset_hw_type;
+    printf("[INFO] Preset hardware type: %s (%d)\n",
+           get_hardware_type_name_str(preset_hw_type), preset_hw_type);
 
     // Try device_info to get exact hw_type (may not work on early firmware)
     CDeviceInfo* info = stark_get_device_info(ctx->handle, ctx->slave_id);

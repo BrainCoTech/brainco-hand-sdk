@@ -57,5 +57,9 @@ async def open_modbus_revo3(port_name=None, baudrate=5000000, slave_id=1):
 
     # Establish Modbus connection
     client: libstark.DeviceContext = await modbus_open(port_name, baudrate)
+    await client.set_hardware_type(slave_id, libstark.StarkHardwareType.Revo3Ultra)
+    logger.info(
+        f"Preset hardware type to {libstark.StarkHardwareType.Revo3Ultra} for Revo3 Modbus open"
+    )
 
     return (client, slave_id)

@@ -161,7 +161,7 @@ Hardware type values:
 
 ## Revo3 Examples
 
-Revo3 (V3) uses a different motor architecture (23 motors, 21 DoF) and tactile system (11 sensor arrays).
+Revo3 (Revo3) uses a different motor architecture (23 motors, 21 DoF) and tactile system (11 sensor arrays).
 Dedicated examples are provided:
 
 ### hand_motor_revo3 - Motor Control
@@ -184,18 +184,18 @@ Demonstrates: enable/disable touch modules, read summary and per-module pressure
 ### hand_monitor_v3 - Real-time Monitor
 
 ```bash
-./hand_monitor_v3.exe              # Motor only (V3 Basic DataCollector)
-./hand_monitor_v3.exe touch        # Motor + touch (V3 Full DataCollector)
+./hand_monitor_v3.exe              # Motor only (Revo3 Basic DataCollector)
+./hand_monitor_v3.exe touch        # Motor + touch (Revo3 Full DataCollector)
 ```
 
-Uses `CV3MotorStatusBuffer` + `data_collector_new_v3_basic` (motor mode)
-or `CV3MotorStatusBuffer` + `CV3TouchDataBuffer` + `data_collector_new_v3_full` (touch mode)
+Uses `CRevo3MotorStatusBuffer` + `data_collector_new_revo3_basic` (motor mode)
+or `CRevo3MotorStatusBuffer` + `CRevo3TouchDataBuffer` + `data_collector_new_revo3_full` (touch mode)
 for high-frequency buffered data collection.
 
 | Mode    | DataCollector          | Buffers                              |
 | ------- | ---------------------- | ------------------------------------ |
-| (none)  | `new_v3_basic`         | `CV3MotorStatusBuffer`               |
-| `touch` | `new_v3_full`          | `CV3MotorStatusBuffer` + `CV3TouchDataBuffer` |
+| (none)  | `new_revo3_basic`         | `CRevo3MotorStatusBuffer`               |
+| `touch` | `new_revo3_full`          | `CRevo3MotorStatusBuffer` + `CRevo3TouchDataBuffer` |
 
 ---
 

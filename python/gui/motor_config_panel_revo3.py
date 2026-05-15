@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from common_imports import sdk
 
 from .motor_control_panel_revo3 import (
-    get_v3_finger_names, get_v3_finger_motors, MOTOR_JOINT_LABELS, get_motor_position_range
+    get_revo3_finger_names, get_revo3_finger_motors, MOTOR_JOINT_LABELS, get_motor_position_range
 )
 
 def run_async(coro_fn):
@@ -53,7 +53,7 @@ class QRangeSlider(QWidget):
         self._low = 0.0
         self._high = 100.0
         self._handle_r = 7
-        self._active = None 
+        self._active = None
         self._drag_offset = 0
 
     def setRange(self, minimum, maximum):
@@ -86,27 +86,27 @@ class QRangeSlider(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        
+
         h = self.height()
         cy = h // 2
-        
+
         # Track background
         p.setPen(Qt.NoPen)
         p.setBrush(QColor("#E0E0E0"))
         p.drawRoundedRect(self._handle_r, cy - 2, self.width() - 2*self._handle_r, 4, 2, 2)
-        
+
         # Active track
         x1 = self._val_to_x(self._low)
         x2 = self._val_to_x(self._high)
         p.setBrush(QColor(COLORS.get("primary", "#4CAF50")))
         p.drawRoundedRect(x1, cy - 2, x2 - x1, 4, 2, 2)
-        
+
         # Draw handles
         p.setBrush(QColor("#FFFFFF"))
         pen = QPen(QColor("#999999"))
         pen.setWidth(1)
         p.setPen(pen)
-        
+
         p.drawEllipse(x1 - self._handle_r, cy - self._handle_r, self._handle_r*2, self._handle_r*2)
         p.drawEllipse(x2 - self._handle_r, cy - self._handle_r, self._handle_r*2, self._handle_r*2)
 
@@ -114,7 +114,7 @@ class QRangeSlider(QWidget):
         x = event.position().x()
         x1 = self._val_to_x(self._low)
         x2 = self._val_to_x(self._high)
-        
+
         if abs(x - x1) < self._handle_r * 2 and abs(x - x2) < self._handle_r * 2:
             self._active = 'low' if abs(x - x1) < abs(x - x2) else 'high'
         elif abs(x - x1) < self._handle_r * 2:
@@ -206,13 +206,13 @@ class V3ConfigSlider(QWidget):
     def update_mode(self, mode_id):
         self.current_mode = mode_id
         _, min_val, max_val, suffix = PARAM_DEF[mode_id]
-        
+
         if mode_id == MODE_POS_LIMITS:
             min_val, max_val = get_motor_position_range(self.motor_id)
-            
+
         self.single_slider.setRange(int(min_val * self._slider_scale), int(max_val * self._slider_scale))
         self.range_slider.setRange(min_val, max_val)
-        
+
         for sp in [self.spin_min, self.spin_max]:
             sp.blockSignals(True)
             sp.setRange(min_val, max_val)
@@ -221,7 +221,7 @@ class V3ConfigSlider(QWidget):
             sp.setDecimals(decimals)
             sp.setSingleStep(100.0 if mode_id == MODE_JOINT_PROTECT else 1.0)
             sp.blockSignals(False)
-            
+
         if mode_id == MODE_JOINT_PROTECT:
             self.spin_min.hide()
             self.range_slider.hide()
@@ -237,15 +237,15 @@ class V3ConfigSlider(QWidget):
         self.spin_max.blockSignals(True)
         self.single_slider.blockSignals(True)
         self.range_slider.blockSignals(True)
-        
-        if self.current_mode == MODE_JOINT_PROTECT:    
+
+        if self.current_mode == MODE_JOINT_PROTECT:
             self.spin_max.setValue(max_val)
             self.single_slider.setValue(int(max_val * self._slider_scale))
         else:
             self.spin_min.setValue(min_val)
             self.spin_max.setValue(max_val)
             self.range_slider.setValues(min_val, max_val)
-            
+
         self.spin_min.blockSignals(False)
         self.spin_max.blockSignals(False)
         self.single_slider.blockSignals(False)
@@ -304,7 +304,7 @@ class V3ConfigFingerGroup(QGroupBox):
         super().__init__(name)
         self.motor_ids = motor_ids
         self.sliders = {}
-        
+
         self.setStyleSheet(f"""
             QGroupBox {{
                 font-weight: bold;
@@ -320,45 +320,45 @@ class V3ConfigFingerGroup(QGroupBox):
                 color: {COLORS['primary']};
             }}
         """)
-        
+
         layout = QVBoxLayout(self)
         layout.setSpacing(6)
-        
+
         for motor_id in motor_ids:
             slider = V3ConfigSlider(motor_id, set_callback)
             layout.addWidget(slider)
             self.sliders[motor_id] = slider
-            
+
     def update_mode(self, mode):
         for s in self.sliders.values():
             s.update_mode(mode)
 
 
-class V3MotorConfigPanel(QWidget):
+class Revo3MotorConfigPanel(QWidget):
     """Separate panel to configure Revo3 motor protection & limits"""
     def __init__(self):
         super().__init__()
         self.device = None
         self.slave_id = 1
         self.shared_data = None
-        
+
         self.current_mode = MODE_JOINT_PROTECT
         self.finger_groups = {}
         self.all_sliders = {}
-        
+
         self.auto_refresh_timer = QTimer(self)
         self.auto_refresh_timer.timeout.connect(self._on_refresh_data)
         self.auto_refresh_timer.setInterval(3000)  # 3 seconds as requested
-        
+
         self._setup_ui()
-        
+
     def set_device(self, device, slave_id, device_info, protocol, shared_data=None):
         self.device = device
         self.slave_id = slave_id
         if self.auto_refresh_cb.isChecked():
             self.auto_refresh_timer.start()
         self._on_refresh_data()
-        
+
     def clear_device(self):
         self.device = None
         self.auto_refresh_timer.stop()
@@ -369,28 +369,28 @@ class V3MotorConfigPanel(QWidget):
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # --- Top Control Bar ---
         top_bar = QHBoxLayout()
         top_bar.addWidget(QLabel("Parameter Type:"))
-        
+
         self.mode_combo = QComboBox()
         for mode_id, data in PARAM_DEF.items():
             self.mode_combo.addItem(data[0], mode_id)
         self.mode_combo.setCurrentIndex(0) # Default to Position Limits
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         top_bar.addWidget(self.mode_combo)
-        
+
         self.refresh_btn = QPushButton(tr("v3_read_parameters"))
         self.refresh_btn.setFixedWidth(120)
         self.refresh_btn.clicked.connect(self._on_refresh_data)
         top_bar.addWidget(self.refresh_btn)
-        
+
         self.auto_refresh_cb = QCheckBox(tr("v3_auto_refresh"))
         self.auto_refresh_cb.setChecked(True)
         self.auto_refresh_cb.stateChanged.connect(self._on_auto_refresh_changed)
         top_bar.addWidget(self.auto_refresh_cb)
-        
+
         top_bar.addStretch()
         layout.addLayout(top_bar)
 
@@ -398,22 +398,22 @@ class V3MotorConfigPanel(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        
+
         container = QWidget()
         grid = QGridLayout()
         grid.setSpacing(8)
         container.setLayout(grid)
-        
-        finger_names = get_v3_finger_names()
-        finger_motors = get_v3_finger_motors()
-        
+
+        finger_names = get_revo3_finger_names()
+        finger_motors = get_revo3_finger_motors()
+
         for i, name in enumerate(finger_names):
             motor_ids = finger_motors[name]
             group = V3ConfigFingerGroup(name, motor_ids, self._on_set_single_parameter)
             self.finger_groups[name] = group
             for m, s in group.sliders.items():
                 self.all_sliders[m] = s
-                
+
             row = 0 if i < 3 else 1
             col = i if i < 3 else i - 3
             grid.addWidget(group, row, col)
@@ -443,42 +443,42 @@ class V3MotorConfigPanel(QWidget):
         """)
         t_layout = QVBoxLayout(self.turbo_group)
         t_layout.setSpacing(8)
-        
+
         turbo_row1 = QHBoxLayout()
         self.turbo_check = QCheckBox(tr("enable_turbo"))
         self.turbo_check.stateChanged.connect(self._on_turbo_changed)
         turbo_row1.addWidget(self.turbo_check)
         turbo_row1.addStretch()
         t_layout.addLayout(turbo_row1)
-        
+
         turbo_row2 = QHBoxLayout()
         turbo_row2.setContentsMargins(0, 0, 0, 0)
-        
+
         lbl_i = QLabel(tr("turbo_interval") + ":")
         lbl_i.setStyleSheet("font-size: 12px;")
         turbo_row2.addWidget(lbl_i)
-        
+
         self.turbo_interval_spin = QSpinBox()
         self.turbo_interval_spin.setRange(0, 10000)
         self.turbo_interval_spin.setValue(1000)
         self.turbo_interval_spin.setFixedWidth(65)
         turbo_row2.addWidget(self.turbo_interval_spin)
-        
+
         lbl_d = QLabel(tr("turbo_duration") + ":")
         lbl_d.setStyleSheet("font-size: 12px;")
         turbo_row2.addWidget(lbl_d)
-        
+
         self.turbo_duration_spin = QSpinBox()
         self.turbo_duration_spin.setRange(0, 10000)
         self.turbo_duration_spin.setValue(500)
         self.turbo_duration_spin.setFixedWidth(65)
         turbo_row2.addWidget(self.turbo_duration_spin)
-        
+
         self.turbo_apply_btn = QPushButton(tr("btn_apply"))
         self.turbo_apply_btn.setFixedWidth(50)
         self.turbo_apply_btn.clicked.connect(self._apply_turbo_config)
         turbo_row2.addWidget(self.turbo_apply_btn)
-        
+
         turbo_row2.addStretch()
         t_layout.addLayout(turbo_row2)
         slot6_layout.addWidget(self.turbo_group)
@@ -519,13 +519,13 @@ class V3MotorConfigPanel(QWidget):
             row_w.addStretch()
             g_layout.addLayout(row_w)
 
-        self.global_spin = QDoubleSpinBox()
-        self.global_spin.setRange(0, 5000)
-        self.global_spin.setSingleStep(100)
-        self.global_spin.setSuffix(" mA")
-        self.global_spin.setDecimals(1)
-        self.global_set_btn = QPushButton(tr("btn_set"))
-        add_global_row(tr("v3_global_protect_current"), self.global_spin, self.global_set_btn, self._on_set_global)
+        self.global_protect_current_spin = QDoubleSpinBox()
+        self.global_protect_current_spin.setRange(0, 5000)
+        self.global_protect_current_spin.setSingleStep(100)
+        self.global_protect_current_spin.setSuffix(" mA")
+        self.global_protect_current_spin.setDecimals(1)
+        self.global_protect_current_btn = QPushButton(tr("btn_set"))
+        add_global_row(tr("v3_global_protect_current"), self.global_protect_current_spin, self.global_protect_current_btn, self._on_set_global_protect_current)
 
         self.calib_current_spin = QDoubleSpinBox()
         self.calib_current_spin.setRange(0.0, 1024.0)
@@ -535,24 +535,17 @@ class V3MotorConfigPanel(QWidget):
         self.calib_current_btn = QPushButton(tr("btn_set"))
         add_global_row(tr("v3_calibration_current"), self.calib_current_spin, self.calib_current_btn, self._on_set_calibration_current)
 
-        self.max_current_spin = QDoubleSpinBox()
-        self.max_current_spin.setRange(0.0, 1024.0)
-        self.max_current_spin.setSingleStep(10.0)
-        self.max_current_spin.setSuffix(" mA")
-        self.max_current_spin.setDecimals(1)
-        self.max_current_btn = QPushButton(tr("btn_set"))
-        add_global_row(tr("v3_max_continuous_current"), self.max_current_spin, self.max_current_btn, self._on_set_max_continuous_current)
 
         g_layout.addStretch()
         slot6_layout.addWidget(self.global_group)
         slot6_layout.addStretch()
         grid.addWidget(slot6_container, 1, 2)
-            
+
         for c in range(3):
             grid.setColumnStretch(c, 1)
         for r in range(2):
             grid.setRowStretch(r, 1)
-            
+
         scroll.setWidget(container)
         layout.addWidget(scroll)
 
@@ -584,10 +577,11 @@ class V3MotorConfigPanel(QWidget):
         run_async(lambda: self.device.set_turbo_config(self.slave_id, config))
         print(f"[Config] Turbo config applied: interval={interval}ms, duration={duration}ms")
 
-    def _on_set_global(self):
+    def _on_set_global_protect_current(self):
+        """Set global protect current"""
         if not self.device:
             return
-        val = self.global_spin.value()
+        val = self.global_protect_current_spin.value()
         run_async(lambda: self.device.revo3_set_global_protect_current(self.slave_id, val))
         print(f"[Config] Global protect current set to {val} mA")
 
@@ -595,20 +589,13 @@ class V3MotorConfigPanel(QWidget):
         if not self.device:
             return
         val = self.calib_current_spin.value()
-        run_async(lambda: self.device.v3_set_calibration_current(self.slave_id, val))
+        run_async(lambda: self.device.revo3_set_calibration_current(self.slave_id, val))
         print(f"[Config] Calibration current set to {val} mA")
-
-    def _on_set_max_continuous_current(self):
-        if not self.device:
-            return
-        val = self.max_current_spin.value()
-        run_async(lambda: self.device.v3_set_max_continuous_current(self.slave_id, val))
-        print(f"[Config] Max continuous current set to {val} mA")
 
     def _on_set_single_parameter(self, motor_id, mode, val, sister_val):
         if not self.device:
             return
-            
+
         if mode == MODE_JOINT_PROTECT:
             run_async(lambda: self.device.revo3_set_joint_protect_current(self.slave_id, motor_id, val))
         elif mode == MODE_POS_LIMITS:
@@ -631,7 +618,7 @@ class V3MotorConfigPanel(QWidget):
         ))
         if globals_data and not isinstance(globals_data[0], Exception):
             if globals_data[0] is not None:
-                self.global_spin.setValue(globals_data[0])
+                self.global_protect_current_spin.setValue(globals_data[0])
 
         if self.current_mode == MODE_JOINT_PROTECT:
             vals = run_async(lambda: self.device.revo3_get_all_joint_protect_currents(self.slave_id))
@@ -639,7 +626,7 @@ class V3MotorConfigPanel(QWidget):
                 for i in range(21):
                     if i in self.all_sliders:
                         self.all_sliders[i].set_value_silently(vals[i])
-                        
+
         elif self.current_mode == MODE_POS_LIMITS:
             res = run_async(lambda: self.device.revo3_get_all_joint_position_limits(self.slave_id))
             if res and len(res) == 2 and len(res[0]) >= 21:
@@ -647,7 +634,7 @@ class V3MotorConfigPanel(QWidget):
                 for i in range(21):
                     if i in self.all_sliders:
                         self.all_sliders[i].set_value_silently(max_pos[i], min_pos[i])
-                            
+
         elif self.current_mode == MODE_SPEED_LIMITS:
             res = run_async(lambda: self.device.revo3_get_all_joint_speed_limits(self.slave_id))
             if res and len(res) == 2 and len(res[0]) >= 21:

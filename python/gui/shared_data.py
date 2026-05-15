@@ -41,7 +41,7 @@ class SharedDataManager(QObject):
     
     # Signals for data updates (panels can connect to these)
     motor_updated = Signal(object)  # MotorStatusData
-    v3_motor_updated = Signal(object)  # V3MotorStatusData
+    revo3_motor_updated = Signal(object)  # Revo3MotorStatusData
     touch_updated = Signal(list)    # List of TouchFingerItem (capacitive)
     pressure_touch_updated = Signal(list, list)  # (summary_data, detailed_data) for pressure touch
     connection_lost = Signal()      # Emitted when device connection is lost
@@ -57,7 +57,7 @@ class SharedDataManager(QObject):
         
         # SDK components
         self.motor_buffer = None
-        self.v3_motor_buffer = None  # V3 motor status buffer (Revo3)
+        self.revo3_motor_buffer = None  # Revo3 motor status buffer (Revo3)
         self.touch_buffer = None  # Capacitive touch
         self.pressure_summary_buffer = None  # Pressure touch summary
         self.pressure_detailed_buffer = None  # Pressure touch detailed
@@ -132,9 +132,9 @@ class SharedDataManager(QObject):
         # Create buffers
         if sdk and device:
             if self._is_revo3:
-                # V3: use V3MotorStatusBuffer + V3TouchDataBuffer
-                self.v3_motor_buffer = sdk.V3MotorStatusBuffer(MOTOR_BUFFER_SIZE)
-                self.v3_touch_buffer = sdk.V3TouchDataBuffer(TOUCH_BUFFER_SIZE)
+                # Revo3: use Revo3MotorStatusBuffer + Revo3TouchDataBuffer
+                self.revo3_motor_buffer = sdk.Revo3MotorStatusBuffer(MOTOR_BUFFER_SIZE)
+                self.revo3_touch_buffer = sdk.Revo3TouchDataBuffer(TOUCH_BUFFER_SIZE)
                 self.motor_buffer = None
                 self.touch_buffer = None
                 self.pressure_summary_buffer = None
@@ -145,7 +145,7 @@ class SharedDataManager(QObject):
                 # Force3D: motor + Force3DTouchDataBuffer
                 self.motor_buffer = sdk.MotorStatusBuffer(MOTOR_BUFFER_SIZE)
                 self.force3d_touch_buffer = sdk.Force3DTouchDataBuffer(TOUCH_BUFFER_SIZE)
-                self.v3_motor_buffer = None
+                self.revo3_motor_buffer = None
                 self.touch_buffer = None
                 self.pressure_summary_buffer = None
                 self.pressure_detailed_buffer = None
@@ -154,7 +154,7 @@ class SharedDataManager(QObject):
                 # ArrayPressure: motor + ArrayPressureTouchDataBuffer
                 self.motor_buffer = sdk.MotorStatusBuffer(MOTOR_BUFFER_SIZE)
                 self.array_pressure_touch_buffer = sdk.ArrayPressureTouchDataBuffer(TOUCH_BUFFER_SIZE)
-                self.v3_motor_buffer = None
+                self.revo3_motor_buffer = None
                 self.touch_buffer = None
                 self.pressure_summary_buffer = None
                 self.pressure_detailed_buffer = None
@@ -162,7 +162,7 @@ class SharedDataManager(QObject):
             else:
                 # V1/V2: use MotorStatusBuffer
                 self.motor_buffer = sdk.MotorStatusBuffer(MOTOR_BUFFER_SIZE)
-                self.v3_motor_buffer = None
+                self.revo3_motor_buffer = None
                 self.force3d_touch_buffer = None
                 self.array_pressure_touch_buffer = None
                 
@@ -192,7 +192,7 @@ class SharedDataManager(QObject):
         self._is_force3d = False
         self._is_array_pressure = False
         self.motor_buffer = None
-        self.v3_motor_buffer = None
+        self.revo3_motor_buffer = None
         self.touch_buffer = None
         self.pressure_summary_buffer = None
         self.pressure_detailed_buffer = None
@@ -240,29 +240,29 @@ class SharedDataManager(QObject):
         motor_freq = 2000 if is_linux else 200
         touch_freq = 10
         
-        if self._is_revo3 and self.v3_motor_buffer:
-            # V3: use V3 full collector (motor + touch)
-            v3_touch_freq = 5  # V3 touch is heavy (~180ms per read), 5Hz is reasonable
-            if hasattr(self, 'v3_touch_buffer') and self.v3_touch_buffer:
-                self.data_collector = sdk.DataCollector.new_v3_full(
+        if self._is_revo3 and self.revo3_motor_buffer:
+            # Revo3: use Revo3 full collector (motor + touch)
+            revo3_touch_freq = 5  # Revo3 touch is heavy (~180ms per read), 5Hz is reasonable
+            if hasattr(self, 'revo3_touch_buffer') and self.revo3_touch_buffer:
+                self.data_collector = sdk.DataCollector.new_revo3_full(
                     self._device,
-                    self.v3_motor_buffer,
-                    self.v3_touch_buffer,
+                    self.revo3_motor_buffer,
+                    self.revo3_touch_buffer,
                     slave_id=self._slave_id,
                     motor_frequency=motor_freq,
-                    touch_frequency=v3_touch_freq,
+                    touch_frequency=revo3_touch_freq,
                     enable_stats=False
                 )
-                print(f"[SharedDataManager] Started: {motor_freq}Hz V3 motor, {v3_touch_freq}Hz V3 touch")
+                print(f"[SharedDataManager] Started: {motor_freq}Hz Revo3 motor, {revo3_touch_freq}Hz Revo3 touch")
             else:
-                self.data_collector = sdk.DataCollector.new_v3_basic(
+                self.data_collector = sdk.DataCollector.new_revo3_basic(
                     self._device,
-                    self.v3_motor_buffer,
+                    self.revo3_motor_buffer,
                     slave_id=self._slave_id,
                     motor_frequency=motor_freq,
                     enable_stats=False
                 )
-                print(f"[SharedDataManager] Started: {motor_freq}Hz V3 motor")
+                print(f"[SharedDataManager] Started: {motor_freq}Hz Revo3 motor")
         elif self._is_pressure_touch and self.pressure_summary_buffer and self.motor_buffer:
             # Pressure touch: use hybrid mode (summary + detailed)
             if not self.pressure_detailed_buffer:
@@ -359,7 +359,7 @@ class SharedDataManager(QObject):
 
     def _start_mock_collector(self):
         """Start a mock data generator loop"""
-        from .mock_device import MockV3MotorStatusData, MockMotorStatusData
+        from .mock_device import MockRevo3MotorStatusData, MockMotorStatusData
         from PySide6.QtCore import QTimer
         import math
         import time
@@ -373,12 +373,12 @@ class SharedDataManager(QObject):
                 return
             t = time.time() - self._start_time
             if self._is_revo3:
-                data = MockV3MotorStatusData()
+                data = MockRevo3MotorStatusData()
                 for i in range(21):
                     data.positions[i] = int(math.sin(t * 2 + i * 0.5) * 1000 + 1000)
                     data.currents[i] = int(abs(math.cos(t * 2 + i * 0.5) * 500))
                     data.temperatures[i] = int(30 + math.sin(t * 0.1 + i) * 10)
-                self.v3_motor_updated.emit(data)
+                self.revo3_motor_updated.emit(data)
             else:
                 data = MockMotorStatusData()
                 for i in range(6):
@@ -418,9 +418,9 @@ class SharedDataManager(QObject):
         
         # Get latest motor data
         if self._is_revo3:
-            v3_motor = self.get_latest_v3_motor()
-            if v3_motor:
-                self.v3_motor_updated.emit(v3_motor)
+            revo3_motor = self.get_latest_revo3_motor()
+            if revo3_motor:
+                self.revo3_motor_updated.emit(revo3_motor)
         else:
             motor = self.get_latest_motor()
             if motor:
@@ -453,15 +453,15 @@ class SharedDataManager(QObject):
             return None
         return self.motor_buffer.peek_latest()
     
-    def get_latest_v3_motor(self) -> Optional[object]:
-        """Get latest V3 motor status (non-blocking)
+    def get_latest_revo3_motor(self) -> Optional[object]:
+        """Get latest Revo3 motor status (non-blocking)
         
         Returns:
-            V3MotorStatusData or None
+            Revo3MotorStatusData or None
         """
-        if not self.v3_motor_buffer:
+        if not self.revo3_motor_buffer:
             return None
-        return self.v3_motor_buffer.peek_latest()
+        return self.revo3_motor_buffer.peek_latest()
     
     def get_all_motor(self) -> List:
         """Get all buffered motor data and clear buffer

@@ -17,6 +17,67 @@ from .styles import COLORS, CONNECTION_STATUS_STYLES
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from common_imports import sdk, get_protocol_display_name, int_to_baudrate, modbus_open
 
+PROTO_AUTO = "auto"
+PROTO_MODBUS = "modbus"
+PROTO_PROTOBUF = "protobuf"
+PROTO_CAN = "can"
+PROTO_CANFD = "canfd"
+PROTO_ETHERCAT = "ethercat"
+
+PROTOCOL_LABELS = {
+    PROTO_AUTO: "Auto Detect",
+    PROTO_MODBUS: "Modbus/RS485",
+    PROTO_PROTOBUF: "Protobuf",
+    PROTO_CAN: "CAN 2.0",
+    PROTO_CANFD: "CANFD",
+    PROTO_ETHERCAT: "EtherCAT",
+}
+
+
+def protocol_key_to_label(protocol_key: str | None) -> str:
+    return PROTOCOL_LABELS.get(protocol_key or "", protocol_key or "")
+
+
+def protocol_label_to_key(protocol_label: str | None) -> str | None:
+    if not protocol_label:
+        return None
+    for key, value in PROTOCOL_LABELS.items():
+        if value == protocol_label:
+            return key
+    return None
+
+
+def sdk_protocol_to_key(protocol_type):
+    if sdk is None:
+        return None
+    if protocol_type == sdk.StarkProtocolType.Modbus:
+        return PROTO_MODBUS
+    if protocol_type == sdk.StarkProtocolType.Can:
+        return PROTO_CAN
+    if protocol_type == sdk.StarkProtocolType.CanFd:
+        return PROTO_CANFD
+    if protocol_type == sdk.StarkProtocolType.EtherCAT:
+        return PROTO_ETHERCAT
+    return None
+
+
+def run_in_new_loop(async_factory):
+    """Run a zero-arg async factory in a fresh event loop.
+
+    The awaitable must be created after the loop is installed as current,
+    otherwise PyO3 async wrappers may fail with "no running event loop".
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        async def _runner():
+            return await async_factory()
+
+        return loop.run_until_complete(_runner())
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
+
 # Serial port listing
 try:
     import serial.tools.list_ports
@@ -42,7 +103,7 @@ def list_serial_ports():
 
 class AutoDetectWorker(QObject):
     """Auto-detection worker thread"""
-    finished = Signal(object, int, object, str)  # ctx, slave_id, device_info, protocol
+    finished = Signal(object, int, object, str, str)  # ctx, slave_id, device_info, protocol_key, protocol_label
     error = Signal(str)
     progress = Signal(str)
 
@@ -60,14 +121,14 @@ class AutoDetectWorker(QObject):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-            ctx, slave_id, device_info, protocol = loop.run_until_complete(
+            ctx, slave_id, device_info, protocol_key, protocol_label = loop.run_until_complete(
                 self._auto_detect()
             )
 
             if ctx is None:
                 self.error.emit("No devices found")
             else:
-                self.finished.emit(ctx, slave_id, device_info, protocol)
+                self.finished.emit(ctx, slave_id, device_info, protocol_key, protocol_label)
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -83,8 +144,6 @@ class AutoDetectWorker(QObject):
         if self.revo3_modbus:
             return await self._auto_detect_revo3_modbus()
 
-        print(f"[DEBUG] Starting auto_detect: scan_all={self.scan_all}, port={self.port}, protocol={self.protocol}")
-
         # Use unified auto_detect API
         try:
             devices = await sdk.auto_detect(
@@ -92,16 +151,14 @@ class AutoDetectWorker(QObject):
                 port=self.port,
                 protocol=self.protocol
             )
-            print(f"[DEBUG] auto_detect returned: {len(devices) if devices else 0} devices")
         except Exception as e:
-            print(f"[DEBUG] auto_detect exception: {e}")
             import traceback
             traceback.print_exc()
             raise
 
         if not devices:
             self.progress.emit("❌ No devices found")
-            return None, 0, None, None
+            return None, 0, None, None, None
 
         device = devices[0]
         self.progress.emit(f"✅ Found {device.protocol_type} device")
@@ -115,15 +172,18 @@ class AutoDetectWorker(QObject):
         # auto_detect already has correct hardware_type including TouchVendor resolution
         device_info = sdk.DeviceInfo(
             sku_type=device.sku_type if device.sku_type is not None else sdk.SkuType.MediumRight,
+            hand_type=sdk.HandType.Right if (device.sku_type is None or device.sku_type in (sdk.SkuType.MediumRight, sdk.SkuType.SmallRight)) else sdk.HandType.Left,
             hardware_type=device.hardware_type if device.hardware_type is not None else sdk.StarkHardwareType.Revo2Basic,
             serial_number=device.serial_number or "",
-            firmware_version=device.firmware_version or ""
+            firmware_version=device.firmware_version or "",
+            hardware_version=""
         )
 
         # Determine protocol name for display
-        protocol_name = get_protocol_display_name(device.protocol_type)
+        protocol_key = sdk_protocol_to_key(device.protocol_type)
+        protocol_label = get_protocol_display_name(device.protocol_type)
 
-        return ctx, slave_id, device_info, protocol_name
+        return ctx, slave_id, device_info, protocol_key, protocol_label
 
     async def _auto_detect_revo3_modbus(self):
         """Auto-detect Revo3 device via Modbus only (fast path)"""
@@ -131,9 +191,7 @@ class AutoDetectWorker(QObject):
 
         try:
             protocol_type, port_name, baudrate, slave_id = await sdk.auto_detect_modbus_revo3()
-            print(f"[Revo3 Modbus] Found: port={port_name}, baudrate={baudrate}, slave_id={slave_id}")
         except Exception as e:
-            print(f"[Revo3 Modbus] auto_detect_modbus_revo3 failed: {e}")
             raise
 
         self.progress.emit(f"✅ Found Revo3 on {port_name}")
@@ -150,22 +208,24 @@ class AutoDetectWorker(QObject):
         except Exception:
             device_info = sdk.DeviceInfo(
                 sku_type=sdk.SkuType.MediumRight,
+                hand_type=sdk.HandType.Right,
                 hardware_type=sdk.StarkHardwareType.Revo3Ultra,
                 serial_number='',
                 firmware_version='',
+                hardware_version='',
             )
 
-        return ctx, slave_id, device_info, "Modbus (RS485)"
+        return ctx, slave_id, device_info, PROTO_MODBUS, get_protocol_display_name(sdk.StarkProtocolType.Modbus)
 
 
 class ManualConnectWorker(QObject):
     """Manual connection worker thread"""
-    finished = Signal(object, int, object, str)
+    finished = Signal(object, int, object, str, str)
     error = Signal(str)
 
-    def __init__(self, protocol, params):
+    def __init__(self, protocol_key, params):
         super().__init__()
-        self.protocol = protocol
+        self.protocol_key = protocol_key
         self.params = params
 
     def run(self):
@@ -176,7 +236,13 @@ class ManualConnectWorker(QObject):
             asyncio.set_event_loop(loop)
 
             ctx, slave_id, device_info = loop.run_until_complete(self._connect())
-            self.finished.emit(ctx, slave_id, device_info, self.protocol)
+            self.finished.emit(
+                ctx,
+                slave_id,
+                device_info,
+                self.protocol_key,
+                protocol_key_to_label(self.protocol_key),
+            )
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -187,7 +253,7 @@ class ManualConnectWorker(QObject):
 
     async def _connect(self):
         """Connect to device"""
-        if self.protocol == "Modbus/RS485":
+        if self.protocol_key == PROTO_MODBUS:
             ctx = await modbus_open(self.params['port'], int(self.params['baudrate']))
             slave_id = self.params['slave_id']
             try:
@@ -197,15 +263,17 @@ class ManualConnectWorker(QObject):
                 if self.params['baudrate'] == "5000000":
                     device_info = sdk.DeviceInfo(
                         sku_type=sdk.SkuType.MediumRight,
+                        hand_type=sdk.HandType.Right,
                         hardware_type=sdk.StarkHardwareType.Revo3Ultra,
                         serial_number='',
                         firmware_version='',
+                        hardware_version='',
                     )
                 else:
                     raise
             return ctx, slave_id, device_info
 
-        elif self.protocol == "Protobuf":
+        elif self.protocol_key == PROTO_PROTOBUF:
             # Protobuf uses fixed baudrate 115200
             ctx = await sdk.protobuf_open(self.params['port'], self.params['slave_id'])
             slave_id = self.params['slave_id']
@@ -216,13 +284,15 @@ class ManualConnectWorker(QObject):
                 # Fallback to minimal info if get_device_info fails
                 device_info = sdk.DeviceInfo(
                     sku_type=sdk.SkuType.MediumRight,
+                    hand_type=sdk.HandType.Right,
                     hardware_type=sdk.StarkHardwareType.Revo1Protobuf,
                     serial_number='',
                     firmware_version='',
+                    hardware_version='',
                 )
             return ctx, slave_id, device_info
 
-        elif self.protocol == "CAN 2.0":
+        elif self.protocol_key == PROTO_CAN:
             port_name = self.params.get('port_name')
             if not port_name:
                 devices = sdk.list_zqwl_devices()
@@ -237,7 +307,7 @@ class ManualConnectWorker(QObject):
             device_info = await ctx.get_device_info(slave_id)
             return ctx, slave_id, device_info
 
-        elif self.protocol == "CANFD":
+        elif self.protocol_key == PROTO_CANFD:
             port_name = self.params.get('port_name')
             if not port_name:
                 devices = sdk.list_zqwl_devices()
@@ -256,7 +326,7 @@ class ManualConnectWorker(QObject):
             device_info = await ctx.get_device_info(slave_id)
             return ctx, slave_id, device_info
 
-        elif self.protocol == "EtherCAT":
+        elif self.protocol_key == PROTO_ETHERCAT:
             master_pos = self.params.get('master_pos', 0)
             slave_pos = self.params.get('slave_pos', 0)
 
@@ -272,12 +342,12 @@ class ManualConnectWorker(QObject):
             return ctx, slave_pos, device_info
 
         else:
-            raise ValueError(f"Unknown protocol: {self.protocol}")
+            raise ValueError(f"Unknown protocol: {self.protocol_key}")
 
 
 class ConnectionPanel(QWidget):
     """Modern Connection Panel"""
-    connected = Signal(object, int, object, str)
+    connected = Signal(object, int, object, str, str)
     about_to_disconnect = Signal()  # Emitted before closing device, so DataCollector can stop first
     disconnected = Signal()
 
@@ -285,7 +355,11 @@ class ConnectionPanel(QWidget):
         super().__init__()
         self.ctx = None
         self.slave_id = None
-        self.protocol = None
+        self.protocol = None  # display label for compatibility
+        self.protocol_key = None
+        self.last_protocol = None  # display label for compatibility
+        self.last_protocol_key = None
+        self.last_slave_id = None
         self.worker = None
         self._thread: QThread | None = None
         self.revo3_modbus = revo3_modbus
@@ -318,11 +392,12 @@ class ConnectionPanel(QWidget):
         self.protocol_combo = QComboBox()
         if self.revo3_modbus:
             # Revo3 Modbus mode: hide protocol selector entirely
-            self.protocol_combo.addItems(["Auto Detect"])
+            self.protocol_combo.addItem(PROTOCOL_LABELS[PROTO_AUTO], PROTO_AUTO)
             self.proto_label.setVisible(False)
             self.protocol_combo.setVisible(False)
         else:
-            self.protocol_combo.addItems(["Auto Detect", "Modbus/RS485", "Protobuf", "CAN 2.0", "CANFD", "EtherCAT"])
+            for protocol_key in [PROTO_AUTO, PROTO_MODBUS, PROTO_PROTOBUF, PROTO_CAN, PROTO_CANFD, PROTO_ETHERCAT]:
+                self.protocol_combo.addItem(PROTOCOL_LABELS[protocol_key], protocol_key)
             if self.mock_type:
                 self.proto_label.setVisible(False)
                 self.protocol_combo.setVisible(False)
@@ -353,8 +428,8 @@ class ConnectionPanel(QWidget):
         self.modbus_baud_label = QLabel(tr("baud") + ":")
         modbus_layout.addWidget(self.modbus_baud_label)
         self.baudrate_combo = QComboBox()
-        self.baudrate_combo.addItems(["115200", "460800", "921600", "1000000", "5000000"])
-        self.baudrate_combo.setCurrentText("1000000")
+        self.baudrate_combo.addItems(["115200", "460800", "921600", "1000000", "2000000", "3000000", "5000000"])
+        self.baudrate_combo.setCurrentText("5000000")
         modbus_layout.addWidget(self.baudrate_combo)
 
         self.modbus_id_label = QLabel(tr("id") + ":")
@@ -571,20 +646,21 @@ class ConnectionPanel(QWidget):
         else:
             self.status_indicator.setText("● " + tr("status_disconnected"))
 
-    def _on_protocol_changed(self, protocol):
+    def _on_protocol_changed(self, protocol_label):
         """Protocol selection changed"""
-        self.modbus_frame.setVisible(protocol == "Modbus/RS485")
-        self.protobuf_frame.setVisible(protocol == "Protobuf")
-        self.can_frame.setVisible(protocol == "CAN 2.0")
-        self.canfd_frame.setVisible(protocol == "CANFD")
-        self.ethercat_frame.setVisible(protocol == "EtherCAT")
-        self.connect_btn.setVisible(protocol != "Auto Detect")
-        self.auto_detect_btn.setVisible(protocol == "Auto Detect")
+        protocol_key = self.protocol_combo.currentData()
+        self.modbus_frame.setVisible(protocol_key == PROTO_MODBUS)
+        self.protobuf_frame.setVisible(protocol_key == PROTO_PROTOBUF)
+        self.can_frame.setVisible(protocol_key == PROTO_CAN)
+        self.canfd_frame.setVisible(protocol_key == PROTO_CANFD)
+        self.ethercat_frame.setVisible(protocol_key == PROTO_ETHERCAT)
+        self.connect_btn.setVisible(protocol_key != PROTO_AUTO)
+        self.auto_detect_btn.setVisible(protocol_key == PROTO_AUTO)
 
         # Refresh port list when switching to Modbus or Protobuf
-        if protocol == "Modbus/RS485":
+        if protocol_key == PROTO_MODBUS:
             self._refresh_port_list()
-        elif protocol == "Protobuf":
+        elif protocol_key == PROTO_PROTOBUF:
             self._refresh_protobuf_port_list()
 
     def _refresh_port_list(self):
@@ -651,13 +727,13 @@ class ConnectionPanel(QWidget):
             self.status_label.setText("❌ SDK not installed")
             return
 
-        protocol = self.protocol_combo.currentText()
+        protocol_key = self.protocol_combo.currentData()
 
-        if protocol == "Auto Detect":
+        if protocol_key == PROTO_AUTO:
             self._on_auto_detect()
             return
 
-        if protocol == "Modbus/RS485":
+        if protocol_key == PROTO_MODBUS:
             # Get port from combo (use itemData for actual device path)
             port = self.port_combo.currentData()
             if not port:
@@ -667,7 +743,7 @@ class ConnectionPanel(QWidget):
                 'baudrate': self.baudrate_combo.currentText(),
                 'slave_id': self.slave_id_spin.value()
             }
-        elif protocol == "Protobuf":
+        elif protocol_key == PROTO_PROTOBUF:
             # Get port from combo
             port = self.protobuf_port_combo.currentData()
             if not port:
@@ -676,14 +752,14 @@ class ConnectionPanel(QWidget):
                 'port': port,
                 'slave_id': self.protobuf_slave_spin.value()
             }
-        elif protocol == "CAN 2.0":
+        elif protocol_key == PROTO_CAN:
             idx = self.can_port_combo.currentIndex()
             params = {
                 'port_name': self.can_port_combo.itemData(idx) if idx >= 0 else None,
                 'slave_id': self.can_slave_spin.value(),
                 'baudrate': 1000000
             }
-        elif protocol == "CANFD":
+        elif protocol_key == PROTO_CANFD:
             idx = self.canfd_port_combo.currentIndex()
             params = {
                 'port_name': self.canfd_port_combo.itemData(idx) if idx >= 0 else None,
@@ -691,20 +767,24 @@ class ConnectionPanel(QWidget):
                 'arb_baudrate': 1000000,
                 'data_baudrate': 5000000
             }
-        elif protocol == "EtherCAT":
+        elif protocol_key == PROTO_ETHERCAT:
             params = {
                 'master_pos': self.ec_master_spin.value(),
                 'slave_pos': self.ec_slave_spin.value(),
             }
         else:
-            self.status_label.setText(f"❌ Unknown protocol: {protocol}")
+            self.status_label.setText(f"❌ Unknown protocol: {protocol_key}")
             return
 
         self._set_connecting_state()
-        self.status_label.setText("Connecting...")
+        self._start_manual_connect(protocol_key, params, "Connecting...")
+
+    def _start_manual_connect(self, protocol_key, params, status_text):
+        """Start a manual connection worker with explicit protocol parameters."""
+        self.status_label.setText(status_text)
 
         self._thread = QThread()
-        self.worker = ManualConnectWorker(protocol, params)
+        self.worker = ManualConnectWorker(protocol_key, params)
         self.worker.moveToThread(self._thread)
 
         self._thread.started.connect(self.worker.run)
@@ -714,6 +794,42 @@ class ConnectionPanel(QWidget):
         self.worker.error.connect(self._thread.quit)
 
         self._thread.start()
+
+    def reconnect_last_device(self):
+        """Reconnect using the last successful protocol when possible."""
+        protocol = self.last_protocol_key
+        slave_id = self.last_slave_id
+
+        if sdk is None or protocol is None:
+            self._on_auto_detect()
+            return
+
+        if protocol == PROTO_CANFD:
+            self._refresh_zqwl_devices()
+            idx = self.canfd_port_combo.currentIndex()
+            params = {
+                'port_name': self.canfd_port_combo.itemData(idx) if idx >= 0 else None,
+                'slave_id': slave_id if slave_id is not None else self.canfd_slave_spin.value(),
+                'arb_baudrate': 1000000,
+                'data_baudrate': 5000000
+            }
+            self._set_connecting_state()
+            self._start_manual_connect(protocol, params, "Reconnecting CANFD...")
+            return
+
+        if protocol == PROTO_CAN:
+            self._refresh_zqwl_devices()
+            idx = self.can_port_combo.currentIndex()
+            params = {
+                'port_name': self.can_port_combo.itemData(idx) if idx >= 0 else None,
+                'slave_id': slave_id if slave_id is not None else self.can_slave_spin.value(),
+                'baudrate': 1000000
+            }
+            self._set_connecting_state()
+            self._start_manual_connect(protocol, params, "Reconnecting CAN 2.0...")
+            return
+
+        self._on_auto_detect()
 
     def _set_connecting_state(self):
         """Set UI to connecting state"""
@@ -726,11 +842,15 @@ class ConnectionPanel(QWidget):
         """Progress update"""
         self.status_label.setText(message)
 
-    def _on_connect_success(self, ctx, slave_id, device_info, protocol):
+    def _on_connect_success(self, ctx, slave_id, device_info, protocol_key, protocol_label):
         """Connection successful"""
         self.ctx = ctx
         self.slave_id = slave_id
-        self.protocol = protocol
+        self.protocol_key = protocol_key
+        self.protocol = protocol_label
+        self.last_protocol_key = protocol_key
+        self.last_protocol = protocol_label
+        self.last_slave_id = slave_id
 
         # Update UI state
         self.auto_detect_btn.setEnabled(False)
@@ -747,7 +867,7 @@ class ConnectionPanel(QWidget):
             self.info_labels["serial"].setText(device_info.serial_number)  # Keep for internal use
             self.info_labels["firmware"].setText(device_info.firmware_version)
 
-        self.connected.emit(ctx, slave_id, device_info, protocol)
+        self.connected.emit(ctx, slave_id, device_info, protocol_key, protocol_label)
 
     def _on_connect_error(self, error):
         """Connection failed"""
@@ -766,28 +886,37 @@ class ConnectionPanel(QWidget):
             self.about_to_disconnect.emit()
 
             try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    if self.protocol == "EtherCAT":
-                        # EtherCAT: stop PDO loop first, then close
-                        loop.run_until_complete(self.ctx.ec_stop_loop())
-                        loop.run_until_complete(self.ctx.close())
-                    elif hasattr(sdk, 'close_device_handler'):
-                        loop.run_until_complete(sdk.close_device_handler(self.ctx))
-                    elif self.protocol in ["CAN 2.0", "CANFD"]:
+                protocol = self.protocol_key or ""
+
+                if protocol == PROTO_ETHERCAT:
+                    async def close_ethercat():
+                        await self.ctx.ec_stop_loop()
+                        await self.ctx.close()
+                    run_in_new_loop(close_ethercat)
+                elif protocol in [PROTO_CAN, PROTO_CANFD]:
+                    if hasattr(sdk, 'close_device_handler'):
+                        run_in_new_loop(lambda: sdk.close_device_handler(self.ctx))
+                    else:
                         # Fallback for older SDK versions
                         sdk.close_zqwl()
+                elif protocol == PROTO_MODBUS:
+                    if hasattr(sdk, 'modbus_close'):
+                        run_in_new_loop(lambda: sdk.modbus_close(self.ctx))
                     else:
-                        loop.run_until_complete(self.ctx.close())
-                finally:
-                    loop.close()
+                        run_in_new_loop(lambda: self.ctx.close())
+                elif protocol == PROTO_PROTOBUF:
+                    run_in_new_loop(lambda: self.ctx.close())
+                elif hasattr(sdk, 'close_device_handler'):
+                    run_in_new_loop(lambda: sdk.close_device_handler(self.ctx))
+                else:
+                    run_in_new_loop(lambda: self.ctx.close())
             except Exception as e:
                 print(f"Error closing device: {e}")
 
         self.ctx = None
         self.slave_id = None
         self.protocol = None
+        self.protocol_key = None
 
         # Reset UI
         self.auto_detect_btn.setEnabled(True)

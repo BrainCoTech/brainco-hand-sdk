@@ -54,13 +54,13 @@ void demo_single_joint_move(DeviceHandler *handle, uint8_t slave_id) {
 
     // Verify
     msleep(200);
-    CV3MotorStatusData *status = stark_v3_get_motor_status_data(handle, slave_id);
+    CRevo3MotorStatusData *status = stark_revo3_get_motor_status_data(handle, slave_id);
     if (status) {
         float error = fabsf(target - status->positions[joint_id]);
         printf("  Final: %.2f° (error: %.2f°) %s\n",
                status->positions[joint_id], error,
                error < 5.0f ? "✅" : "⚠️");
-        free_v3_motor_status_data(status);
+        free_revo3_motor_status_data(status);
     }
 
     // Move back
@@ -101,13 +101,13 @@ void demo_single_joint_move_with_speed(DeviceHandler *handle, uint8_t slave_id) 
 
     // Verify
     msleep(200);
-    CV3MotorStatusData *status = stark_v3_get_motor_status_data(handle, slave_id);
+    CRevo3MotorStatusData *status = stark_revo3_get_motor_status_data(handle, slave_id);
     if (status) {
         float error = fabsf(target - status->positions[joint_id]);
         printf("  Final: %.2f° (error: %.2f°) %s\n",
                status->positions[joint_id], error,
                error < 5.0f ? "✅" : "⚠️");
-        free_v3_motor_status_data(status);
+        free_revo3_motor_status_data(status);
     }
 
     // Move back
@@ -136,7 +136,7 @@ void demo_full_hand_move(DeviceHandler *handle, uint8_t slave_id) {
 
     // Verify
     msleep(500);
-    CV3MotorStatusData *status = stark_v3_get_motor_status_data(handle, slave_id);
+    CRevo3MotorStatusData *status = stark_revo3_get_motor_status_data(handle, slave_id);
     if (status) {
         printf("  Final MCP positions:\n");
         for (int i = 0; i < n_mcp; i++) {
@@ -146,7 +146,7 @@ void demo_full_hand_move(DeviceHandler *handle, uint8_t slave_id) {
                    jid, status->positions[jid], err,
                    err < 5.0f ? "✅" : "⚠️");
         }
-        free_v3_motor_status_data(status);
+        free_revo3_motor_status_data(status);
     }
 
     // Reset
@@ -179,7 +179,7 @@ void demo_full_hand_move_with_speed(DeviceHandler *handle, uint8_t slave_id) {
 
     // Verify
     msleep(500);
-    CV3MotorStatusData *status = stark_v3_get_motor_status_data(handle, slave_id);
+    CRevo3MotorStatusData *status = stark_revo3_get_motor_status_data(handle, slave_id);
     if (status) {
         printf("  Final PIP positions:\n");
         for (int i = 0; i < n_pip; i++) {
@@ -189,7 +189,7 @@ void demo_full_hand_move_with_speed(DeviceHandler *handle, uint8_t slave_id) {
                    jid, status->positions[jid], err,
                    err < 5.0f ? "✅" : "⚠️");
         }
-        free_v3_motor_status_data(status);
+        free_revo3_motor_status_data(status);
     }
 
     // Reset

@@ -1,6 +1,6 @@
-"""V3 Touch Panel - For Revo3 Tactile Array devices
+"""Revo3 Touch Panel - For Revo3 Tactile Array devices
 
-Displays V3 tactile array data:
+Displays Revo3 tactile array data:
 - Summary: 16 values (palm + 5 fingers × 3 locations)
 - Detail: 11 tactile array modules as heatmaps
 
@@ -184,8 +184,8 @@ REVO3_COORD_MAP = {
 }
 
 
-def _get_v3_coord_map(module_name: str):
-    """Get coordinate map for a V3 touch module"""
+def _get_revo3_coord_map(module_name: str):
+    """Get coordinate map for a Revo3 touch module"""
     if module_name in REVO3_COORD_MAP:
         return REVO3_COORD_MAP[module_name]
     if module_name in ("IndexTip", "MiddleTip", "RingTip", "PinkyTip"):
@@ -195,8 +195,8 @@ def _get_v3_coord_map(module_name: str):
     return None
 
 
-class V3TouchSubPanel(QWidget):
-    """V3 Touch Panel for Revo3 Tactile Array devices.
+class Revo3TouchSubPanel(QWidget):
+    """Revo3 Touch Panel for Revo3 Tactile Array devices.
 
     Tabs:
     - Summary: 16-line curves + status cards
@@ -243,7 +243,7 @@ class V3TouchSubPanel(QWidget):
         self.tabs.addTab(overview_widget, "📊 Summary")
 
         # --- Detail tabs: grouped by finger ---
-        v3_finger_groups = [
+        revo3_finger_groups = [
             ("Palm", "🖐", [(0, "Palm", "Palm")]),
             ("Thumb", "👆", [(1, "Thumb Tip", "ThumbTip"), (2, "Thumb Pad", "ThumbPad")]),
             ("Index", "👆", [(3, "Index Tip", "IndexTip"), (4, "Index Pad", "IndexPad")]),
@@ -252,13 +252,13 @@ class V3TouchSubPanel(QWidget):
             ("Pinky", "👆", [(9, "Pinky Tip", "PinkyTip"), (10, "Pinky Pad", "PinkyPad")]),
         ]
 
-        for group_name, icon, modules in v3_finger_groups:
+        for group_name, icon, modules in revo3_finger_groups:
             if len(modules) == 1:
                 mod_idx, name, mod_key = modules[0]
                 color = REVO3_MODULE_COLORS[mod_idx]
                 pts = REVO3_MODULE_POINTS[mod_key]
                 rows, cols = REVO3_HEATMAP_LAYOUT[mod_key]
-                coord_map = _get_v3_coord_map(mod_key)
+                coord_map = _get_revo3_coord_map(mod_key)
                 chart = HeatmapChart(name, pts, color, rows, cols, coord_map=coord_map)
                 self.detail_charts[mod_idx] = chart
                 self.tabs.addTab(chart, f"{icon} {group_name}")
@@ -272,7 +272,7 @@ class V3TouchSubPanel(QWidget):
                     color = REVO3_MODULE_COLORS[mod_idx]
                     pts = REVO3_MODULE_POINTS[mod_key]
                     rows, cols = REVO3_HEATMAP_LAYOUT[mod_key]
-                    coord_map = _get_v3_coord_map(mod_key)
+                    coord_map = _get_revo3_coord_map(mod_key)
                     chart = HeatmapChart(name, pts, color, rows, cols, coord_map=coord_map)
                     self.detail_charts[mod_idx] = chart
                     finger_layout.addWidget(chart, 1)
@@ -281,16 +281,16 @@ class V3TouchSubPanel(QWidget):
 
         layout.addWidget(self.tabs, 1)
 
-    def update_data(self, v3_data):
-        """Process V3 Touch data.
+    def update_data(self, revo3_data):
+        """Process Revo3 Touch data.
 
-        v3_data: object with .summary (list of 16) and .modules (list of 11 lists)
+        revo3_data: object with .summary (list of 16) and .modules (list of 11 lists)
         """
-        if not hasattr(v3_data, 'summary') or not hasattr(v3_data, 'modules'):
+        if not hasattr(revo3_data, 'summary') or not hasattr(revo3_data, 'modules'):
             return
 
-        summary = v3_data.summary
-        modules = v3_data.modules
+        summary = revo3_data.summary
+        modules = revo3_data.modules
 
         # Update summary
         if summary and len(summary) >= 16:
@@ -316,7 +316,7 @@ class V3TouchSubPanel(QWidget):
     def update_texts(self):
         self.tabs.setTabText(0, f"📊 {tr('touch_summary')}")
         
-        v3_finger_groups = [
+        revo3_finger_groups = [
             ("touch_palm", "🖐"),
             ("touch_thumb", "👆"),
             ("touch_index", "👆"),
@@ -325,5 +325,5 @@ class V3TouchSubPanel(QWidget):
             ("touch_pinky", "👆"),
         ]
         
-        for i, (tr_key, icon) in enumerate(v3_finger_groups):
+        for i, (tr_key, icon) in enumerate(revo3_finger_groups):
             self.tabs.setTabText(i + 1, f"{icon} {tr(tr_key)}")

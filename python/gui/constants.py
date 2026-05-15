@@ -38,7 +38,7 @@ MOTOR_COUNT = 6
 
 
 # =============================================================================
-# V3 Motor Constants (21 DOF)
+# Revo3 Motor Constants (21 DOF)
 # =============================================================================
 
 REVO3_MOTOR_COUNT = 21
@@ -48,11 +48,11 @@ REVO3_MOTOR_NAMES_EN = [
     'M11', 'M12', 'M13', 'M14', 'M15', 'M16', 'M17', 'M18', 'M19', 'M20'
 ]
 
-REVO3_MOTOR_NAMES_ZH = REVO3_MOTOR_NAMES_EN  # Same naming for V3
+REVO3_MOTOR_NAMES_ZH = REVO3_MOTOR_NAMES_EN  # Same naming for Revo3
 
 
-def get_v3_motor_count() -> int:
-    """Get motor/joint count active V3 protocol version."""
+def get_revo3_motor_count() -> int:
+    """Get motor/joint count active Revo3 protocol version."""
     return REVO3_MOTOR_COUNT
 
 

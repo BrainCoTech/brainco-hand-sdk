@@ -3,7 +3,7 @@
 Supports:
 - Revo2 Pressure Touch: Distributed pressure arrays
 - Revo2 Force Touch (ArrayPressure): 3D force + torque
-- Revo3 V3 Touch: Tactile array modules
+- Revo3 Revo3 Touch: Tactile array modules
 
 This file acts as a dispatcher, delegating to the appropriate sub-panel
 based on the connected device's hardware type.
@@ -110,7 +110,7 @@ class PressureTouchPanel(QWidget):
         self.clear_btn.clicked.connect(self._clear_charts)
         self.control_layout.addWidget(self.clear_btn)
 
-        # Data type selector (V3 only)
+        # Data type selector (Revo3 only)
         if self.mode == self.MODE_V3:
             self.control_layout.addWidget(QLabel("Data Type:"))
             self.data_type_combo = QComboBox()
@@ -131,8 +131,8 @@ class PressureTouchPanel(QWidget):
             from .touch_panel_force import ForceTouchSubPanel
             self.sub_panel = ForceTouchSubPanel()
         elif self.mode == self.MODE_V3:
-            from .touch_panel_revo3 import V3TouchSubPanel
-            self.sub_panel = V3TouchSubPanel()
+            from .touch_panel_revo3 import Revo3TouchSubPanel
+            self.sub_panel = Revo3TouchSubPanel()
         else:
             return
 
@@ -230,15 +230,15 @@ class PressureTouchPanel(QWidget):
             return
 
         if self.mode == self.MODE_V3:
-            # V3: read from v3_touch_buffer
-            if (self.shared_data and hasattr(self.shared_data, 'v3_touch_buffer')
-                    and self.shared_data.v3_touch_buffer):
+            # Revo3: read from revo3_touch_buffer
+            if (self.shared_data and hasattr(self.shared_data, 'revo3_touch_buffer')
+                    and self.shared_data.revo3_touch_buffer):
                 try:
-                    touch_data_list = self.shared_data.v3_touch_buffer.pop_all()
+                    touch_data_list = self.shared_data.revo3_touch_buffer.pop_all()
                     if touch_data_list:
-                        for v3_data in touch_data_list[-5:]:
-                            if v3_data:
-                                self.sub_panel.update_data(v3_data)
+                        for revo3_data in touch_data_list[-5:]:
+                            if revo3_data:
+                                self.sub_panel.update_data(revo3_data)
                 except Exception:
                     pass
 
@@ -309,13 +309,13 @@ class PressureTouchPanel(QWidget):
 
     def _on_data_type_changed(self, index):
         if self.mode == self.MODE_V3 and self.device:
-            run_async(self._async_set_v3_data_type(index))
+            run_async(self._async_set_revo3_data_type(index))
 
-    async def _async_set_v3_data_type(self, data_type):
+    async def _async_set_revo3_data_type(self, data_type):
         if not self.device:
             return
         try:
-            await self.device.v3_set_touch_data_type(self.slave_id, data_type)
-            logger.info(f"[TouchPanel] v3_set_touch_data_type({data_type})")
+            await self.device.revo3_set_touch_data_type(self.slave_id, data_type)
+            logger.info(f"[TouchPanel] revo3_set_touch_data_type({data_type})")
         except Exception as e:
             logger.warn(f"[TouchPanel] Set data type failed: {e}")

@@ -43,8 +43,8 @@ FIRMWARE_PATHS = {
     "revo1_advanced": OTA_DIR / "stark2" / "Revo1.8_V1.0.3.C_2602031800.bin",
     "revo2_485_canfd": OTA_DIR / "stark2" / "Revo2_V1.0.20.U_2501091030.bin",
     "revo2_ethercat_canfd": OTA_DIR / "stark2" / "Revo2_V1.0.16.F_2512051618.bin",
-    # "revo2_485_canfd": OTA_DIR / "stark2" / "Revo2_V1.0.16.F_2512051618.bin", 
-    "revo3": OTA_DIR / "stark3" / "placeholder.bin",  # Revo3 firmware path
+    # "revo2_485_canfd": OTA_DIR / "stark2" / "Revo2_V1.0.16.F_2512051618.bin",
+    "revo3": OTA_DIR / "stark3" / "revo23-fw-V0.0.4-2605111016.bin",  # Revo3 firmware path
 }
 
 # DFU state tracking

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Stark Revo3 (V3) Touch / Tactile Sensor Demo
+Stark Revo3 (Revo3) Touch / Tactile Sensor Demo
 
-Demonstrates V3-specific touch sensor APIs:
+Demonstrates Revo3-specific touch sensor APIs:
   - Enable/disable touch modules (11 modules: palm + 5 fingers × 2 pads)
   - Set data output type (AD raw / calibrated)
   - Read summary force values (16 pads)
@@ -67,7 +67,7 @@ SUMMARY_PAD_NAMES = [
 
 
 async def demo_device_info(ctx, slave_id):
-    """Read and display V3 device information"""
+    """Read and display Revo3 device information"""
     print("\n=== Device Info ===")
 
     sn = await ctx.get_device_sn(slave_id)
@@ -84,11 +84,11 @@ async def demo_enable_modules(ctx, slave_id):
     # Enable all 11 modules at once (bits 0~10 = 0x7FF)
     all_bits = 0x7FF
     print(f"  Enabling all modules: 0x{all_bits:03X} ({all_bits:011b})")
-    await ctx.v3_set_all_touch_modules_enabled(slave_id, all_bits)
+    await ctx.revo3_set_all_touch_modules_enabled(slave_id, all_bits)
     await asyncio.sleep(0.5)
 
     # Read back enable state
-    enabled_bits = await ctx.v3_get_all_touch_modules_enabled(slave_id)
+    enabled_bits = await ctx.revo3_get_all_touch_modules_enabled(slave_id)
     print(f"  Enabled modules: 0x{enabled_bits:03X} ({enabled_bits:011b})")
     for i in range(REVO3_TOUCH_MODULE_COUNT):
         state = "ON" if (enabled_bits & (1 << i)) else "OFF"
@@ -96,17 +96,17 @@ async def demo_enable_modules(ctx, slave_id):
 
     # Enable/disable a single module (example: toggle Palm)
     print("\n  --- Single module toggle (Palm) ---")
-    is_enabled = await ctx.v3_get_touch_module_enabled(slave_id, 0)
+    is_enabled = await ctx.revo3_get_touch_module_enabled(slave_id, 0)
     print(f"  Palm enabled: {is_enabled}")
 
     # Disable Palm
-    await ctx.v3_set_touch_module_enabled(slave_id, 0, False)
-    is_enabled = await ctx.v3_get_touch_module_enabled(slave_id, 0)
+    await ctx.revo3_set_touch_module_enabled(slave_id, 0, False)
+    is_enabled = await ctx.revo3_get_touch_module_enabled(slave_id, 0)
     print(f"  Palm enabled (after disable): {is_enabled}")
 
     # Re-enable Palm
-    await ctx.v3_set_touch_module_enabled(slave_id, 0, True)
-    is_enabled = await ctx.v3_get_touch_module_enabled(slave_id, 0)
+    await ctx.revo3_set_touch_module_enabled(slave_id, 0, True)
+    is_enabled = await ctx.revo3_get_touch_module_enabled(slave_id, 0)
     print(f"  Palm enabled (after re-enable): {is_enabled}")
 
 
@@ -115,19 +115,19 @@ async def demo_data_type(ctx, slave_id):
     print("\n=== Touch Data Type ===")
 
     # Read current data type
-    data_type = await ctx.v3_get_touch_data_type(slave_id)
+    data_type = await ctx.revo3_get_touch_data_type(slave_id)
     print(f"  Current data type: {data_type} ({'Calibrated' if data_type == 1 else 'AD Raw'})")
 
     # Set to calibrated value
     print("  Setting data type to calibrated (1)...")
-    await ctx.v3_set_touch_data_type(slave_id, 1)
-    data_type = await ctx.v3_get_touch_data_type(slave_id)
+    await ctx.revo3_set_touch_data_type(slave_id, 1)
+    data_type = await ctx.revo3_get_touch_data_type(slave_id)
     print(f"  Data type after set: {data_type} ({'Calibrated' if data_type == 1 else 'AD Raw'})")
 
     # Set to AD raw value
     print("  Setting data type to AD raw (0)...")
-    await ctx.v3_set_touch_data_type(slave_id, 0)
-    data_type = await ctx.v3_get_touch_data_type(slave_id)
+    await ctx.revo3_set_touch_data_type(slave_id, 0)
+    data_type = await ctx.revo3_get_touch_data_type(slave_id)
     print(f"  Data type after set: {data_type} ({'Calibrated' if data_type == 1 else 'AD Raw'})")
 
 
@@ -135,7 +135,7 @@ async def demo_read_summary(ctx, slave_id):
     """Read summary force values for all pads"""
     print("\n=== Touch Summary (16 pads) ===")
 
-    summary = await ctx.v3_get_touch_summary(slave_id)
+    summary = await ctx.revo3_get_touch_summary(slave_id)
     print(f"  Raw values: {summary}")
     for i, val in enumerate(summary):
         name = SUMMARY_PAD_NAMES[i] if i < len(SUMMARY_PAD_NAMES) else f"Pad[{i}]"
@@ -149,7 +149,7 @@ async def demo_read_module_data(ctx, slave_id):
 
     # Read data from each module
     for module_id in range(REVO3_TOUCH_MODULE_COUNT):
-        data = await ctx.v3_get_touch_module_data(slave_id, module_id)
+        data = await ctx.revo3_get_touch_module_data(slave_id, module_id)
         name = REVO3_TOUCH_MODULE_NAMES[module_id]
         total = sum(data)
         print(f"  [{module_id:2d}] {name:12s} ({len(data):2d} pts): "
@@ -160,7 +160,7 @@ async def demo_read_all_data(ctx, slave_id):
     """Read all touch data at once (summary + all modules)"""
     print("\n=== All Touch Data ===")
 
-    touch_data = await ctx.v3_get_all_touch_data(slave_id)
+    touch_data = await ctx.revo3_get_all_touch_data(slave_id)
 
     print(f"  Summary ({len(touch_data.summary)} values): {touch_data.summary}")
     print(f"  Modules: {len(touch_data.modules)}")
@@ -176,12 +176,12 @@ async def demo_clear_pressure(ctx, slave_id):
 
     # Clear a single module (Palm)
     print("  Clearing Palm (module 0) pressure data...")
-    await ctx.v3_reset_touch_pressure(slave_id, 0)
+    await ctx.revo3_reset_touch_pressure(slave_id, 0)
     await asyncio.sleep(0.1)
 
     # Clear all modules
     print("  Clearing all modules pressure data...")
-    await ctx.v3_reset_all_touch_pressure(slave_id)
+    await ctx.revo3_reset_all_touch_pressure(slave_id)
     await asyncio.sleep(0.1)
 
     print("  Pressure data cleared.")
@@ -192,7 +192,7 @@ async def demo_continuous_monitor(ctx, slave_id, count=10, interval=0.1):
     print(f"\n=== Continuous Monitor ({count} reads, {interval}s interval) ===")
 
     for i in range(count):
-        summary = await ctx.v3_get_touch_summary(slave_id)
+        summary = await ctx.revo3_get_touch_summary(slave_id)
         # Format as compact string
         vals = " ".join(f"{v:4d}" for v in summary)
         print(f"  [{i:3d}] {vals}")
@@ -207,10 +207,10 @@ async def main():
     ctx = device_ctx.ctx
     slave_id = device_ctx.slave_id
 
-    # Verify V3 device
+    # Verify Revo3 device
     if not ctx.uses_revo3_motor_api(slave_id):
         print(f"Warning: Device is not Revo3 (hw_type={device_ctx.hw_type})")
-        print("V3 Touch APIs may not work correctly on this device.")
+        print("Revo3 Touch APIs may not work correctly on this device.")
 
     try:
         await demo_device_info(ctx, slave_id)

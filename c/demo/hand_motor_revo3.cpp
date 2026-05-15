@@ -48,7 +48,7 @@ void demo_device_info(DeviceHandler *handle, uint8_t slave_id) {
         printf("  Serial Number: %s\n", info->serial_number);
         printf("  Firmware: %s\n", info->firmware_version);
         printf("  Hardware Type: %d\n", info->hardware_type);
-        printf("  Uses V3 API: %s\n",
+        printf("  Uses Revo3 API: %s\n",
                stark_uses_revo3_motor_api(info->hardware_type) ? "yes" : "no");
         free_device_info(info);
     } else {
@@ -84,7 +84,7 @@ void demo_device_info(DeviceHandler *handle, uint8_t slave_id) {
 void demo_motor_status(DeviceHandler *handle, uint8_t slave_id) {
     printf("\n=== Motor Status ===\n");
 
-    CV3MotorStatusData *status = stark_v3_get_motor_status_data(handle, slave_id);
+    CRevo3MotorStatusData *status = stark_revo3_get_motor_status_data(handle, slave_id);
     if (status) {
         printf("  Positions (first 5):");
         for (int i = 0; i < 5; i++) printf(" %.1f", status->positions[i]);
@@ -98,39 +98,39 @@ void demo_motor_status(DeviceHandler *handle, uint8_t slave_id) {
         for (int i = 0; i < 5; i++) printf(" %.2f", status->currents[i]);
         printf("\n");
 
-        free_v3_motor_status_data(status);
+        free_revo3_motor_status_data(status);
     } else {
         printf("  Failed to read motor status\n");
     }
 }
 
-void demo_new_single_joint(DeviceHandler *handle, uint8_t slave_id) {
+void demo_single_joint(DeviceHandler *handle, uint8_t slave_id) {
     printf("\n=== Single Joint Control ===\n");
 
     // Mode 0 = Position. param is 45 (degrees)
-    printf("  Joint 0: mode=Position(0), param=45°\n");
-    stark_revo3_single_joint_control(handle, slave_id, 0, 0, 45);
+    printf("  Joint 0: mode=Position(0), param=45.0°\n");
+    stark_revo3_single_joint_control(handle, slave_id, 0, 0, 45.0f);
     msleep(500);
 }
 
-void demo_new_multi_joint(DeviceHandler *handle, uint8_t slave_id) {
+void demo_multi_joint(DeviceHandler *handle, uint8_t slave_id) {
     printf("\n=== Multi-Joint Control ===\n");
 
-    uint16_t params[21];
+    float params[21];
     for (int i = 0; i < 21; i++) {
-        params[i] = 30; // 30 degrees
+        params[i] = 30.0f; // 30.0 degrees
     }
-    printf("  All 21 joints: mode=Position(0), param=30°\n");
+    printf("  All 21 joints: mode=Position(0), param=30.0°\n");
     stark_revo3_multi_joint_control(handle, slave_id, 0, params);
     msleep(1000);
 
     // Reset to 0
-    for (int i = 0; i < 21; i++) params[i] = 0;
+    for (int i = 0; i < 21; i++) params[i] = 0.0f;
     stark_revo3_multi_joint_control(handle, slave_id, 0, params);
     msleep(500);
 }
 
-void demo_new_mit_control(DeviceHandler *handle, uint8_t slave_id) {
+void demo_mit_control(DeviceHandler *handle, uint8_t slave_id) {
     printf("\n=== MIT Joint Control ===\n");
     printf("  τ = Kp*(P_des - P_act) + Kd*(V_des - V_act) + T_ff\n");
 
@@ -140,7 +140,7 @@ void demo_new_mit_control(DeviceHandler *handle, uint8_t slave_id) {
     msleep(1000);
 }
 
-void demo_new_multi_mit(DeviceHandler *handle, uint8_t slave_id) {
+void demo_multi_mit(DeviceHandler *handle, uint8_t slave_id) {
     printf("\n=== Multi-Joint MIT Control ===\n");
 
     printf("  All 21 joints via multi-MIT: pos=20, Kp=2.0, Kd=0.2, T_ff=50mA\n");
@@ -164,7 +164,7 @@ void demo_new_multi_mit(DeviceHandler *handle, uint8_t slave_id) {
     msleep(500);
 }
 
-void demo_new_batch_mit(DeviceHandler *handle, uint8_t slave_id) {
+void demo_batch_mit(DeviceHandler *handle, uint8_t slave_id) {
     printf("\n=== MIT Batch Parameter Control ===\n");
 
     float vals[21];
@@ -190,29 +190,29 @@ void demo_new_batch_mit(DeviceHandler *handle, uint8_t slave_id) {
     msleep(500);
 }
 
-void demo_new_impedance_damping(DeviceHandler *handle, uint8_t slave_id) {
+void demo_impedance_damping(DeviceHandler *handle, uint8_t slave_id) {
     printf("\n=== Impedance & Damping Mode ===\n");
 
-    // Impedance mode (Mode=4), param = coeff * 100
-    printf("  Joint 0: Impedance mode, coeff=50\n");
-    stark_revo3_single_joint_control(handle, slave_id, 0, 4, 5000); // 50 * 100
+    // Impedance mode (Mode=4), param = coeff (0.0-100.0)
+    printf("  Joint 0: Impedance mode, coeff=50.0\n");
+    stark_revo3_single_joint_control(handle, slave_id, 0, 4, 50.0f); 
     msleep(500);
 
-    // Damping mode (Mode=5), param = coeff * 100
-    printf("  Joint 0: Damping mode, coeff=30\n");
-    stark_revo3_single_joint_control(handle, slave_id, 0, 5, 3000); // 30 * 100
+    // Damping mode (Mode=5), param = coeff (0.0-100.0)
+    printf("  Joint 0: Damping mode, coeff=30.0\n");
+    stark_revo3_single_joint_control(handle, slave_id, 0, 5, 30.0f); 
     msleep(500);
 
     // Reset to position 0
-    stark_revo3_single_joint_control(handle, slave_id, 0, 0, 0);
+    stark_revo3_single_joint_control(handle, slave_id, 0, 0, 0.0f);
     msleep(500);
 }
 
 
-void demo_new_teaching_mode(DeviceHandler *handle, uint8_t slave_id) {
+void demo_teaching_mode(DeviceHandler *handle, uint8_t slave_id) {
     printf("\n=== Teaching Mode ===\n");
 
-    // Note: Python sdk uses v3_set_teaching_mode(True) via V3ControlMode 6 or similar
+    // Note: Python sdk uses revo3_set_teaching_mode(True) via V3ControlMode 6 or similar
     // We can simulate it by setting mode to Damping=0 or MIT with 0 Kp/Kd
     printf("  Setting all joints to 0 Kp/Kd for compliance...\n");
     float zeros[21] = {0};
@@ -230,16 +230,29 @@ void demo_new_teaching_mode(DeviceHandler *handle, uint8_t slave_id) {
     stark_revo3_set_all_mit_kd(handle, slave_id, kds);
 }
 
+void demo_config(DeviceHandler *handle, uint8_t slave_id) {
+    printf("\n=== Configuration ===\n");
+    float max_curr;
+    if (stark_revo3_get_global_protect_current(handle, slave_id, &max_curr) == 0) {
+        printf("  Global protect current: %.1f mA\n", max_curr);
+    }
+    printf("  Auto calibration: %d\n", stark_revo3_get_auto_calibration(handle, slave_id));
+    printf("  Auto clear motor error: %d\n", stark_revo3_get_auto_clear_motor_error(handle, slave_id));
+    printf("  Touch screen enabled: %d\n", stark_revo3_get_touch_screen(handle, slave_id));
+    printf("  Software e-stop: %d\n", stark_revo3_get_software_e_stop(handle, slave_id));
+    printf("  Use broadcast ID: %d\n", stark_revo3_get_use_broadcast_id(handle, slave_id));
+}
+
 void demo_status_monitor(DeviceHandler *handle, uint8_t slave_id, int count) {
     printf("\n=== Status Monitor (%d reads) ===\n", count);
 
     for (int i = 0; i < count && keep_running; i++) {
-        CV3MotorStatusData *status = stark_v3_get_motor_status_data(handle, slave_id);
+        CRevo3MotorStatusData *status = stark_revo3_get_motor_status_data(handle, slave_id);
         if (status) {
             printf("  [%d] pos:", i);
             for (int j = 0; j < 5; j++) printf(" %.1f", status->positions[j]);
             printf("\n");
-            free_v3_motor_status_data(status);
+            free_revo3_motor_status_data(status);
         }
         msleep(200);
     }
@@ -259,23 +272,24 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Verify V3 device
+    // Verify Revo3 device
     if (!stark_uses_revo3_motor_api(ctx.hw_type)) {
         printf("Warning: Device is not Revo3 (hw_type=%d)\n", ctx.hw_type);
-        printf("V3 APIs may not work correctly on this device.\n");
+        printf("Revo3 APIs may not work correctly on this device.\n");
     }
 
     // Run demos
     demo_device_info(ctx.handle, ctx.slave_id);
+    demo_config(ctx.handle, ctx.slave_id);
     demo_motor_status(ctx.handle, ctx.slave_id);
 
-    demo_new_single_joint(ctx.handle, ctx.slave_id);
-    demo_new_multi_joint(ctx.handle, ctx.slave_id);
-    demo_new_mit_control(ctx.handle, ctx.slave_id);
-    demo_new_multi_mit(ctx.handle, ctx.slave_id);
-    demo_new_batch_mit(ctx.handle, ctx.slave_id);
-    demo_new_impedance_damping(ctx.handle, ctx.slave_id);
-    demo_new_teaching_mode(ctx.handle, ctx.slave_id);
+    demo_single_joint(ctx.handle, ctx.slave_id);
+    demo_multi_joint(ctx.handle, ctx.slave_id);
+    demo_mit_control(ctx.handle, ctx.slave_id);
+    demo_multi_mit(ctx.handle, ctx.slave_id);
+    demo_batch_mit(ctx.handle, ctx.slave_id);
+    demo_impedance_damping(ctx.handle, ctx.slave_id);
+    demo_teaching_mode(ctx.handle, ctx.slave_id);
 
     // System status
     printf("\n=== System Status ===\n");

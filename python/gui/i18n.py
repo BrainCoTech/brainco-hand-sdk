@@ -338,7 +338,7 @@ TRANSLATIONS_EN = {
     "dfu_reset_success_msg": "DFU state reset, ready to start over.",
     "dfu_reset_fail_msg": "Reset failed: {error}",
     "dfu_state_reset": "State reset successfully",
-    
+
     "dfu_overlay_warning": "⚠ Firmware upgrading, do not operate...",
     "dfu_status_warning": "⚠ DFU upgrading, do not disconnect...",
     "dfu_wait_reconnect": "DFU completed - Waiting for device to restart and reconnect...",
@@ -395,7 +395,7 @@ TRANSLATIONS_EN = {
     "finger_thumb_base": "Thumb Base",
     "finger_thumb_aux": "Thumb Aux",
 
-    # V3 Motor Settings
+    # Revo3 Motor Settings
     "v3_settings": "⚙ Settings",
 
     "v3_position_limits": "Position Limits",
@@ -428,15 +428,15 @@ TRANSLATIONS_EN = {
     "v3_overheat": "Overheat!",
     "v3_warm": "Warm",
     "v3_no_errors": "No Errors",
-    
+
     # Modes
     "mode_impedance": "Impedance",
     "mode_damping": "Damping",
     "mode_mit": "MIT",
-    "mode_trajectory": "Trajectory",
+    "mode_trajectory": "Trajectory Planning",
     "communication": "Communication",
     "revo3_status": "Revo3 Status",
-    
+
     "system_state": "System State",
     "error_code": "Error Code",
     "current_ma": "Current (mA)",
@@ -446,9 +446,9 @@ TRANSLATIONS_EN = {
     "motor_info": "Motor Info",
     "motor_id": "Motor ID",
     "motor": "Motor",
-    
+
     "timing_step": "Step",
-    
+
     # Touch Sensor Panel
     "touch_summary": "Summary",
     "touch_palm": "Palm",
@@ -457,18 +457,18 @@ TRANSLATIONS_EN = {
     "touch_middle": "Middle",
     "touch_ring": "Ring",
     "touch_pinky": "Pinky",
-    
+
     # Timing Test
     "timing_control": "Control",
     "timing_signal": "Signal",
     "timing_sine": "Sine",
     "timing_square": "Square",
     "timing_triangle": "Triangle",
-    
+
     # System Config
     "config_modbus": "Modbus",
     "config_revo3_status": "Revo3 Status",
-    
+
     "v3_reset_finger_defaults": "↩ Reset Finger Defaults",
     "v3_touch_screen": "Touch Screen",
     "v3_teaching_mode": "🎓 Teaching Mode",
@@ -554,8 +554,8 @@ TRANSLATIONS_ZH = {
 
     # Motor Control Panel
     "motor_control": "电机控制",
-    "motor_control_v3": "电机控制 (V3)",
-    "v3_motor_config": "关节参数配置 (V3)",
+    "motor_control_v3": "电机控制 (Revo3)",
+    "v3_motor_config": "关节参数配置 (Revo3)",
     "control_mode": "控制模式",
     "mode": "模式",
     "mode_position": "位置",
@@ -847,7 +847,7 @@ TRANSLATIONS_ZH = {
     "finger_thumb_base": "拇指根部",
     "finger_thumb_aux": "拇指辅助",
 
-    # V3 Motor Settings
+    # Revo3 Motor Settings
     "v3_settings": "⚙ 设置",
 
     "v3_position_limits": "位置限制",
@@ -880,15 +880,15 @@ TRANSLATIONS_ZH = {
     "v3_overheat": "过热！",
     "v3_warm": "偏高",
     "v3_no_errors": "无错误",
-    
+
     # Modes
     "mode_impedance": "阻抗",
     "mode_damping": "阻尼",
     "mode_mit": "MIT",
-    "mode_trajectory": "轨迹模式",
+    "mode_trajectory": "轨迹规划",
     "communication": "通信设置",
     "revo3_status": "Revo3 状态",
-    
+
     "system_state": "系统状态",
     "error_code": "错误码",
     "current_ma": "电流 (mA)",
@@ -898,9 +898,9 @@ TRANSLATIONS_ZH = {
     "motor_info": "马达信息",
     "motor_id": "马达 ID",
     "motor": "马达",
-    
+
     "timing_step": "阶跃",
-    
+
     # Touch Sensor Panel
     "touch_summary": "总览",
     "touch_palm": "手掌",
@@ -909,19 +909,19 @@ TRANSLATIONS_ZH = {
     "touch_middle": "中指",
     "touch_ring": "无名指",
     "touch_pinky": "小拇指",
-    
+
     # Timing Test
     "timing_control": "控制",
     "timing_signal": "信号",
     "timing_sine": "正弦波",
     "timing_square": "方波",
     "timing_triangle": "三角波",
-    
+
     # System Config
     "config_modbus": "Modbus",
     "config_revo3_status": "Revo3状态",
-    
-    "v3_reset_finger_defaults": "↩ 手指恢复默认",
+
+    "v3_reset_finger_defaults": "↩ 恢复参数默认值",
     "v3_touch_screen": "触屏功能",
     "v3_teaching_mode": "🎓 示教模式",
     "v3_software_e_stop": "🛑 软件急停",

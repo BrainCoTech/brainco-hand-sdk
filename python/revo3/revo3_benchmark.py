@@ -108,7 +108,7 @@ async def main(port=None, mode="both"):
 
             if do_read:
                 # 2. READ: Request all position data
-                positions = await client.v3_get_all_motor_positions(slave_id)
+                positions = await client.revo3_get_all_motor_positions(slave_id)
                 pos_str = f"{positions[3]:.1f}°"
 
             total_loops += 1

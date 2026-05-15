@@ -1,6 +1,6 @@
 # Revo3 Python API Reference
 
-Revo3 (V3) 21-DoF Dexterous Hand — Motor Control & Tactile Sensor API
+Revo3 (Revo3) 21-DoF Dexterous Hand — Motor Control & Tactile Sensor API
 
 > SDK: `bc-stark-sdk >= 1.3.5` · Protocol: Modbus RTU @ 5 Mbps
 
@@ -30,8 +30,8 @@ Revo3 (V3) 21-DoF Dexterous Hand — Motor Control & Tactile Sensor API
   - [All Touch Data](#all-touch-data)
   - [Reset Pressure](#reset-pressure)
 - [DataCollector (High-Frequency)](#datacollector-high-frequency)
-  - [V3 Basic (Motor Only)](#v3-basic-motor-only)
-  - [V3 Full (Motor + Touch)](#v3-full-motor--touch)
+  - [Revo3 Basic (Motor Only)](#v3-basic-motor-only)
+  - [Revo3 Full (Motor + Touch)](#v3-full-motor--touch)
   - [Dynamic Frequency Control](#dynamic-frequency-control)
   - [Buffers](#buffers)
 - [Hardware Layout](#hardware-layout)
@@ -53,14 +53,14 @@ Revo3 (V3) 21-DoF Dexterous Hand — Motor Control & Tactile Sensor API
 
 | API | Notes |
 |-----|-------|
-| `v3_set_motor_position` | SingleJointId mode=0 |
-| `v3_set_motor_velocity` | SingleJointId mode=1 |
-| `v3_set_motor_current` | SingleJointId mode=2 |
-| `v3_set_motor_mit` | Atomic MIT: MitJointId 1050~1055 |
-| `v3_set_all_motor_positions` | MultiJoint mode=0, 21 joints |
-| `v3_set_all_motor_velocities` | MultiJoint mode=1, 21 joints |
-| `v3_set_all_motor_currents` | MultiJoint mode=2, 21 joints |
-| `v3_get_motor_status_data` | 5×21 register reads |
+| `revo3_set_motor_position` | SingleJointId mode=0 |
+| `revo3_set_motor_velocity` | SingleJointId mode=1 |
+| `revo3_set_motor_current` | SingleJointId mode=2 |
+| `revo3_set_motor_mit` | Atomic MIT: MitJointId 1050~1055 |
+| `revo3_set_all_motor_positions` | MultiJoint mode=0, 21 joints |
+| `revo3_set_all_motor_velocities` | MultiJoint mode=1, 21 joints |
+| `revo3_set_all_motor_currents` | MultiJoint mode=2, 21 joints |
+| `revo3_get_motor_status_data` | 5×21 register reads |
 | `revo3_set_*` | Extended APIs (prefixed `revo3_`) |
 
 Extended APIs (prefixed with `revo3_`):
@@ -71,9 +71,9 @@ Extended APIs (prefixed with `revo3_`):
 | `revo3_multi_joint_control(mode, params[21])` | Low-level multi-joint |
 | `revo3_mit_control(joint_id, kp, kd, pos, vel, torque_ff)` | Atomic MIT control |
 | `revo3_multi_mit_set_joint(joint_id, kp, kd, pos, vel, tor)` | Multi-MIT: set one joint (1100+N×5) |
-| `revo3_multi_mit_set_all(kp, kd, pos, vel, tor)` | Multi-MIT: all 21 joints interleaved (1100~1204) |
+| `revo3_multi_mit_set_all[_without_retry](kp, kd, pos, vel, tor)` | Multi-MIT: all 21 joints interleaved (1100~1204) |
 | `revo3_set_all_mit_kp/kd/positions/velocities/torques(values)` | Batch MIT single-parameter (1300~1404) |
-| `revo3_set_all_mit_batch(kp, kd, pos, vel, tor)` | Batch MIT all 5 params grouped (1300~1404) |
+| `revo3_set_all_mit_batch[_without_retry](kp, kd, pos, vel, tor)` | Batch MIT all 5 params grouped (1300~1404) |
 | `revo3_finger_control(finger_id, mode, params[4])` | Non-thumb finger control (1500~1505) |
 | `revo3_thumb_control(mode, params[5])` | Thumb control (1510~1515) |
 | `revo3_finger_mit_control(finger_id, params[20])` | Finger MIT (1520~1540) |
@@ -126,14 +126,14 @@ async def main():
     ctx = await sdk.modbus_open(port, baudrate)
 
     # Read motor status
-    status = await ctx.v3_get_motor_status_data(slave_id)
+    status = await ctx.revo3_get_motor_status_data(slave_id)
     print(f"Positions: {status.positions}")
 
     # Position control (motor 0 → 45°)
-    await ctx.v3_set_motor_position(slave_id, 0, 45.0)
+    await ctx.revo3_set_motor_position(slave_id, 0, 45.0)
 
     # Read touch summary
-    summary = await ctx.v3_get_touch_summary(slave_id)
+    summary = await ctx.revo3_get_touch_summary(slave_id)
     print(f"Touch summary: {summary}")
 
     sdk.modbus_close(ctx)
@@ -198,42 +198,42 @@ is_revo3 = device_info.uses_revo3_motor_api()  # → bool
 ### Device Info
 
 ```python
-fw_version  = await ctx.v3_get_firmware_version(slave_id)   # → str
-serial_num  = await ctx.v3_get_serial_number(slave_id)       # → str
-hand_type   = await ctx.v3_get_hand_type(slave_id)           # → int/str
-temperature = await ctx.v3_get_board_temperature(slave_id)   # → float (°C)
+fw_version  = await ctx.revo3_get_firmware_version(slave_id)   # → str
+serial_num  = await ctx.revo3_get_serial_number(slave_id)       # → str
+hand_type   = await ctx.revo3_get_hand_type(slave_id)           # → int/str
+temperature = await ctx.revo3_get_board_temperature(slave_id)   # → float (°C)
 ```
 
 ### Motor Status
 
 ```python
 # Read all 23 motors status in a single call
-status = await ctx.v3_get_motor_status_data(slave_id)
-# V3MotorStatusData fields:
+status = await ctx.revo3_get_motor_status_data(slave_id)
+# Revo3MotorStatusData fields:
 #   .positions   → List[float]  (23 values, degrees)
 #   .velocities  → List[float]  (23 values)
 #   .currents    → List[float]  (23 values, Amperes)
 
 # Read positions only
-positions = await ctx.v3_get_all_motor_positions(slave_id)  # → List[float] (23 values)
+positions = await ctx.revo3_get_all_motor_positions(slave_id)  # → List[float] (23 values)
 ```
 
 ### Position Control
 
 ```python
 # Single motor position (degrees, float)
-await ctx.v3_set_motor_position(slave_id, motor_id, degrees)
+await ctx.revo3_set_motor_position(slave_id, motor_id, degrees)
 # motor_id: 0~22
 # degrees: float
 #   Motor 0~18, 21~22: range [-90.0, 90.0]
 #   Motor 19~20 (differential): range [-105.0, 105.0]
 
 # Example
-await ctx.v3_set_motor_position(slave_id, 0, 45.0)
+await ctx.revo3_set_motor_position(slave_id, 0, 45.0)
 
 # Batch: set all 23 motors at once
 positions = [30.0] * 23
-await ctx.v3_set_all_motor_positions(slave_id, positions)
+await ctx.revo3_set_all_motor_positions(slave_id, positions)
 # positions: List[float] of exactly 23 values
 ```
 
@@ -241,28 +241,28 @@ await ctx.v3_set_all_motor_positions(slave_id, positions)
 
 ```python
 # Single motor velocity
-await ctx.v3_set_motor_velocity(slave_id, motor_id, velocity)
+await ctx.revo3_set_motor_velocity(slave_id, motor_id, velocity)
 # motor_id: 0~22
 # velocity: float, range [0.0, 1000.0]
 
 # Example
-await ctx.v3_set_motor_velocity(slave_id, 0, 100.0)
+await ctx.revo3_set_motor_velocity(slave_id, 0, 100.0)
 # Stop: set velocity to 0.0
-await ctx.v3_set_motor_velocity(slave_id, 0, 0.0)
+await ctx.revo3_set_motor_velocity(slave_id, 0, 0.0)
 ```
 
 ### Current Control
 
 ```python
 # Single motor current (mA)
-await ctx.v3_set_motor_current(slave_id, motor_id, current)
+await ctx.revo3_set_motor_current(slave_id, motor_id, current)
 # motor_id: 0~22
 # current: float, range [-1024, 1024] mA
 
 # Example
-await ctx.v3_set_motor_current(slave_id, 0, 500.0)  # 500 mA
+await ctx.revo3_set_motor_current(slave_id, 0, 500.0)  # 500 mA
 # Stop: set current to 0.0
-await ctx.v3_set_motor_current(slave_id, 0, 0.0)
+await ctx.revo3_set_motor_current(slave_id, 0, 0.0)
 ```
 
 ### MIT Impedance Control
@@ -283,7 +283,7 @@ MIT (Mini Cheetah) impedance control formula:
 
 ```python
 # Single motor MIT control
-await ctx.v3_set_motor_mit(
+await ctx.revo3_set_motor_mit(
     slave_id,
     motor_id,          # 0~22
     position,          # float, degrees
@@ -294,10 +294,10 @@ await ctx.v3_set_motor_mit(
 )
 
 # Example: Motor 0, pos=45°, vel=0, cur=500mA, Kp=5.0, Kd=0.5
-await ctx.v3_set_motor_mit(slave_id, 0, 45.0, 0.0, 500.0, 5.0, 0.5)
+await ctx.revo3_set_motor_mit(slave_id, 0, 45.0, 0.0, 500.0, 5.0, 0.5)
 
 # Batch: all 23 motors in a single write (115 Modbus registers)
-await ctx.v3_set_all_motor_mit(
+await ctx.revo3_set_all_motor_mit(
     slave_id,
     velocities,        # List[float], 23 values
     positions,         # List[float], 23 values
@@ -307,7 +307,7 @@ await ctx.v3_set_all_motor_mit(
 )
 
 # Batch: set Kp/Kd only (46 registers)
-await ctx.v3_set_all_motor_mit_params(
+await ctx.revo3_set_all_motor_mit_params(
     slave_id,
     kp_values,         # List[float], 23 values
     kd_values          # List[float], 23 values
@@ -324,11 +324,11 @@ pose = sdk.FingertipPose(x, y, z, rx, ry, rz)
 # All axes range: [-100.0, 100.0]
 
 # Set single fingertip pose
-await ctx.v3_set_fingertip_pose(slave_id, finger_id, pose)
+await ctx.revo3_set_fingertip_pose(slave_id, finger_id, pose)
 # finger_id: 0=Thumb, 1=Index, 2=Middle, 3=Ring, 4=Pinky
 
 # Read all fingertip poses
-poses = await ctx.v3_get_all_fingertip_poses(slave_id)
+poses = await ctx.revo3_get_all_fingertip_poses(slave_id)
 # → List[FingertipPose] (5 items)
 # Each FingertipPose has: .x, .y, .z, .rx, .ry, .rz
 ```
@@ -337,16 +337,15 @@ poses = await ctx.v3_get_all_fingertip_poses(slave_id)
 
 ```python
 # Calibration
-await ctx.v3_set_calibration_current(slave_id, current)  # float, mA
-await ctx.v3_manual_calibration(slave_id)                 # Trigger manual calibration
-await ctx.v3_set_auto_calibration(slave_id, enabled)      # bool
+await ctx.revo3_set_calibration_current(slave_id, current)  # float, mA
+await ctx.revo3_manual_calibration(slave_id)                 # Trigger manual calibration
+await ctx.revo3_set_auto_calibration(slave_id, enabled)      # bool
 
 # Motion limits
-# await ctx.v3_set_max_acceleration(slave_id, accel)     # REMOVED in V1.4
-await ctx.v3_set_max_continuous_current(slave_id, current) # float, mA
+await ctx.revo3_set_global_protect_current(slave_id, current) # float, mA
 
 # Error handling
-await ctx.v3_clear_motor_errors(slave_id)
+await ctx.revo3_clear_motor_errors(slave_id)
 
 # Protection & configuration
 await ctx.revo3_set_global_protect_current(slave_id, current)      # float, mA
@@ -471,19 +470,19 @@ Summary register provides 16 aggregated values:
 ```python
 # Enable all 11 modules (bitmask: bits 0~10)
 all_bits = 0x7FF  # 0b111_1111_1111
-await ctx.v3_set_all_touch_modules_enabled(slave_id, all_bits)
+await ctx.revo3_set_all_touch_modules_enabled(slave_id, all_bits)
 
 # Read enabled modules
-enabled_bits = await ctx.v3_get_all_touch_modules_enabled(slave_id)
+enabled_bits = await ctx.revo3_get_all_touch_modules_enabled(slave_id)
 # → int (bitmask), bit i = module i enabled
 
 # Enable/disable single module
-await ctx.v3_set_touch_module_enabled(slave_id, module_id, enabled)
+await ctx.revo3_set_touch_module_enabled(slave_id, module_id, enabled)
 # module_id: 0~10
 # enabled: bool
 
 # Read single module enabled state
-is_enabled = await ctx.v3_get_touch_module_enabled(slave_id, module_id)
+is_enabled = await ctx.revo3_get_touch_module_enabled(slave_id, module_id)
 # → bool
 ```
 
@@ -491,11 +490,11 @@ is_enabled = await ctx.v3_get_touch_module_enabled(slave_id, module_id)
 
 ```python
 # Set data output type
-await ctx.v3_set_touch_data_type(slave_id, data_type)
+await ctx.revo3_set_touch_data_type(slave_id, data_type)
 # data_type: 0 = AD Raw, 1 = Calibrated
 
 # Read current data type
-data_type = await ctx.v3_get_touch_data_type(slave_id)
+data_type = await ctx.revo3_get_touch_data_type(slave_id)
 # → int (0 or 1)
 ```
 
@@ -503,7 +502,7 @@ data_type = await ctx.v3_get_touch_data_type(slave_id)
 
 ```python
 # Read summary force values (16 aggregated pad values)
-summary = await ctx.v3_get_touch_summary(slave_id)
+summary = await ctx.revo3_get_touch_summary(slave_id)
 # → List[int] (16 values, in mN)
 # Layout: [palm, thumb_tip, thumb_upad, thumb_lpad, index_tip, ...]
 ```
@@ -512,12 +511,12 @@ summary = await ctx.v3_get_touch_summary(slave_id)
 
 ```python
 # Read single module pressure array
-data = await ctx.v3_get_touch_module_data(slave_id, module_id)
+data = await ctx.revo3_get_touch_module_data(slave_id, module_id)
 # module_id: 0~10
 # → List[int] (variable length per module, see table above)
 
 # Example: read palm (29 points)
-palm_data = await ctx.v3_get_touch_module_data(slave_id, 0)
+palm_data = await ctx.revo3_get_touch_module_data(slave_id, 0)
 print(f"Palm: {len(palm_data)} points, total={sum(palm_data)}")
 ```
 
@@ -525,22 +524,22 @@ print(f"Palm: {len(palm_data)} points, total={sum(palm_data)}")
 
 ```python
 # Read all data at once (summary + all 11 module arrays)
-touch_data = await ctx.v3_get_all_touch_data(slave_id)
-# V3TouchData fields:
+touch_data = await ctx.revo3_get_all_touch_data(slave_id)
+# Revo3TouchData fields:
 #   .summary  → List[int] (16 values)
 #   .modules  → List[List[int]] (11 modules, each with variable points)
 
-# V3TouchData is also returned by V3TouchDataBuffer (DataCollector)
+# Revo3TouchData is also returned by Revo3TouchDataBuffer (DataCollector)
 ```
 
 ### Reset Pressure
 
 ```python
 # Clear single module pressure data
-await ctx.v3_reset_touch_pressure(slave_id, module_id)  # module_id: 0~10
+await ctx.revo3_reset_touch_pressure(slave_id, module_id)  # module_id: 0~10
 
 # Clear all modules
-await ctx.v3_reset_all_touch_pressure(slave_id)
+await ctx.revo3_reset_all_touch_pressure(slave_id)
 ```
 
 ---
@@ -549,16 +548,16 @@ await ctx.v3_reset_all_touch_pressure(slave_id)
 
 For real-time monitoring, use `DataCollector` which runs a background thread polling motor/touch data into lock-free ring buffers.
 
-### V3 Basic (Motor Only)
+### Revo3 Basic (Motor Only)
 
 ```python
 # Create buffer
-motor_buffer = sdk.V3MotorStatusBuffer(max_size=1000)
+motor_buffer = sdk.Revo3MotorStatusBuffer(max_size=1000)
 
 # Create and start collector
-collector = sdk.DataCollector.new_v3_basic(
+collector = sdk.DataCollector.new_revo3_basic(
     ctx=ctx,                       # DeviceContext
-    motor_buffer=motor_buffer,     # V3MotorStatusBuffer
+    motor_buffer=motor_buffer,     # Revo3MotorStatusBuffer
     slave_id=slave_id,             # int
     motor_frequency=200,           # Hz (macOS: 200, Linux: 2000)
     enable_stats=False             # bool, print stats to console
@@ -566,26 +565,26 @@ collector = sdk.DataCollector.new_v3_basic(
 collector.start()
 
 # Read data (non-blocking)
-latest = motor_buffer.peek_latest()  # → V3MotorStatusData or None
+latest = motor_buffer.peek_latest()  # → Revo3MotorStatusData or None
 if latest:
     print(f"Position[0]: {latest.positions[0]}")
 
-all_data = motor_buffer.pop_all()    # → List[V3MotorStatusData], clears buffer
+all_data = motor_buffer.pop_all()    # → List[Revo3MotorStatusData], clears buffer
 
 # Stop
 collector.stop()
 collector.wait()  # Wait for background thread to finish
 ```
 
-### V3 Full (Motor + Touch)
+### Revo3 Full (Motor + Touch)
 
 ```python
 # Create buffers
-motor_buffer = sdk.V3MotorStatusBuffer(max_size=1000)
-touch_buffer = sdk.V3TouchDataBuffer(max_size=100)
+motor_buffer = sdk.Revo3MotorStatusBuffer(max_size=1000)
+touch_buffer = sdk.Revo3TouchDataBuffer(max_size=100)
 
 # Create collector with both motor and touch
-collector = sdk.DataCollector.new_v3_full(
+collector = sdk.DataCollector.new_revo3_full(
     ctx=ctx,
     motor_buffer=motor_buffer,
     touch_buffer=touch_buffer,
@@ -597,7 +596,7 @@ collector = sdk.DataCollector.new_v3_full(
 collector.start()
 
 # Read touch data
-touch_list = touch_buffer.pop_all()  # → List[V3TouchData]
+touch_list = touch_buffer.pop_all()  # → List[Revo3TouchData]
 for td in touch_list:
     print(f"Summary: {td.summary}")   # 16 values
     print(f"Modules: {len(td.modules)}")  # 11 modules
@@ -618,15 +617,15 @@ collector.update_touch_frequency(0)     # Disable touch collection
 
 | Buffer Class            | Item Type            | Methods                                              |
 |-------------------------|----------------------|------------------------------------------------------|
-| `V3MotorStatusBuffer`   | `V3MotorStatusData`  | `peek_latest()`, `pop_all()`, `clear()`, `len()`     |
-| `V3TouchDataBuffer`     | `V3TouchData`        | `peek_latest()`, `pop_all()`, `clear()`, `len()`     |
+| `Revo3MotorStatusBuffer`   | `Revo3MotorStatusData`  | `peek_latest()`, `pop_all()`, `clear()`, `len()`     |
+| `Revo3TouchDataBuffer`     | `Revo3TouchData`        | `peek_latest()`, `pop_all()`, `clear()`, `len()`     |
 
-**V3MotorStatusData** fields:
+**Revo3MotorStatusData** fields:
 - `.positions` → `List[float]` (23 values, degrees)
 - `.velocities` → `List[float]` (23 values)
 - `.currents` → `List[float]` (23 values, mA)
 
-**V3TouchData** fields:
+**Revo3TouchData** fields:
 - `.summary` → `List[int]` (16 values, mN)
 - `.modules` → `List[List[int]]` (11 modules)
 
@@ -760,7 +759,7 @@ python gui/main.py --revo3-modbus
 | RS485 4Mbps baudrate | Use 2Mbps or 5Mbps |
 | Admittance control (mode 3) | Use Impedance (4) or Damping (5) |
 | PositionTime control (mode 6) | Use `revo3_move_hand()` (host-side quintic) |
-| MaxAcceleration (register 115) | `v3_set_max_acceleration()` raises error |
+| MaxAcceleration (register 115) | `revo3_set_max_acceleration()` raises error |
 
 ## Motor Status Bitmask (V1.4)
 

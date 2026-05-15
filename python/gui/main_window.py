@@ -11,10 +11,10 @@ from PySide6.QtGui import QAction, QActionGroup, QPainter, QColor
 
 from .i18n import get_i18n, tr
 from .styles import COLORS
-from .connection_panel import ConnectionPanel
+from .connection_panel import ConnectionPanel, run_in_new_loop
 from .motor_control_panel import MotorControlPanel
-from .motor_control_panel_revo3 import V3MotorControlPanel
-from .motor_config_panel_revo3 import V3MotorConfigPanel
+from .motor_control_panel_revo3 import Revo3MotorControlPanel
+from .motor_config_panel_revo3 import Revo3MotorConfigPanel
 from .universal_touch_panel import UniversalTouchPanel
 from .data_collector_panel import DataCollectorPanel
 from .system_config_panel import SystemConfigPanel
@@ -165,15 +165,15 @@ class MainWindow(QMainWindow):
         self.motor_panel = MotorControlPanel()
         self.tabs.addTab(self.motor_panel, "🎮 " + tr("motor_control"))
 
-        # V3 motor panel (hidden by default, shown for Revo3 devices)
-        self.motor_panel_v3 = V3MotorControlPanel()
-        self.tabs.addTab(self.motor_panel_v3, "🎮 " + tr("motor_control_v3"))
-        self.tabs.setTabVisible(self.tabs.indexOf(self.motor_panel_v3), False)
+        # Revo3 motor panel (hidden by default, shown for Revo3 devices)
+        self.motor_panel_revo3 = Revo3MotorControlPanel()
+        self.tabs.addTab(self.motor_panel_revo3, "🎮 " + tr("motor_control_v3"))
+        self.tabs.setTabVisible(self.tabs.indexOf(self.motor_panel_revo3), False)
 
-        # V3 Motor Config Panel
-        self.config_panel_v3 = V3MotorConfigPanel()
-        self.tabs.addTab(self.config_panel_v3, "⚙ " + tr("v3_motor_config"))
-        self.tabs.setTabVisible(self.tabs.indexOf(self.config_panel_v3), False)
+        # Revo3 Motor Config Panel
+        self.config_panel_revo3 = Revo3MotorConfigPanel()
+        self.tabs.addTab(self.config_panel_revo3, "⚙ " + tr("v3_motor_config"))
+        self.tabs.setTabVisible(self.tabs.indexOf(self.config_panel_revo3), False)
 
         # Unified Touch Sensor Panel
         self.touch_panel = UniversalTouchPanel()
@@ -202,15 +202,15 @@ class MainWindow(QMainWindow):
 
         # Pre-configure tab visibility for revo3_modbus mode
         if self.revo3_modbus:
-            # Show V3 motor & teaching panel, hide V1/V2 motor panel
+            # Show Revo3 motor & teaching panel, hide V1/V2 motor panel
             self.tabs.setTabVisible(self.tabs.indexOf(self.motor_panel), False)
-            self.tabs.setTabVisible(self.tabs.indexOf(self.motor_panel_v3), True)
+            self.tabs.setTabVisible(self.tabs.indexOf(self.motor_panel_revo3), True)
             self.tabs.setTabVisible(self.tabs.indexOf(self.teaching_panel), True)
-            self.tabs.setTabVisible(self.tabs.indexOf(self.config_panel_v3), True)
+            self.tabs.setTabVisible(self.tabs.indexOf(self.config_panel_revo3), True)
             # Hide action sequence (not supported on Revo3)
             self.tabs.setTabVisible(self.tabs.indexOf(self.action_panel), False)
-            # Default to V3 motor tab
-            self.tabs.setCurrentIndex(self.tabs.indexOf(self.motor_panel_v3))
+            # Default to Revo3 motor tab
+            self.tabs.setCurrentIndex(self.tabs.indexOf(self.motor_panel_revo3))
 
         # Data collector panel (not in tabs, opened from menu)
         self.collector_panel = DataCollectorPanel()
@@ -276,10 +276,10 @@ class MainWindow(QMainWindow):
         self.statusbar = QStatusBar()
         self.setStatusBar(self.statusbar)
 
-        # Device info label (left side - ID and firmware version)
+        # Device info label (right side - ID and firmware version)
         self.device_info_label = QLabel("")
         self.device_info_label.setStyleSheet(f"color: {COLORS['text_muted']}; margin-right: 10px;")
-        self.statusbar.addWidget(self.device_info_label)  # addWidget = left side
+        self.statusbar.addPermanentWidget(self.device_info_label)  # Permanent stays visible during showMessage
 
         # Language switch button (right side)
         from PySide6.QtWidgets import QPushButton
@@ -337,8 +337,8 @@ class MainWindow(QMainWindow):
         # Update panels
         self.connection_panel.update_texts()
         self.motor_panel.update_texts()
-        self.motor_panel_v3.update_texts()
-        self.config_panel_v3.update_texts()
+        self.motor_panel_revo3.update_texts()
+        self.config_panel_revo3.update_texts()
         self.touch_panel.update_texts()
         self.collector_panel.update_texts()
         self.action_panel.update_texts()
@@ -350,8 +350,8 @@ class MainWindow(QMainWindow):
         # Update tab names
         tab_names = [
             (self.motor_panel, "🎮 " + tr("motor_control")),
-            (self.motor_panel_v3, "🎮 " + tr("motor_control_v3")),
-            (self.config_panel_v3, "⚙ " + tr("v3_motor_config")),
+            (self.motor_panel_revo3, "🎮 " + tr("motor_control_v3")),
+            (self.config_panel_revo3, "⚙ " + tr("v3_motor_config")),
             (self.touch_panel, "👆 " + tr("touch_sensor")),
             (self.timing_panel, "\u23f1 " + tr("timing_test")),
             (self.action_panel, "🎬 " + tr("action_sequence")),
@@ -374,7 +374,7 @@ class MainWindow(QMainWindow):
         """Stop DataCollector before serial port is closed"""
         self.shared_data.stop()
 
-    def _on_connected(self, device, slave_id, device_info, protocol):
+    def _on_connected(self, device, slave_id, device_info, protocol_key, protocol):
         """Device connected"""
         self.device = device
         self.slave_id = slave_id
@@ -397,7 +397,7 @@ class MainWindow(QMainWindow):
         self.tabs.blockSignals(True)
 
         # Determine protocol-based visibility
-        is_ethercat = (protocol == "EtherCAT")
+        is_ethercat = (protocol_key == "ethercat")
 
         # Show/hide tabs based on device capability
         touch_tab_index = self.tabs.indexOf(self.touch_panel)
@@ -425,22 +425,22 @@ class MainWindow(QMainWindow):
         if config_tab_index >= 0:
             self.tabs.setTabVisible(config_tab_index, not is_ethercat)
 
-        # Show V3 motor panel for Revo3, V1/V2 panel for others
+        # Show Revo3 motor panel for Revo3, V1/V2 panel for others
         motor_tab_index = self.tabs.indexOf(self.motor_panel)
-        motor_v3_tab_index = self.tabs.indexOf(self.motor_panel_v3)
+        motor_revo3_tab_index = self.tabs.indexOf(self.motor_panel_revo3)
         if motor_tab_index >= 0:
             self.tabs.setTabVisible(motor_tab_index, not is_revo3)
-        if motor_v3_tab_index >= 0:
-            self.tabs.setTabVisible(motor_v3_tab_index, is_revo3)
+        if motor_revo3_tab_index >= 0:
+            self.tabs.setTabVisible(motor_revo3_tab_index, is_revo3)
 
         # Show Teaching & Config panel for Revo3 only
         teaching_tab_index = self.tabs.indexOf(self.teaching_panel)
         if teaching_tab_index >= 0:
             self.tabs.setTabVisible(teaching_tab_index, is_revo3)
 
-        config_v3_tab_index = self.tabs.indexOf(self.config_panel_v3)
-        if config_v3_tab_index >= 0:
-            self.tabs.setTabVisible(config_v3_tab_index, is_revo3)
+        config_revo3_tab_index = self.tabs.indexOf(self.config_panel_revo3)
+        if config_revo3_tab_index >= 0:
+            self.tabs.setTabVisible(config_revo3_tab_index, is_revo3)
 
         # Show Timing Test panel only for Revo1/2, or Revo3.
         timing_tab_index = self.tabs.indexOf(self.timing_panel)
@@ -456,8 +456,8 @@ class MainWindow(QMainWindow):
         # Pass device and shared_data to panels
         self.motor_panel.set_device(device, slave_id, device_info, self.shared_data)
         if is_revo3:
-            self.motor_panel_v3.set_device(device, slave_id, device_info, self.shared_data)
-            self.config_panel_v3.set_device(device, slave_id, device_info, protocol, self.shared_data)
+            self.motor_panel_revo3.set_device(device, slave_id, device_info, self.shared_data)
+            self.config_panel_revo3.set_device(device, slave_id, device_info, protocol, self.shared_data)
             self.teaching_panel.set_device(device, slave_id, device_info, self.shared_data)
         self.touch_panel.set_device(device, slave_id, device_info, self.shared_data)
         self.collector_panel.set_device(device, slave_id, device_info, self.shared_data)
@@ -481,14 +481,14 @@ class MainWindow(QMainWindow):
             self.device_info_label.setText(" | ".join(info_parts))
 
             self.statusbar.showMessage(
-                f"Connected: {device_info.serial_number} | {protocol}"
+                f"Connected: {device_info.serial_number} | {protocol} | FW: {fw_str}"
             )
         else:
             self.device_info_label.setText(f"ID:{slave_id}")
             self.statusbar.showMessage(f"Connected via {protocol}")
 
         # Switch to the motor panel and restore tab signals
-        target = motor_v3_tab_index if is_revo3 else motor_tab_index
+        target = motor_revo3_tab_index if is_revo3 else motor_tab_index
         if target >= 0:
             self.tabs.setCurrentIndex(target)
         self.tabs.blockSignals(False)
@@ -518,8 +518,8 @@ class MainWindow(QMainWindow):
 
         # Clear device from panels (stops timers)
         self.motor_panel.clear_device()
-        self.motor_panel_v3.clear_device()
-        self.config_panel_v3.clear_device()
+        self.motor_panel_revo3.clear_device()
+        self.config_panel_revo3.clear_device()
         self.teaching_panel.clear_device()
         self.touch_panel.clear_device()
         self.collector_panel.clear_device()
@@ -531,8 +531,8 @@ class MainWindow(QMainWindow):
             idx = self.tabs.indexOf(panel)
             if idx >= 0:
                 self.tabs.setTabVisible(idx, True)
-        # Hide V3-only panels by default
-        for panel in [self.motor_panel_v3, self.teaching_panel, self.config_panel_v3]:
+        # Hide Revo3-only panels by default
+        for panel in [self.motor_panel_revo3, self.teaching_panel, self.config_panel_revo3]:
             idx = self.tabs.indexOf(panel)
             if idx >= 0:
                 self.tabs.setTabVisible(idx, False)
@@ -582,7 +582,11 @@ class MainWindow(QMainWindow):
 
         # Stop timers in panels to avoid conflicts during DFU
         self.motor_panel.clear_device()
+        self.motor_panel_revo3.clear_device()
+        self.config_panel_revo3.clear_device()
+        self.teaching_panel.clear_device()
         self.touch_panel.clear_device()
+        self.collector_panel.clear_device()
 
         # Disable all tabs except DFU
         dfu_index = self.tabs.indexOf(self.dfu_panel)
@@ -612,7 +616,7 @@ class MainWindow(QMainWindow):
 
             # Auto-reconnect after delay (device needs time to reboot)
             from PySide6.QtCore import QTimer
-            QTimer.singleShot(7000, self._auto_reconnect_after_dfu)
+            QTimer.singleShot(5000, self._auto_reconnect_after_dfu)
         else:
             self.statusbar.showMessage(tr("dfu_failed"))
 
@@ -620,10 +624,11 @@ class MainWindow(QMainWindow):
         """Auto-reconnect after DFU completion"""
         self.statusbar.showMessage(tr("status_reconnecting"))
 
-        # Clear connection panel state (ZQWL is already closed by SDK after DFU)
-        self.connection_panel.ctx = None
-        self.connection_panel.slave_id = None
-        self.connection_panel.protocol = None
+        # Release the old connection before auto-detect.
+        # Revo3 Modbus DFU keeps using the existing ctx during transfer, so the GUI
+        # must explicitly close the stale Modbus handle after the device reboots.
+        if self.connection_panel.ctx is not None:
+            self.connection_panel._on_disconnect()
 
         # Trigger auto-detect in connection panel
         self.connection_panel._on_auto_detect()
@@ -709,8 +714,8 @@ class MainWindow(QMainWindow):
 
         # Clear device from panels (stops timers)
         self.motor_panel.clear_device()
-        self.motor_panel_v3.clear_device()
-        self.config_panel_v3.clear_device()
+        self.motor_panel_revo3.clear_device()
+        self.config_panel_revo3.clear_device()
         self.teaching_panel.clear_device()
         self.touch_panel.clear_device()
         self.collector_panel.clear_device()
@@ -719,31 +724,24 @@ class MainWindow(QMainWindow):
         if self.connection_panel.ctx:
             try:
                 ctx = self.connection_panel.ctx
-                protocol = self.connection_panel.protocol
+                protocol = self.connection_panel.protocol_key
 
                 # Use sync close for CAN protocols, async for others
-                if protocol in ["CAN 2.0", "CANFD"]:
+                if protocol in ["can", "canfd"]:
                     if hasattr(sdk, 'close_zqwl'):
                         sdk.close_zqwl()
-                elif protocol == "EtherCAT":
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        loop.run_until_complete(ctx.ec_stop_loop())
-                        loop.run_until_complete(ctx.close())
-                    finally:
-                        loop.close()
+                elif protocol == "ethercat":
+                    async def close_ethercat():
+                        await ctx.ec_stop_loop()
+                        await ctx.close()
+                    run_in_new_loop(close_ethercat)
                 else:
-                    # Create event loop for async close
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        if hasattr(sdk, 'close_device_handler'):
-                            loop.run_until_complete(sdk.close_device_handler(ctx))
-                        elif hasattr(ctx, 'close'):
-                            loop.run_until_complete(ctx.close())
-                    finally:
-                        loop.close()
+                    if protocol == "modbus" and hasattr(sdk, 'modbus_close'):
+                        run_in_new_loop(lambda: sdk.modbus_close(ctx))
+                    elif hasattr(sdk, 'close_device_handler'):
+                        run_in_new_loop(lambda: sdk.close_device_handler(ctx))
+                    elif hasattr(ctx, 'close'):
+                        run_in_new_loop(lambda: ctx.close())
             except Exception as e:
                 print(f"Error closing device on exit: {e}")
 
