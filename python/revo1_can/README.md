@@ -2,7 +2,7 @@
 
 ## Requirement
 
-- Python 3.8~3.12
+- Python 3.9~3.12
 - Linux: Ubuntu 20.04/22.04 LTS (x86_64/aarch64), glibc ≥ 2.31
 - macOS: 10.15+ (ZQWL only)
 - Windows: 10/11

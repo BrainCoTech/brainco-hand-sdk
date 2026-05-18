@@ -36,7 +36,7 @@ class UniversalTouchPanel(QWidget):
         self.no_touch_label.show()
         
     def set_device(self, device, slave_id, device_info, shared_data=None):
-        from common_imports import is_capacitive_touch, has_touch, uses_revo3_motor_api, sdk
+        from common_imports import is_capacitive_touch, has_touch
         
         if not device or not device_info:
             self._set_mode('none')
@@ -51,7 +51,7 @@ class UniversalTouchPanel(QWidget):
         if is_capacitive_touch(hw_type):
             self._set_mode('capacitive', device, slave_id, device_info, shared_data)
         else:
-            # Everything else (Pressure, Force3D, ArrayPressure, Revo3 Tactical) routes to advanced panel
+            # Pressure, Force3D and ArrayPressure route to the advanced panel.
             self._set_mode('advanced', device, slave_id, device_info, shared_data)
             
     def _set_mode(self, mode: str, device=None, slave_id=None, device_info=None, shared_data=None):

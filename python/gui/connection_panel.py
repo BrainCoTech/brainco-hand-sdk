@@ -107,12 +107,11 @@ class AutoDetectWorker(QObject):
     error = Signal(str)
     progress = Signal(str)
 
-    def __init__(self, protocol=None, port=None, scan_all=False, revo3_modbus=False):
+    def __init__(self, protocol=None, port=None, scan_all=False):
         super().__init__()
         self.protocol = protocol
         self.port = port
         self.scan_all = scan_all
-        self.revo3_modbus = revo3_modbus
 
     def run(self):
         """Execute auto-detection"""
@@ -140,9 +139,6 @@ class AutoDetectWorker(QObject):
     async def _auto_detect(self):
         """Auto-detect device using unified API"""
         self.progress.emit("🔍 Scanning for devices...")
-
-        if self.revo3_modbus:
-            return await self._auto_detect_revo3_modbus()
 
         # Use unified auto_detect API
         try:
@@ -185,39 +181,6 @@ class AutoDetectWorker(QObject):
 
         return ctx, slave_id, device_info, protocol_key, protocol_label
 
-    async def _auto_detect_revo3_modbus(self):
-        """Auto-detect Revo3 device via Modbus only (fast path)"""
-        self.progress.emit("🔍 Scanning Revo3 Modbus...")
-
-        try:
-            protocol_type, port_name, baudrate, slave_id = await sdk.auto_detect_modbus_revo3()
-        except Exception as e:
-            raise
-
-        self.progress.emit(f"✅ Found Revo3 on {port_name}")
-
-        # Open Modbus connection
-        ctx = await modbus_open(port_name, baudrate)
-
-        # Set hw_type to Revo3Ultra
-        await ctx.set_hardware_type(slave_id, sdk.StarkHardwareType.Revo3Ultra)
-
-        # Try to get full device info, fallback to Revo3Ultra
-        try:
-            device_info = await ctx.get_device_info(slave_id)
-        except Exception:
-            device_info = sdk.DeviceInfo(
-                sku_type=sdk.SkuType.MediumRight,
-                hand_type=sdk.HandType.Right,
-                hardware_type=sdk.StarkHardwareType.Revo3Ultra,
-                serial_number='',
-                firmware_version='',
-                hardware_version='',
-            )
-
-        return ctx, slave_id, device_info, PROTO_MODBUS, get_protocol_display_name(sdk.StarkProtocolType.Modbus)
-
-
 class ManualConnectWorker(QObject):
     """Manual connection worker thread"""
     finished = Signal(object, int, object, str, str)
@@ -256,21 +219,7 @@ class ManualConnectWorker(QObject):
         if self.protocol_key == PROTO_MODBUS:
             ctx = await modbus_open(self.params['port'], int(self.params['baudrate']))
             slave_id = self.params['slave_id']
-            try:
-                device_info = await ctx.get_device_info(slave_id)
-            except Exception:
-                # Revo3 SN may not be available yet, force Revo3 hw_type at 5Mbps
-                if self.params['baudrate'] == "5000000":
-                    device_info = sdk.DeviceInfo(
-                        sku_type=sdk.SkuType.MediumRight,
-                        hand_type=sdk.HandType.Right,
-                        hardware_type=sdk.StarkHardwareType.Revo3Ultra,
-                        serial_number='',
-                        firmware_version='',
-                        hardware_version='',
-                    )
-                else:
-                    raise
+            device_info = await ctx.get_device_info(slave_id)
             return ctx, slave_id, device_info
 
         elif self.protocol_key == PROTO_PROTOBUF:
@@ -351,7 +300,7 @@ class ConnectionPanel(QWidget):
     about_to_disconnect = Signal()  # Emitted before closing device, so DataCollector can stop first
     disconnected = Signal()
 
-    def __init__(self, revo3_modbus=False, mock_type=None):
+    def __init__(self, mock_type=None):
         super().__init__()
         self.ctx = None
         self.slave_id = None
@@ -362,7 +311,6 @@ class ConnectionPanel(QWidget):
         self.last_slave_id = None
         self.worker = None
         self._thread: QThread | None = None
-        self.revo3_modbus = revo3_modbus
         self.mock_type = mock_type
 
         self._setup_ui()
@@ -390,17 +338,11 @@ class ConnectionPanel(QWidget):
         layout.addWidget(self.proto_label)
 
         self.protocol_combo = QComboBox()
-        if self.revo3_modbus:
-            # Revo3 Modbus mode: hide protocol selector entirely
-            self.protocol_combo.addItem(PROTOCOL_LABELS[PROTO_AUTO], PROTO_AUTO)
+        for protocol_key in [PROTO_AUTO, PROTO_MODBUS, PROTO_PROTOBUF, PROTO_CAN, PROTO_CANFD, PROTO_ETHERCAT]:
+            self.protocol_combo.addItem(PROTOCOL_LABELS[protocol_key], protocol_key)
+        if self.mock_type:
             self.proto_label.setVisible(False)
             self.protocol_combo.setVisible(False)
-        else:
-            for protocol_key in [PROTO_AUTO, PROTO_MODBUS, PROTO_PROTOBUF, PROTO_CAN, PROTO_CANFD, PROTO_ETHERCAT]:
-                self.protocol_combo.addItem(PROTOCOL_LABELS[protocol_key], protocol_key)
-            if self.mock_type:
-                self.proto_label.setVisible(False)
-                self.protocol_combo.setVisible(False)
         self.protocol_combo.setMinimumWidth(120)
         self.protocol_combo.currentTextChanged.connect(self._on_protocol_changed)
         layout.addWidget(self.protocol_combo)
@@ -709,7 +651,7 @@ class ConnectionPanel(QWidget):
         self.status_label.setText("🔍 Scanning for devices...")
 
         self._thread = QThread()
-        self.worker = AutoDetectWorker(revo3_modbus=self.revo3_modbus)
+        self.worker = AutoDetectWorker()
         self.worker.moveToThread(self._thread)
 
         self._thread.started.connect(self.worker.run)
@@ -936,7 +878,7 @@ class ConnectionPanel(QWidget):
     def _connect_mock(self):
         """Connect to mock device for UI debugging"""
         from .mock_device import MockDeviceContext
-        hw_type = sdk.StarkHardwareType.Revo3Ultra
+        hw_type = sdk.StarkHardwareType.Revo2Basic
         
         m_type = self.mock_type.lower()
         if m_type == "revo1":
@@ -951,10 +893,6 @@ class ConnectionPanel(QWidget):
             hw_type = sdk.StarkHardwareType.Revo2TouchPressure
         elif m_type == "revo2-force3d":
             hw_type = sdk.StarkHardwareType.Revo2TouchForce3D
-        elif m_type == "revo3":
-            hw_type = sdk.StarkHardwareType.Revo3Ultra
-        elif m_type == "revo3-touch":
-            hw_type = sdk.StarkHardwareType.Revo3UltraTouch
             
         ctx = MockDeviceContext(hw_type)
         slave_id = 1

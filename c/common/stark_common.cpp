@@ -164,11 +164,7 @@ bool hw_has_touch_sensor(StarkHardwareType hw_type) {
           hw_type == STARK_HARDWARE_TYPE_REVO2_TOUCH ||
           hw_type == STARK_HARDWARE_TYPE_REVO2_TOUCH_PRESSURE ||
           hw_type == STARK_HARDWARE_TYPE_REVO2_TOUCH_FORCE3D ||
-          hw_type == STARK_HARDWARE_TYPE_REVO2_TOUCH_ARRAY_PRESSURE ||
-          hw_type == STARK_HARDWARE_TYPE_REVO3_ULTRA_TOUCH ||
-          hw_type == STARK_HARDWARE_TYPE_REVO3_ULTRA_VISION_TOUCH ||
-          hw_type == STARK_HARDWARE_TYPE_REVO3_PRO_TOUCH ||
-          hw_type == STARK_HARDWARE_TYPE_REVO3_BASIC_TOUCH);
+          hw_type == STARK_HARDWARE_TYPE_REVO2_TOUCH_ARRAY_PRESSURE);
 }
 
 // Legacy functions for backward compatibility
@@ -217,13 +213,6 @@ const char* get_hardware_type_name_str(uint8_t hw_type) {
         case STARK_HARDWARE_TYPE_REVO2_TOUCH_PRESSURE: return "Revo2 Touch (Pressure)";
         case STARK_HARDWARE_TYPE_REVO2_TOUCH_FORCE3D: return "Revo2 Touch (Force3D)";
         case STARK_HARDWARE_TYPE_REVO2_TOUCH_ARRAY_PRESSURE: return "Revo2 Touch (ArrayPressure)";
-        case STARK_HARDWARE_TYPE_REVO3_ULTRA: return "Revo3 Ultra (21 DoF)";
-        case STARK_HARDWARE_TYPE_REVO3_ULTRA_TOUCH: return "Revo3 Ultra Touch (21 DoF)";
-        case STARK_HARDWARE_TYPE_REVO3_ULTRA_VISION_TOUCH: return "Revo3 Ultra Vision Touch (21 DoF)";
-        case STARK_HARDWARE_TYPE_REVO3_PRO: return "Revo3 Pro (16 DoF)";
-        case STARK_HARDWARE_TYPE_REVO3_PRO_TOUCH: return "Revo3 Pro Touch (16 DoF)";
-        case STARK_HARDWARE_TYPE_REVO3_BASIC: return "Revo3 Basic (13 DoF)";
-        case STARK_HARDWARE_TYPE_REVO3_BASIC_TOUCH: return "Revo3 Basic Touch (13 DoF)";
         default: return "Unknown";
     }
 }
@@ -514,11 +503,6 @@ bool init_modbus_revo1(DeviceContext* ctx, const char* port, uint32_t baudrate, 
 bool init_modbus_revo2(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_t slave_id) {
     return init_modbus_with_series_default(
         ctx, port, baudrate, slave_id, STARK_HARDWARE_TYPE_REVO2_BASIC);
-}
-
-bool init_modbus_revo3(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_t slave_id) {
-    return init_modbus_with_series_default(
-        ctx, port, baudrate, slave_id, STARK_HARDWARE_TYPE_REVO3_ULTRA);
 }
 
 bool init_protobuf(DeviceContext* ctx, const char* port, uint8_t slave_id) {
@@ -833,129 +817,6 @@ void print_init_usage(const char* prog_name) {
     printf("  %s -m /dev/ttyUSB0 460800 1  # Modbus\n", prog_name);
     printf("  %s -b can0 1                 # SocketCAN (SDK built-in)\n", prog_name);
     printf("  %s -t 5 -b can0 1            # Override hw type + init\n", prog_name);
-}
-
-/**
- * @brief Initialize Revo3 device via Modbus auto-detection
- * Uses auto_detect_modbus_revo3 for fast initialization (5Mbps, slave_id 1).
- * Much faster than generic auto_detect_and_init which scans all protocols.
- * 
- * @param ctx Output: Device context to fill
- * @param port Serial port path (NULL for auto-detect)
- * @return true if successful
- */
-bool init_revo3(DeviceContext* ctx, const char* port) {
-    printf("[INFO] Detecting Revo3 device...");
-    if (port) printf(" (port: %s)", port);
-    printf("\n");
-
-    CDeviceConfig* config = auto_detect_modbus_revo3(port);
-    if (config == NULL) {
-        printf("[ERROR] No Revo3 device found\n");
-        return false;
-    }
-
-    printf("[INFO] Found Revo3: port=%s, baudrate=%u, slave_id=%d\n",
-           config->port_name, config->baudrate, config->slave_id);
-
-    // Open Modbus connection
-    ctx->handle = modbus_open(config->port_name, config->baudrate);
-    if (ctx->handle == NULL) {
-        printf("[ERROR] Failed to open Modbus port\n");
-        free_device_config(config);
-        return false;
-    }
-
-    ctx->slave_id = config->slave_id;
-    free_device_config(config);
-
-    // Preset a Revo3-series hardware type before get_device_info() refines it.
-    StarkHardwareType preset_hw_type =
-        ctx->hw_type_override != 0 ? ctx->hw_type_override : STARK_HARDWARE_TYPE_REVO3_ULTRA;
-    stark_set_hardware_type(ctx->handle, ctx->slave_id, preset_hw_type);
-    ctx->hw_type = preset_hw_type;
-    printf("[INFO] Preset hardware type: %s (%d)\n",
-           get_hardware_type_name_str(preset_hw_type), preset_hw_type);
-
-    // Try device_info to get exact hw_type (may not work on early firmware)
-    CDeviceInfo* info = stark_get_device_info(ctx->handle, ctx->slave_id);
-    if (info != NULL) {
-        ctx->hw_type = (StarkHardwareType)info->hardware_type;
-        printf("[INFO] SN: %s, FW: %s\n", info->serial_number, info->firmware_version);
-        if (info->serial_number) {
-            strncpy(ctx->serial_number, info->serial_number, sizeof(ctx->serial_number) - 1);
-            ctx->serial_number[sizeof(ctx->serial_number) - 1] = '\0';
-        }
-        free_device_info(info);
-    }
-
-    // Default frequencies for Revo3 Modbus
-    #ifdef __linux__
-        ctx->motor_freq = 200;
-        ctx->touch_freq = 10;
-    #else
-        ctx->motor_freq = 10;
-        ctx->touch_freq = 1;
-    #endif
-
-    printf("[INFO] Device: %s, Motor: %dHz, Touch: %dHz\n",
-           get_hardware_type_name_str(ctx->hw_type), ctx->motor_freq, ctx->touch_freq);
-
-    return true;
-}
-
-bool parse_args_and_init_revo3(DeviceContext* ctx, int argc, const char* argv[], int* arg_idx) {
-    *arg_idx = 1;
-
-    // Usage:
-    //   (no args)                      -> auto-detect Revo3 on all ports
-    //   <port>                         -> auto-detect Revo3 on specific port
-    //   -m <port> <baud> <slave_id>    -> manual Modbus (fallback)
-
-    if (argc > 1 && argv[1][0] == '-') {
-        char opt = argv[1][1];
-
-        if (opt == 'm') {
-            // Manual Modbus: -m <port> <baud> <slave_id>
-            if (argc < 5) {
-                printf("[ERROR] -m requires: <port> <baudrate> <slave_id>\n");
-                printf("Usage: %s                       # auto-detect Revo3\n", argv[0]);
-                printf("       %s <port>                # auto-detect on port\n", argv[0]);
-                printf("       %s -m <port> <baud> <id> # manual Modbus\n", argv[0]);
-                return false;
-            }
-            if (!init_modbus(ctx, argv[2], atoi(argv[3]), atoi(argv[4]))) {
-                return false;
-            }
-            *arg_idx = 5;
-        } else if (opt == 'h') {
-            printf("Usage: %s [options] [mode]\n\n", argv[0]);
-            printf("  (default)                   Auto-detect Revo3 (fast, Modbus 5Mbps)\n");
-            printf("  <port>                      Auto-detect Revo3 on specific port\n");
-            printf("  -m <port> <baud> <slave_id> Manual Modbus (e.g., -m /dev/ttyUSB0 5000000 1)\n");
-            printf("  -h                          Show this help\n");
-            return false;
-        } else {
-            printf("[ERROR] Unknown option: %s\n", argv[1]);
-            printf("Use -h for help\n");
-            return false;
-        }
-    } else {
-        // Auto-detect: optional port as first arg
-        const char* port = NULL;
-        if (argc > 1 && argv[1][0] != '-') {
-            // Check if first arg looks like a port (starts with / or COM)
-            if (argv[1][0] == '/' || strncmp(argv[1], "COM", 3) == 0) {
-                port = argv[1];
-                *arg_idx = 2;
-            }
-        }
-        if (!init_revo3(ctx, port)) {
-            return false;
-        }
-    }
-
-    return true;
 }
 
 bool parse_args_and_init(DeviceContext* ctx, int argc, const char* argv[], int* arg_idx) {

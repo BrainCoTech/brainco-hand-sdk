@@ -25,7 +25,7 @@ import argparse
 # Setup path and imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common_imports import (
-    sdk, check_sdk, get_hw_type_name, uses_revo2_motor_api, uses_revo3_motor_api, logger
+    sdk, check_sdk, get_hw_type_name, uses_revo2_motor_api, logger
 )
 from common_init import (
     DeviceContext, parse_args_and_init, cleanup_context, print_init_usage
@@ -44,7 +44,6 @@ FIRMWARE_PATHS = {
     "revo2_485_canfd": OTA_DIR / "stark2" / "Revo2_V1.0.20.U_2501091030.bin",
     "revo2_ethercat_canfd": OTA_DIR / "stark2" / "Revo2_V1.0.16.F_2512051618.bin",
     # "revo2_485_canfd": OTA_DIR / "stark2" / "Revo2_V1.0.16.F_2512051618.bin",
-    "revo3": OTA_DIR / "stark3" / "revo23-fw-V0.0.4-2605111016.bin",  # Revo3 firmware path
 }
 
 # DFU state tracking
@@ -80,8 +79,6 @@ def select_firmware(hw_type, protocol_type) -> str:
         return str(FIRMWARE_PATHS["revo1_touch"])
     if hw_type in [sdk.StarkHardwareType.Revo1Advanced, sdk.StarkHardwareType.Revo1AdvancedTouch]:
         return str(FIRMWARE_PATHS["revo1_advanced"])
-    if uses_revo3_motor_api(hw_type):
-        return str(FIRMWARE_PATHS["revo3"])
     if uses_revo2_motor_api(hw_type):
         return str(FIRMWARE_PATHS["revo2_485_canfd"])
     raise ValueError(f"Cannot determine firmware for hw_type={hw_type}")

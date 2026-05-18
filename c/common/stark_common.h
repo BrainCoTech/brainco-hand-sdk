@@ -211,12 +211,6 @@ bool init_modbus_revo1(DeviceContext* ctx, const char* port, uint32_t baudrate, 
 bool init_modbus_revo2(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_t slave_id);
 
 /**
- * @brief Initialize a Revo3-series device via Modbus with a Revo3 default hardware type.
- * The exact hardware type can still be refined later by `stark_get_device_info()`.
- */
-bool init_modbus_revo3(DeviceContext* ctx, const char* port, uint32_t baudrate, uint8_t slave_id);
-
-/**
  * @brief Initialize device via Protobuf protocol
  * Protobuf uses fixed baudrate 115200 and slave_id range 10-254.
  * Position range is 0-100 internally (SDK converts from 0-1000).
@@ -292,30 +286,6 @@ bool init_socketcan_device_builtin(DeviceContext* ctx, const char* iface, uint8_
  * @return true if successful, false if error or help requested
  */
 bool parse_args_and_init(DeviceContext* ctx, int argc, const char* argv[], int* arg_idx);
-
-/**
- * @brief Initialize Revo3 device via Modbus auto-detection
- * Uses auto_detect_modbus_revo3 for fast initialization (5Mbps, slave_id 1).
- * Much faster than generic auto_detect_and_init which scans all protocols.
- * 
- * @param ctx Output: Device context to fill
- * @param port Serial port path (NULL for auto-detect all ports)
- * @return true if successful
- */
-bool init_revo3(DeviceContext* ctx, const char* port);
-
-/**
- * @brief Parse command line arguments and initialize Revo3 device (simplified)
- * Uses init_revo3 (auto_detect_modbus_revo3) by default for fast detection.
- * Supports: auto-detect (default), <port> (specific port), -m (manual Modbus)
- * 
- * @param ctx Output: Device context to fill
- * @param argc Argument count
- * @param argv Argument values
- * @param arg_idx Output: Index of next argument after init options
- * @return true if successful, false if error or help requested
- */
-bool parse_args_and_init_revo3(DeviceContext* ctx, int argc, const char* argv[], int* arg_idx);
 
 /**
  * @brief Print common initialization usage

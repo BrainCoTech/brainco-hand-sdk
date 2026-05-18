@@ -3,17 +3,13 @@
 Supports:
 - Revo2 Pressure Touch: Distributed pressure arrays
 - Revo2 Force Touch (ArrayPressure): 3D force + torque
-- Revo3 Revo3 Touch: Tactile array modules
 
 This file acts as a dispatcher, delegating to the appropriate sub-panel
 based on the connected device's hardware type.
 """
 
 from typing import Optional, TYPE_CHECKING
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QCheckBox, QComboBox
-)
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton
 from PySide6.QtCore import Qt, QTimer
 
 if TYPE_CHECKING:
@@ -33,7 +29,6 @@ class PressureTouchPanel(QWidget):
     MODE_NONE = 'none'
     MODE_PRESSURE = 'pressure'        # Pressure arrays
     MODE_FORCE = 'force'              # ArrayPressure force/torque
-    MODE_V3 = 'v3'                    # Revo3 tactile arrays
 
     def __init__(self):
         super().__init__()
@@ -110,14 +105,6 @@ class PressureTouchPanel(QWidget):
         self.clear_btn.clicked.connect(self._clear_charts)
         self.control_layout.addWidget(self.clear_btn)
 
-        # Data type selector (Revo3 only)
-        if self.mode == self.MODE_V3:
-            self.control_layout.addWidget(QLabel("Data Type:"))
-            self.data_type_combo = QComboBox()
-            self.data_type_combo.addItems(["AD Raw", "Calibrated"])
-            self.data_type_combo.currentIndexChanged.connect(self._on_data_type_changed)
-            self.control_layout.addWidget(self.data_type_combo)
-
         self.control_layout.addStretch()
 
     def _setup_sub_panel(self):
@@ -130,9 +117,6 @@ class PressureTouchPanel(QWidget):
         elif self.mode == self.MODE_FORCE:
             from .touch_panel_force import ForceTouchSubPanel
             self.sub_panel = ForceTouchSubPanel()
-        elif self.mode == self.MODE_V3:
-            from .touch_panel_revo3 import Revo3TouchSubPanel
-            self.sub_panel = Revo3TouchSubPanel()
         else:
             return
 
@@ -168,17 +152,13 @@ class PressureTouchPanel(QWidget):
             return
 
         # Determine mode from hardware type
-        from common_imports import (
-            uses_pressure_touch_api, uses_revo3_motor_api, sdk
-        )
+        from common_imports import uses_pressure_touch_api, sdk
 
         old_mode = self.mode
         if device_info and hasattr(device_info, 'hardware_type'):
             hw_type = device_info.hardware_type
 
-            if uses_revo3_motor_api(hw_type):
-                self.mode = self.MODE_V3
-            elif sdk and hw_type == sdk.StarkHardwareType.Revo2TouchArrayPressure:
+            if sdk and hw_type == sdk.StarkHardwareType.Revo2TouchArrayPressure:
                 self.mode = self.MODE_FORCE
             elif uses_pressure_touch_api(hw_type):
                 self.mode = self.MODE_PRESSURE
@@ -229,20 +209,7 @@ class PressureTouchPanel(QWidget):
         if not self.device or not self.sub_panel:
             return
 
-        if self.mode == self.MODE_V3:
-            # Revo3: read from revo3_touch_buffer
-            if (self.shared_data and hasattr(self.shared_data, 'revo3_touch_buffer')
-                    and self.shared_data.revo3_touch_buffer):
-                try:
-                    touch_data_list = self.shared_data.revo3_touch_buffer.pop_all()
-                    if touch_data_list:
-                        for revo3_data in touch_data_list[-5:]:
-                            if revo3_data:
-                                self.sub_panel.update_data(revo3_data)
-                except Exception:
-                    pass
-
-        elif self.mode == self.MODE_FORCE:
+        if self.mode == self.MODE_FORCE:
             # Force: read from array_pressure or force3d touch buffer
             buf = None
             if self.shared_data:
@@ -306,16 +273,3 @@ class PressureTouchPanel(QWidget):
             logger.info("[TouchPanel] Reset completed")
         except Exception as e:
             logger.warn(f"[TouchPanel] Reset failed: {e}")
-
-    def _on_data_type_changed(self, index):
-        if self.mode == self.MODE_V3 and self.device:
-            run_async(self._async_set_revo3_data_type(index))
-
-    async def _async_set_revo3_data_type(self, data_type):
-        if not self.device:
-            return
-        try:
-            await self.device.revo3_set_touch_data_type(self.slave_id, data_type)
-            logger.info(f"[TouchPanel] revo3_set_touch_data_type({data_type})")
-        except Exception as e:
-            logger.warn(f"[TouchPanel] Set data type failed: {e}")

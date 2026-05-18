@@ -102,8 +102,6 @@ TRANSLATIONS_EN = {
 
     # Motor control panel
     "motor_control": "Motor Control",
-    "motor_control_v3": "Motor Control (Revo3)",
-    "v3_motor_config": "Motor Config (Revo3)",
     "control_mode": "Control Mode",
     "mode": "Mode",
     "mode_position": "Position",
@@ -395,7 +393,6 @@ TRANSLATIONS_EN = {
     "finger_thumb_base": "Thumb Base",
     "finger_thumb_aux": "Thumb Aux",
 
-    # Revo3 Motor Settings
     "v3_settings": "⚙ Settings",
 
     "v3_position_limits": "Position Limits",
@@ -435,7 +432,6 @@ TRANSLATIONS_EN = {
     "mode_mit": "MIT",
     "mode_trajectory": "Trajectory Planning",
     "communication": "Communication",
-    "revo3_status": "Revo3 Status",
 
     "system_state": "System State",
     "error_code": "Error Code",
@@ -467,7 +463,6 @@ TRANSLATIONS_EN = {
 
     # System Config
     "config_modbus": "Modbus",
-    "config_revo3_status": "Revo3 Status",
 
     "v3_reset_finger_defaults": "↩ Reset Finger Defaults",
     "v3_touch_screen": "Touch Screen",
@@ -554,8 +549,6 @@ TRANSLATIONS_ZH = {
 
     # Motor Control Panel
     "motor_control": "电机控制",
-    "motor_control_v3": "电机控制 (Revo3)",
-    "v3_motor_config": "关节参数配置 (Revo3)",
     "control_mode": "控制模式",
     "mode": "模式",
     "mode_position": "位置",
@@ -847,7 +840,6 @@ TRANSLATIONS_ZH = {
     "finger_thumb_base": "拇指根部",
     "finger_thumb_aux": "拇指辅助",
 
-    # Revo3 Motor Settings
     "v3_settings": "⚙ 设置",
 
     "v3_position_limits": "位置限制",
@@ -887,7 +879,6 @@ TRANSLATIONS_ZH = {
     "mode_mit": "MIT",
     "mode_trajectory": "轨迹规划",
     "communication": "通信设置",
-    "revo3_status": "Revo3 状态",
 
     "system_state": "系统状态",
     "error_code": "错误码",
@@ -919,7 +910,6 @@ TRANSLATIONS_ZH = {
 
     # System Config
     "config_modbus": "Modbus",
-    "config_revo3_status": "Revo3状态",
 
     "v3_reset_finger_defaults": "↩ 恢复参数默认值",
     "v3_touch_screen": "触屏功能",

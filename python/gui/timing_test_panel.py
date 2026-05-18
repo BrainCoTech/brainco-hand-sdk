@@ -1,4 +1,4 @@
-"""Timing Test Panel — dispatches to Revo2 or Revo3 worker.
+"""Timing Test Panel for Revo1/Revo2 workers.
 
 Always shows 3 simultaneous charts:
   Position (°) | Speed (rpm) | Current (mA)
@@ -26,19 +26,12 @@ if TYPE_CHECKING:
     from .shared_data import SharedDataManager
 
 from .i18n import tr
-from .constants import MOTOR_COLORS, MOTOR_COUNT, REVO3_MOTOR_COUNT
+from .constants import MOTOR_COLORS, MOTOR_COUNT
 from .timing_test_revo2_worker import (
     TimingTestRevo2Worker,
     MODE_ALL_FINGERS, MODE_SINGLE_FINGER,
     SINGLE_FINGER_OPTIONS,
 )
-from .timing_test_revo3_worker import (
-    TimingTestRevo3Worker,
-    REVO3_SINGLE_FINGER_OPTIONS, REVO3_SINGLE_JOINT_OPTIONS,
-    REVO3_CLOSE_POSITION, REVO3_OPEN_POSITION,
-    REVO3_MOTOR_COLORS,
-)
-
 try:
     import pyqtgraph as pg
     HAS_PYQTGRAPH = True
@@ -76,7 +69,6 @@ def _ref_legend_html(var_act: str = 'θ', var_ref: str = 'θₐ',
 class TimingTestPanel(QWidget):
     """Timing Test Panel.
 
-    - Dispatches to TimingTestRevo2Worker or TimingTestRevo3Worker.
     - Displays 3 simultaneous charts: Position / Speed / Current.
     - The selected Control mode chart overlays reference setpoint (dashed).
     - Single Finger mode hides inactive curves across all 3 charts.
@@ -88,7 +80,6 @@ class TimingTestPanel(QWidget):
         self.worker: Optional[QObject] = None
         self._thread: Optional[QThread] = None
         self.is_running = False
-        self._is_revo3 = False
         self._view_mode = "MIT"
 
         # Data storage (sized to max device; resized in _update_for_device_type)
@@ -392,9 +383,8 @@ class TimingTestPanel(QWidget):
     # ── Device setup ──────────────────────────────────────────────────────────
 
     def set_device(self, device, slave_id, device_info, shared_data=None):
-        """Called when a device is connected. Rebuilds UI for Revo2 vs Revo3."""
+        """Called when a device is connected."""
         self.shared_data = shared_data
-        self._is_revo3 = shared_data._is_revo3 if shared_data else False
         self._update_for_device_type()
 
     def _update_for_device_type(self):
@@ -404,23 +394,11 @@ class TimingTestPanel(QWidget):
         self.finger_combo.blockSignals(True)
         self.finger_combo.clear()
 
-        if self._is_revo3:
-            for name, _ in REVO3_SINGLE_FINGER_OPTIONS:
-                self.finger_combo.addItem(f"🖐 {name}", name)
-            self.finger_combo.insertSeparator(len(REVO3_SINGLE_FINGER_OPTIONS))
-            for name, _ in REVO3_SINGLE_JOINT_OPTIONS:
-                self.finger_combo.addItem(f"⚙ {name}", name)
-            m3_idx = self.finger_combo.findData("M3")
-            if m3_idx >= 0:
-                self.finger_combo.setCurrentIndex(m3_idx)
-            self._num_curves = REVO3_MOTOR_COUNT
-            self._setup_revo3_chart()
-        else:
-            for name, idx in SINGLE_FINGER_OPTIONS:
-                self.finger_combo.addItem(name, idx)
-            self.finger_combo.setCurrentIndex(1)
-            self._num_curves = MOTOR_COUNT
-            self._setup_revo12_chart()
+        for name, idx in SINGLE_FINGER_OPTIONS:
+            self.finger_combo.addItem(name, idx)
+        self.finger_combo.setCurrentIndex(1)
+        self._num_curves = MOTOR_COUNT
+        self._setup_revo12_chart()
 
         self.finger_combo.blockSignals(False)
         # Apply correct visibility now that curves exist
@@ -439,101 +417,6 @@ class TimingTestPanel(QWidget):
         self.ref_positions = _empty()
         self.ref_speeds    = _empty()
         self.ref_currents  = _empty()
-
-    def _setup_revo3_chart(self):
-        """Build 3-chart panel for Revo3 (23 actual + 23 ref curves per chart)."""
-        if not HAS_PYQTGRAPH or pg is None:
-            return
-
-        # Remove old curves from each plot
-        for curves, plot in [
-            (self.pos_curves + self.ref_pos_curves, self.pos_plot),
-            (self.vel_curves + self.ref_vel_curves, self.vel_plot),
-            (self.cur_curves + self.ref_cur_curves, self.cur_plot),
-        ]:
-            for c in curves:
-                try:
-                    plot.removeItem(c)
-                except Exception:
-                    pass
-        for line in self._target_lines:
-            try:
-                self.pos_plot.removeItem(line)
-            except Exception:
-                pass
-
-        self.pos_curves = []
-        self.vel_curves = []
-        self.cur_curves = []
-        self.ref_pos_curves = []
-        self.ref_vel_curves = []
-        self.ref_cur_curves = []
-        self._target_lines  = []
-
-        # Y-axis labels and titles with MIT symbols
-        # Position: θ (degrees)  |  Velocity: ω = dθ/dt (rpm)  |  Torque proxy: τ (mA)
-        DashLine = pg.QtCore.Qt.DashLine
-
-        self.pos_plot.setYRange(-10, 120)
-        self.pos_plot.setLabel('left', 'θ (°)', color='#cccccc')
-        self.pos_plot.setTitle("Position (θ)", color='#cccccc', size='12pt')
-
-        self.vel_plot.enableAutoRange(axis='y')
-        self.vel_plot.setLabel('left', 'ω (rpm)', color='#cccccc')
-        self.vel_plot.setTitle("Velocity (ω)", color='#cccccc', size='12pt')
-
-        self.cur_plot.enableAutoRange(axis='y')
-        self.cur_plot.setLabel('left', 'τ (mA)', color='#cccccc')
-        self.cur_plot.setTitle("Torque (τ)", color='#cccccc', size='12pt')
-
-        ref_pen_color = (*_REF_COLOR, _REF_ALPHA)   # RGBA with slight transparency
-        for plot, ref_name in [(self.pos_plot, "REF (θₐ)"), (self.vel_plot, "REF (ωₐ)"), (self.cur_plot, "REF (τff)")]:
-            plot_item = plot.getPlotItem()
-            if plot_item.legend is None:
-                legend = plot.addLegend(offset=(-10, 10))
-                legend.anchor((1, 0), (1, 0), offset=(-10, 10))
-                legend.setBrush(pg.mkBrush(20, 20, 30, 200))
-                legend.setPen(pg.mkPen(color='#555555', width=1))
-            else:
-                legend = plot_item.legend
-                legend.clear()
-            # Larger legend text with colored sample lines
-            act_dummy = pg.PlotDataItem(pen=pg.mkPen(color='#88ddcc', width=3))
-            ref_dummy = pg.PlotDataItem(pen=pg.mkPen(color=ref_pen_color, width=2, style=DashLine))
-            legend.addItem(act_dummy, "ACT")
-            legend.addItem(ref_dummy, ref_name)
-            # Increase legend label font size
-            for item in legend.items:
-                for single_item in item:
-                    if isinstance(single_item, pg.graphicsItems.LabelItem.LabelItem):
-                        single_item.setText(single_item.text, size='11pt')
-
-        # Horizontal reference lines on pos chart
-        self._target_lines.append(
-            self.pos_plot.addLine(y=REVO3_CLOSE_POSITION,
-                pen=pg.mkPen('g', style=DashLine, width=1)))
-        self._target_lines.append(
-            self.pos_plot.addLine(y=REVO3_OPEN_POSITION,
-                pen=pg.mkPen((100, 100, 255), style=DashLine, width=1)))
-
-        # 23 actual (motor-color solid) + 23 REF (amber dashed) per chart
-        for mid in range(REVO3_MOTOR_COUNT):
-            color = REVO3_MOTOR_COLORS[mid]
-            solid = pg.mkPen(color=color,          width=2)
-            dash  = pg.mkPen(color=ref_pen_color,  width=1.5, style=DashLine)
-
-            self.pos_curves.append(self.pos_plot.plot([], [], pen=solid))
-            self.vel_curves.append(self.vel_plot.plot([], [], pen=solid))
-            self.cur_curves.append(self.cur_plot.plot([], [], pen=solid))
-
-            self.ref_pos_curves.append(self.pos_plot.plot([], [], pen=dash))
-            self.ref_vel_curves.append(self.vel_plot.plot([], [], pen=dash))
-            self.ref_cur_curves.append(self.cur_plot.plot([], [], pen=dash))
-
-        # Hide all ref curves initially; _sync_ref_visibility will set them
-        for rc in self.ref_pos_curves + self.ref_vel_curves + self.ref_cur_curves:
-            rc.setVisible(False)
-        self._sync_ref_visibility()
 
     def _setup_revo12_chart(self):
         """Build 3-chart panel for Revo1/2 (6 actual + 6 ref curves per chart)."""
@@ -633,8 +516,6 @@ class TimingTestPanel(QWidget):
 
     def _on_finger_changed(self, _index=None):
         """Update curve visibility when finger / joint selection changes."""
-        if not self._is_revo3:
-            return
         if self.mode_btn_group.checkedId() != MODE_SINGLE_FINGER:
             return
         self._set_active_curves(self._resolve_active_joints())
@@ -657,11 +538,8 @@ class TimingTestPanel(QWidget):
     def _resolve_active_joints(self) -> list:
         """Return motor IDs for the current Single Finger selection."""
         finger_index = self.finger_combo.currentData()
-        if isinstance(finger_index, str):
-            if finger_index.startswith("M") and finger_index[1:].isdigit():
-                return [int(finger_index[1:])]
-            from .timing_test_revo3_worker import REVO3_FINGER_JOINTS
-            return REVO3_FINGER_JOINTS.get(finger_index, list(range(self._num_curves)))
+        if isinstance(finger_index, int):
+            return [finger_index]
         return list(range(self._num_curves))
 
     def _set_active_curves(self, active_indices: list):
@@ -681,7 +559,7 @@ class TimingTestPanel(QWidget):
 
     def _sync_ref_visibility(self):
         """Show ref curves only in the active Control mode chart, active joints."""
-        if self.mode_btn_group.checkedId() == MODE_SINGLE_FINGER and self._is_revo3:
+        if self.mode_btn_group.checkedId() == MODE_SINGLE_FINGER:
             active_set = set(self._resolve_active_joints())
         else:
             active_set = set(range(self._num_curves))
@@ -832,24 +710,19 @@ class TimingTestPanel(QWidget):
         finger_index = (self.finger_combo.currentData()
                         if test_mode == MODE_SINGLE_FINGER else 0)
 
-        # Apply curve visibility for Revo3
-        if self._is_revo3:
-            if test_mode == MODE_SINGLE_FINGER:
-                self._set_active_curves(self._resolve_active_joints())
-            else:
-                self._restore_all_curves()
+        if test_mode == MODE_SINGLE_FINGER:
+            self._set_active_curves(self._resolve_active_joints())
+        else:
+            self._restore_all_curves()
 
         signal_type = self.signal_combo.currentText()
-        WorkerClass = TimingTestRevo3Worker if self._is_revo3 else TimingTestRevo2Worker
+        WorkerClass = TimingTestRevo2Worker
 
         self._thread = QThread()
         worker_kwargs = dict(
             view_mode=self._view_mode,
             signal_type=signal_type,
         )
-        if self._is_revo3 and self._view_mode == "MIT":
-            worker_kwargs['mit_kp'] = self.kp_spin.value()
-            worker_kwargs['mit_kd'] = self.kd_spin.value()
         self.worker  = WorkerClass(
             self.device,
             self.slave_id,

@@ -57,13 +57,6 @@ def test_hardware_type_enum():
         ("Revo2TouchPressure", sdk.StarkHardwareType.Revo2TouchPressure),
         ("Revo2TouchForce3D", sdk.StarkHardwareType.Revo2TouchForce3D),
         ("Revo2TouchArrayPressure", sdk.StarkHardwareType.Revo2TouchArrayPressure),
-        ("Revo3Ultra", sdk.StarkHardwareType.Revo3Ultra),
-        ("Revo3UltraTouch", sdk.StarkHardwareType.Revo3UltraTouch),
-        ("Revo3UltraVisionTouch", sdk.StarkHardwareType.Revo3UltraVisionTouch),
-        ("Revo3Pro", sdk.StarkHardwareType.Revo3Pro),
-        ("Revo3ProTouch", sdk.StarkHardwareType.Revo3ProTouch),
-        ("Revo3Basic", sdk.StarkHardwareType.Revo3Basic),
-        ("Revo3BasicTouch", sdk.StarkHardwareType.Revo3BasicTouch),
     ]
     for name, val in all_types:
         print(f"   {name:20} = {int(val)}")

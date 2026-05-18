@@ -173,13 +173,6 @@ def get_hw_type_name(hw_type) -> str:
             "Revo2TouchPressure": "Revo2 Touch (Pressure)",
             "Revo2TouchForce3D": "Revo2 Touch (Force3D)",
             "Revo2TouchArrayPressure": "Revo2 Touch (ArrayPressure)",
-            "Revo3Ultra": "Revo3 Ultra (21 DoF)",
-            "Revo3UltraTouch": "Revo3 Ultra Touch (21 DoF)",
-            "Revo3UltraVisionTouch": "Revo3 Ultra Vision Touch (21 DoF)",
-            "Revo3Pro": "Revo3 Pro (16 DoF)",
-            "Revo3ProTouch": "Revo3 Pro Touch (16 DoF)",
-            "Revo3Basic": "Revo3 Basic (13 DoF)",
-            "Revo3BasicTouch": "Revo3 Basic Touch (13 DoF)",
         }
         return descriptions.get(name, name)
 
@@ -195,14 +188,6 @@ def get_hw_type_name(hw_type) -> str:
         12: "Revo2 Touch (Pressure)",
         13: "Revo2 Touch (Force3D)",
         14: "Revo2 Touch (ArrayPressure)",
-        20: "Revo3 Ultra (21 DoF)",
-        21: "Revo3 Ultra Touch (21 DoF)",
-        22: "Revo3 Ultra Vision Touch (21 DoF)",
-        23: "Revo3 Pro (16 DoF)",
-        24: "Revo3 Pro Touch (16 DoF)",
-        # 25 reserved for Revo3 Pro Vision Touch
-        26: "Revo3 Basic (13 DoF)",
-        27: "Revo3 Basic Touch (13 DoF)",
     }
     value = hw_type if isinstance(hw_type, int) else -1
     return names.get(value, f"Unknown ({value})")
@@ -233,26 +218,7 @@ def uses_revo2_motor_api(hw_type) -> bool:
 
     Revo1 Advanced/AdvancedTouch and all Revo2 use Revo2 Motor API.
     """
-    return not uses_revo1_motor_api(hw_type) and not uses_revo3_motor_api(hw_type)
-
-
-def uses_revo3_motor_api(hw_type) -> bool:
-    """Check if device uses Revo3 Motor API (23 motors, float values)"""
-    if hasattr(hw_type, 'uses_revo3_motor_api'):
-        return hw_type.uses_revo3_motor_api()
-
-    # Fallback using enum comparison
-    if sdk is None:
-        return False
-    return hw_type in (
-        sdk.StarkHardwareType.Revo3Ultra,
-        sdk.StarkHardwareType.Revo3UltraTouch,
-        sdk.StarkHardwareType.Revo3UltraVisionTouch,
-        sdk.StarkHardwareType.Revo3Pro,
-        sdk.StarkHardwareType.Revo3ProTouch,
-        sdk.StarkHardwareType.Revo3Basic,
-        sdk.StarkHardwareType.Revo3BasicTouch,
-    )
+    return not uses_revo1_motor_api(hw_type)
 
 
 # Legacy aliases for backward compatibility
@@ -275,10 +241,6 @@ def has_touch(hw_type) -> bool:
         sdk.StarkHardwareType.Revo2TouchPressure,
         sdk.StarkHardwareType.Revo2TouchForce3D,
         sdk.StarkHardwareType.Revo2TouchArrayPressure,
-        sdk.StarkHardwareType.Revo3UltraTouch,
-        sdk.StarkHardwareType.Revo3UltraVisionTouch,
-        sdk.StarkHardwareType.Revo3ProTouch,
-        sdk.StarkHardwareType.Revo3BasicTouch,
     ]
 
 

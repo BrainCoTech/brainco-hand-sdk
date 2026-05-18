@@ -29,23 +29,11 @@
 static std::atomic<bool> g_dfu_completed(false);
 static std::atomic<bool> g_dfu_failed(false);
 
-// ============================================================================
-// WARNING: ABI COMPATIBILITY NOTE (SDK v1.5.1+)
-// The underlying integer values of the `Baudrate` enum have been reordered 
-// to be strictly ascending. Specifically:
-//   - STARK_BAUDRATE_BAUD3MBPS = 6
-//   - STARK_BAUDRATE_BAUD5MBPS = 7 (previously was 6)
-// If you are using pre-compiled binaries that hardcode or expect BAUD5MBPS 
-// to be 6, you MUST recompile your C/C++ application against the new 
-// stark-sdk.h header to ensure correct baudrate configuration.
-// ============================================================================
-
 // Default firmware paths (relative to executable)
 static const char* FIRMWARE_REVO1_BASIC = "../ota_bin/modbus/FW_MotorController_Release_SecureOTA_0.1.7.C.ota";
 static const char* FIRMWARE_REVO1_TOUCH = "../ota_bin/touch/FW_MotorController_Release_SecureOTA_V1.8.53.F.ota";
 static const char* FIRMWARE_REVO1_ADVANCED = "../ota_bin/stark2/Revo1.8_V1.0.3.C_2602031800.bin";
 static const char* FIRMWARE_REVO2_485_CANFD = "../ota_bin/stark2/Revo2_V1.0.20.U_2601091030.bin";
-static const char* FIRMWARE_REVO3 = "../ota_bin/stark3/revo23-fw-V0.0.4-2605111016.bin";
 
 /**
  * @brief Select firmware path based on hardware type
@@ -53,10 +41,6 @@ static const char* FIRMWARE_REVO3 = "../ota_bin/stark3/revo23-fw-V0.0.4-26051110
  * @return Firmware path or NULL if unknown
  */
 const char* select_firmware(StarkHardwareType hw_type) {
-    // Check Revo3 first (uses separate motor API)
-    if (stark_uses_revo3_motor_api(hw_type)) {
-        return FIRMWARE_REVO3;
-    }
     switch (hw_type) {
         case STARK_HARDWARE_TYPE_REVO1_BASIC:
             return FIRMWARE_REVO1_BASIC;
@@ -83,7 +67,6 @@ void print_usage(const char* prog_name) {
     printf("  Revo1 Touch:          %s\n", FIRMWARE_REVO1_TOUCH);
     printf("  Revo1 Advanced/Touch: %s\n", FIRMWARE_REVO1_ADVANCED);
     printf("  Revo2 (485/CANFD):    %s\n", FIRMWARE_REVO2_485_CANFD);
-    printf("  Revo3 (Stark3):       %s\n", FIRMWARE_REVO3);
     printf("\nExamples:\n");
     printf("  %s                           # Auto-detect, auto-select firmware\n", prog_name);
     printf("  %s firmware.bin              # Auto-detect, custom firmware\n", prog_name);

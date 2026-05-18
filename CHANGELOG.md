@@ -1,27 +1,27 @@
 # BrainCo RevoHand SDK Examples Changelog
 
+## v2.0.0 (2026/05/18)
+
+### Breaking Changes
+- **SDK Upgrade**: Upgraded to `bc-stark-sdk` 2.0.0 (Python 3.9 ABI wheels `cp39-abi3`).
+- **Scope Change**: This repository now exclusively targets Revo1 and Revo2 series examples. Support for new-generation devices (e.g., Revo3) has been migrated to a dedicated SDK repository.
+
+### Improvements & Fixes
+- Removed GUI panels, mock paths, and documentation for unsupported new-generation devices.
+- Updated C and Python build scripts and dependency requirements for SDK 2.0.0.
+- Cleaned up stale build artifacts and runtime logs.
+
+---
+
 ## v1.5.1 (2026/05/15)
 
-### 🚀 New Features
-- **Revo3 Smooth Trajectory Control**: Added host-side trajectory interpolation support (`hand_trajectory_revo3.cpp`, `revo3_trajectory.py`) for smooth multi-joint motion execution.
-- **Revo3 OTA Support**: Added Revo3 Device Firmware Upgrade (DFU) capabilities with CLI tools and GUI panel integration.
-- **Revo3 System Status Monitoring**: Added APIs (`revo3_get_system_status`) to retrieve whole-hand diagnostic metrics including voltage, current, power, temperature, and system fault codes.
-
-### 🔧 Improvements & Fixes
-- **Revo3 API Refactoring**: Renamed legacy `V3` API prefixes to `Revo3` across Python SDK and C++ demos for consistent nomenclature.
-- **Motor Protection**: Migrated deprecated `max_continuous_current` API to `global_protect_current` for Revo3 devices.
-- **Baudrate Detection Fix**: Fixed Revo3 Modbus initial baudrate detection by pre-setting hardware context via `get_device_info`.
-- **GUI Enhancements**: Updated Revo3 motor position limits, added fractional movement controls, and fixed UI interactions during DFU upgrades.
-- **ABI Compatibility**: Standardized `Baudrate` enum values for strict ascending order (SDK v1.5.1+).
+### Improvements & Fixes
+- Standardized `Baudrate` enum values for strict ascending order (SDK v1.5.1+).
+- Added `install_whl.sh` support for wheel installation from OSS.
 
 ---
 
 ## v1.4.0 (2026/04/15)
-
-### 🚀 Revo3 Support
-- Full support for Revo3 devices
-- Motor control modes: position, velocity, current, MIT impedance, damping
-- MIT impedance debug tools: tracking, plotting, trajectory generation
 
 ### 🚀 Revo2 ArrayPressTouch Device Support
 - 3D force + torque (Fx, Fy, Fz, Mx, My) data collection via `ArrayPressureTouchDataBuffer`
@@ -29,14 +29,13 @@
 - Python GUI: 2D vector compass visualization for force/torque data
 
 ### 🎨 Python GUI
-- Revo3 motor control, config, and teaching mode panels
-- Touch panels: heatmap visualization, force/pressure/Revo3 support
-- Timing test with Revo2/Revo3 workers and dynamic frequency switching
+- Touch panels: heatmap visualization and force/pressure support
+- Timing test with Revo2 workers and dynamic frequency switching
 - i18n support (EN/ZH)
 
 ### 🔧 SDK & API Changes
-- New hardware types: `Revo2TouchForce3D`, `Revo2TouchArrayPressure`, `Revo3Ultra/Pro/Basic` (hw_type 10-27)
-- New API: `uses_revo3_motor_api()`, `uses_revo3_touch_api()`, `uses_array_pressure_touch_api()`
+- New hardware types: `Revo2TouchForce3D`, `Revo2TouchArrayPressure`
+- New API: `uses_array_pressure_touch_api()`
 
 ### 🐛 Bug Fixes
 - Fix CAN error frame handling and auto-detect protocol dispatch
@@ -44,7 +43,6 @@
 
 ### 📚 Documentation & Project Structure
 - Archive deprecated `linux/` and `windows/` folders to `archive/`
-- Add comprehensive Revo3 Python API documentation and joint mapping
 - Add `install_whl.sh` script for Python wheel installation
 
 ---

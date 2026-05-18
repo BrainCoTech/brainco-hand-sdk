@@ -3,7 +3,7 @@ set -e
 
 # BrainCo Stark SDK - Install .whl from OSS
 # Usage: bash install_whl.sh [version]
-# Example: bash install_whl.sh 1.5.1
+# Example: bash install_whl.sh 2.0.0
 
 OSS_BASE="https://app.brainco.cn/universal/bc-stark-sdk/libs"
 
@@ -13,7 +13,7 @@ if [ -n "$1" ]; then
 elif [ -f "Cargo.toml" ]; then
   VERSION=$(grep '^version =' Cargo.toml | head -1 | awk -F'"' '{print $2}')
 else
-  VERSION="1.5.1"
+  VERSION="2.0.0"
 fi
 
 echo "Installing bc-stark-sdk v${VERSION}..."
@@ -46,8 +46,8 @@ case "$OS" in
     ;;
 esac
 
-# abi3-cp38 is compatible with Python 3.8+
-WHL_NAME="bc_stark_sdk-${VERSION}-cp38-abi3-${PLATFORM}.whl"
+# abi3-cp39 is compatible with Python 3.9+
+WHL_NAME="bc_stark_sdk-${VERSION}-cp39-abi3-${PLATFORM}.whl"
 WHL_URL="${OSS_BASE}/v${VERSION}/${WHL_NAME}"
 
 # Check if file exists before downloading
@@ -61,5 +61,11 @@ if [ "$HTTP_CODE" != "200" ]; then
 fi
 
 echo "Downloading: $WHL_URL"
-pip3 install "$WHL_URL"
+# Add --break-system-packages if pip supports it (for PEP 668)
+PIP_FLAGS=""
+if pip3 install --help | grep -q "break-system-packages"; then
+  PIP_FLAGS="--break-system-packages"
+fi
+
+pip3 install $PIP_FLAGS "$WHL_URL"
 echo "Done. bc-stark-sdk v${VERSION} installed."

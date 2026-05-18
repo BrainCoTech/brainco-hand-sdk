@@ -578,7 +578,7 @@ void demo_touch_sensor(DeviceHandler *handle, uint8_t slave_id, TouchSensorType 
 
                 // Read ArrayPressure data
                 const size_t MAX_AP = 100;
-                CArrayPressureTouchItem ap_data[MAX_AP];
+                CArrayPressureTouchData ap_data[MAX_AP];
                 int count = array_pressure_touch_buffer_pop_all(ap_buf, ap_data, MAX_AP);
 
                 if (count > 0) {
@@ -586,8 +586,8 @@ void demo_touch_sensor(DeviceHandler *handle, uint8_t slave_id, TouchSensorType 
                     auto latest = &ap_data[count - 1];
 
                     // Print status
-                    uint16_t sensor_bits = latest->sensor_status;
-                    bool warmup = latest->warmup_complete != 0;
+                    uint16_t sensor_bits = latest->status.sensor_status;
+                    bool warmup = latest->status.warmup_complete != 0;
                     printf("\n[Demo] ArrayPressure data (%d samples collected):\n", count);
                     printf("  Status:");
                     for (int i = 0; i < 5; i++) {

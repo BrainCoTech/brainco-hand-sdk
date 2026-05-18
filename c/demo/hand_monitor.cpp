@@ -406,7 +406,7 @@ void run_array_pressure_collection(
     CArrayPressureTouchItemBuffer* ap_buffer
 ) {
     const size_t MAX_AP_DATA = 100;
-    CArrayPressureTouchItem ap_data[MAX_AP_DATA];
+    CArrayPressureTouchData ap_data[MAX_AP_DATA];
     int loop_count = 0;
 
     const char* finger_names[] = {"Thumb", "Index", "Middle", "Ring", "Pinky"};
@@ -432,8 +432,8 @@ void run_array_pressure_collection(
         auto latest = &ap_data[count - 1];
 
         // Print status
-        uint16_t sensor_bits = latest->sensor_status;
-        bool warmup = latest->warmup_complete != 0;
+        uint16_t sensor_bits = latest->status.sensor_status;
+        bool warmup = latest->status.warmup_complete != 0;
 
         printf("[%2ds]\n", loop_count);
         printf("  Sensors:");
