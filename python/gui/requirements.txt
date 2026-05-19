@@ -1,7 +1,9 @@
 # Stark SDK GUI Requirements
 
-# Stark SDK
-bc_stark_sdk>=2.0.0
+# Stark SDK Installation:
+# 1. To install from internal OSS (recommended for pre-release): run `bash install_whl.sh`
+# 2. To install from public PyPI: uncomment the line below (if commented out)
+# bc-stark-sdk>=2.0.1
 
 # GUI Framework
 PySide6>=6.5.0

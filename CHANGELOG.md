@@ -1,23 +1,23 @@
 # BrainCo RevoHand SDK Examples Changelog
 
+## v2.0.1 (2026/05/19)
+
+### 🐛 Bug Fixes
+- **Auto Detection**: Added full multi-channel and multi-protocol (CAN 2.0 / CANFD) auto-detection support for BrainCo USBCANFD adapters.
+- **Motor Calibration**: Resolved an issue preventing successful manual motor calibration on Revo2 devices.
+
+---
 ## v2.0.0 (2026/05/18)
 
 ### Breaking Changes
 - **SDK Upgrade**: Upgraded to `bc-stark-sdk` 2.0.0 (Python 3.9 ABI wheels `cp39-abi3`).
-- **Scope Change**: This repository now exclusively targets Revo1 and Revo2 series examples. Support for new-generation devices (e.g., Revo3) has been migrated to a dedicated SDK repository.
+- **C/C++ ABI Change**: The `Baudrate` enum has been reordered (e.g., `BAUD5MBPS` changed from 6 to 7). You MUST recompile your C/C++ application against the new `stark-sdk.h` header.
+- **Scope Change**: This repository now exclusively targets Revo1 and Revo2 series examples. Support for new-generation devices has been migrated to a dedicated SDK repository.
 
 ### Improvements & Fixes
 - Removed GUI panels, mock paths, and documentation for unsupported new-generation devices.
 - Updated C and Python build scripts and dependency requirements for SDK 2.0.0.
 - Cleaned up stale build artifacts and runtime logs.
-
----
-
-## v1.5.1 (2026/05/15)
-
-### Improvements & Fixes
-- Standardized `Baudrate` enum values for strict ascending order (SDK v1.5.1+).
-- Added `install_whl.sh` support for wheel installation from OSS.
 
 ---
 
