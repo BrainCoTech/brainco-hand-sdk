@@ -33,3 +33,4 @@ trajectory_*.json
 jitter_analysis.py
 jitter_report.png
 python/gui/dfu_runner.py
+python/edu/recordings/

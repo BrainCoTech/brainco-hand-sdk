@@ -1,8 +1,8 @@
 """
 Glove Data Collection Example
 
-This example demonstrates how to connect the glove device and collect sensor data using bc-edu-sdk,
-including Flex (bend sensor), IMU (Inertial Measurement Unit), and magnetometer data.
+This example demonstrates how to connect to the glove device and collect sensor data,
+including Flex (bending sensors), IMU (inertial measurement unit), and magnetometer data.
 """
 
 import asyncio
@@ -12,11 +12,11 @@ from typing import Optional, List
 from edu_utils import *
 from model import FlexData, IMUData, MagData
 
-# Constants
-NUM_CHANNELS = 6  # Flex sensor channel count
-FLEX_BUFFER_LENGTH = 1250  # Flex data buffer length (data points)
-FETCH_DATA_COUNT = 1000  # Number of data points to fetch
-BAUDRATE = 115200  # Serial port baud rate
+# Configuration constants
+NUM_CHANNELS = 6  # Number of Flex sensor channels
+FLEX_BUFFER_LENGTH = 1250  # Flex data buffer length (number of data points)
+FETCH_DATA_COUNT = 1000  # Number of data points fetched each time
+BAUDRATE = 115200  # Serial port baudrate
 DATA_PRINT_INTERVAL = 0.5  # Data print interval (seconds)
 
 # Sensor coefficients
@@ -25,12 +25,12 @@ GYRO_COEFFICIENT = 0.06103515625  # Gyroscope coefficient (1/16.4)
 MAG_COEFFICIENT = 0.00152587890625  # Magnetometer coefficient (1/65536)
 
 # Global variables
-flex_seq_num: Optional[int] = None  # Flex sequence number
+flex_seq_num: Optional[int] = None  # Flex packet sequence number
 flex_values = np.zeros((NUM_CHANNELS, FLEX_BUFFER_LENGTH))  # Flex sensor data buffer
 
 def print_mag_data() -> None:
     """
-    Get and print magnetometer data
+    Fetch and print magnetometer data
     """
     mag_buff = libedu.get_mag_buffer(FETCH_DATA_COUNT, clean=True)
     logger.info(f"Got mag buffer len={len(mag_buff)}")
@@ -38,14 +38,14 @@ def print_mag_data() -> None:
     if len(mag_buff) == 0:
         return
 
-    # Print the first magnetometer data as an example
+    # Print only the first Mag data frame as an example
     mag_data = MagData.from_data(mag_buff[0])
     logger.info(f"MagData: {mag_data}")
 
 
 def print_imu_data() -> None:
     """
-    Get and print IMU (Inertial Measurement Unit) data
+    Fetch and print IMU (inertial measurement unit) data
     """
     imu_buff = libedu.get_imu_buffer(FETCH_DATA_COUNT, clean=True)
     logger.info(f"Got IMU buffer len={len(imu_buff)}")
@@ -53,7 +53,7 @@ def print_imu_data() -> None:
     if len(imu_buff) == 0:
         return
 
-    # Print the first IMU data as an example
+    # Print only the first IMU data frame as an example
     row = imu_buff[0]
     logger.info(f"IMU raw data: {row}")
     imu_data = IMUData.from_data(row)
@@ -62,7 +62,7 @@ def print_imu_data() -> None:
 
 def update_flex_buffer(flex_data: FlexData) -> None:
     """
-    Update Flex sensor data buffer
+    Update the Flex sensor data buffer
 
     Args:
         flex_data: Flex sensor data object
@@ -71,31 +71,31 @@ def update_flex_buffer(flex_data: FlexData) -> None:
 
     seq_num = flex_data.seq_num
 
-    # Check data packet sequence continuity
+    # Check data packet sequence number continuity
     if flex_seq_num is not None:
-        # Handle normal increment and duplicate sequence number cases
+        # Handle normal increment and duplicate sequence number conditions
         if seq_num < flex_seq_num:
             logger.warning(f"Data sequence backward: expected >= {flex_seq_num}, got {seq_num}")
         elif seq_num > flex_seq_num + 1:
             logger.warning(f"Data sequence gap: expected {flex_seq_num + 1}, got {seq_num}")
         elif seq_num == flex_seq_num:
             logger.debug(f"Duplicate sequence number: {seq_num}")
-            return  # Skip duplicate data packets
+            return  # Skip duplicate packet
 
     flex_seq_num = seq_num
 
-    # Split channel data into individual channels
+    # Split the channel data into individual channels
     channel_values = np.array_split(flex_data.channel_values, NUM_CHANNELS)
 
-    # Update each channel's data buffer
+    # Update the data buffer for each channel
     for i in range(NUM_CHANNELS):
-        flex_values[i] = np.roll(flex_values[i], -1)  # Data shift left
-        flex_values[i, -1] = channel_values[i][0]  # Add latest data
+        flex_values[i] = np.roll(flex_values[i], -1)  # Roll the data to the left
+        flex_values[i, -1] = channel_values[i][0]  # Append the latest data point
 
 
 def print_flex_data() -> None:
     """
-    Get and print Flex sensor data
+    Fetch and print Flex sensor data
     """
     flex_buff = libedu.get_flex_buffer(FETCH_DATA_COUNT, clean=True)
     logger.info(f"Got flex buffer len={len(flex_buff)}")
@@ -111,29 +111,29 @@ def print_flex_data() -> None:
 
     print_flex_timestamps(flex_data_list)
 
+
 def print_flex_timestamps(data: List[FlexData]) -> None:
     """
-    Print Flex data timestamps
+    Elegant single-line printing of Flex data batch summary to avoid verbose outputs
 
     Args:
         data: Flex data list
     """
-    if len(data) <= 6:
-        for item in data:
-            logger.info(f"{item}")
+    if not data:
         return
 
-    # If there are too many data points, only print the first 3 and last 3
-    for item in data[:3]:
-        logger.info(f"{item}")
-    logger.info("...")
-    for item in data[-3:]:
-        logger.info(f"{item}")
+    first_seq = data[0].seq_num
+    last_seq = data[-1].seq_num
+    seq_range = f"{first_seq}" if first_seq == last_seq else f"{first_seq} ~ {last_seq}"
+
+    logger.info(
+        f"-> Received {len(data)} Flex packets (seq: {seq_range})"
+    )
 
 
 def print_all_sensor_data() -> None:
     """
-    Print all sensor data (IMU, magnetometer, Flex)
+    Print all sensor data (IMU, Magnetometer, Flex)
     """
     print_imu_data()
     print_mag_data()
@@ -142,10 +142,10 @@ def print_all_sensor_data() -> None:
 
 async def connect_device() -> bool:
     """
-    Connect to the glove device and start data stream
+    Connect to the glove device and start the data stream
 
     Returns:
-        bool: True if connection is successful, False otherwise
+        bool: Returns True if connection succeeds, False otherwise
     """
     port_name = get_glove_port_name()
     if port_name is None:
@@ -157,11 +157,11 @@ async def connect_device() -> bool:
         await device.start_data_stream(libedu.MessageParser("Glove-device", libedu.MsgType.Edu))
         logger.info("Listening for messages...")
 
-        # Get device status information
+        # Get device status info
         await device.get_dongle_pair_stat()
         await asyncio.sleep(0.5)
 
-        # Optional: Configure sensor sampling rate
+        # Optional: configure sensor sampling rate
         await device.set_flex_config(libedu.SamplingRate.SAMPLING_RATE_50)
         await asyncio.sleep(0.5)
 
@@ -177,7 +177,7 @@ async def connect_device() -> bool:
 
 def initialize_configuration() -> None:
     """
-    Initialize SDK configuration
+    Initialize the SDK configuration
     """
     logger.info("Initializing configuration...")
     libedu.set_flex_buffer_cfg(FLEX_BUFFER_LENGTH)
@@ -188,7 +188,7 @@ def initialize_configuration() -> None:
 
 async def main() -> None:
     """
-    Main function: initialize configuration, connect to device, and start data collection loop
+    Main function: initialize configurations, connect the device, and start the data collection loop
     """
     initialize_configuration()
 

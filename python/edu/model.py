@@ -4,12 +4,13 @@ class EMGData:
         return EMGData(arr[0], arr[1], arr[2:])
 
     def __init__(self, seq_num, lead_off_bits, channel_values):
-        self.seq_num = seq_num
-        self.lead_off_status = lead_off_bits # 8 channels' lead-off status
-        self.channel_values = channel_values  # 8 * 20, 8 channels, each channel has 20 data points
+        self.seq_num = int(seq_num)
+        self.lead_off_bits = int(lead_off_bits) # Lead-off status of 8 channels
+        self.channel_values = channel_values  # 8 * 20, 8 channels, each with 20 data points
 
     def __repr__(self):
-        return f"EMG seq_num={self.seq_num}, lead_off_bits={self.lead_off_bits}, len={len(self.channel_values)}, values={self.channel_values[:3]}"
+        shape_str = f"8ch x {len(self.channel_values)//8}"
+        return f"EMG seq_num={self.seq_num}, lead_off_bits={self.lead_off_bits}, shape={shape_str}, values={self.channel_values[:8]}"
 
 class FlexData:
     @staticmethod
@@ -17,11 +18,12 @@ class FlexData:
         return FlexData(arr[0], arr[1:])
 
     def __init__(self, seq_num, channel_values):
-        self.seq_num = seq_num
+        self.seq_num = int(seq_num)
         self.channel_values = channel_values  # 6 channels
 
     def __repr__(self):
-        return f"FlexData seq_num={self.seq_num}, len={len(self.channel_values)}"
+        shape_str = f"6ch x {len(self.channel_values)//6}"
+        return f"FlexData seq_num={self.seq_num}, shape={shape_str}"
 
 class IMUCord:
 
@@ -45,10 +47,12 @@ class IMUCord:
 class IMUData:
     @staticmethod
     def from_data(arr: list):
-        return IMUData(arr[0], arr[1:4], arr[4:7])
+        # Ensure arr has at least 7 elements, pad with 0.0 if not enough to prevent IndexError
+        extended = arr + [0.0] * max(0, 7 - len(arr))
+        return IMUData(extended[0], extended[1:4], extended[4:7])
 
     def __init__(self, seqnum, acc, gyro):
-        self.seqnum = seqnum & 0xFFFF
+        self.seqnum = int(seqnum) & 0xFFFF
         self.acc = IMUCord(acc[0], acc[1], acc[2])
         self.gyro = IMUCord(gyro[0], gyro[1], gyro[2])
 
@@ -59,10 +63,12 @@ class IMUData:
 class MagData:
     @staticmethod
     def from_data(arr: list):
-        return MagData(arr[0], arr[1:4])
+        # Ensure arr has at least 4 elements, pad with 0.0 if not enough to prevent IndexError
+        extended = arr + [0.0] * max(0, 4 - len(arr))
+        return MagData(extended[0], extended[1:4])
 
     def __init__(self, seqnum, acc):
-        self.seqnum = seqnum & 0xFFFF
+        self.seqnum = int(seqnum) & 0xFFFF
         self.data = IMUCord(acc[0], acc[1], acc[2])
 
     def __repr__(self):

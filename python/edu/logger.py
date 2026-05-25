@@ -3,10 +3,10 @@ import colorlog
 import datetime
 import os
 
-# Custom time formatter, outputs RFC3339 format
+# Custom time formatter, outputting in RFC3339 format
 class RFC3339Formatter(colorlog.ColoredFormatter):
     def formatTime(self, record, datefmt=None):
-        # Create RFC3339 format timestamp, e.g.: 2025-07-24T02:04:23.466388Z
+        # Create RFC3339 formatted timestamp, e.g.: 2025-07-24T02:04:23.466388Z
         dt = datetime.datetime.fromtimestamp(record.created)
         return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
@@ -16,13 +16,13 @@ class PlainRFC3339Formatter(logging.Formatter):
         dt = datetime.datetime.fromtimestamp(record.created)
         return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
-# Console log format (with color, shows full path)
+# Console log format (colored, displaying full path)
 CONSOLE_FORMAT = "%(asctime)s[%(log_color)s%(levelname)s%(reset)s][%(pathname)s:%(lineno)d] %(message)s"
 
-# File log format (without color, shows full path)
+# File log format (plain, displaying full path)
 FILE_FORMAT = "%(asctime)s[%(levelname)s][%(pathname)s:%(lineno)d] %(message)s"
 
-# Create console formatter (with color)
+# Create console formatter (colored)
 console_formatter = RFC3339Formatter(
     CONSOLE_FORMAT,
     datefmt=None,
@@ -53,13 +53,13 @@ console_formatter = RFC3339Formatter(
     style="%",
 )
 
-# File log formatter (without color)
+# File log format (plain)
 file_formatter = PlainRFC3339Formatter(FILE_FORMAT)
 
 # Get root logger
 logger = logging.getLogger()
 
-# Create console handler
+# Create a console handler
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(console_formatter)
 
@@ -72,7 +72,7 @@ log_filename = f"logs/python_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f
 file_handler = logging.FileHandler(log_filename, encoding='utf-8')
 file_handler.setFormatter(file_formatter)
 
-# Add handlers to logger
+# Add handlers to the logger
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 logger.setLevel(logging.INFO)

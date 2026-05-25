@@ -1,8 +1,8 @@
 """
 Education SDK Utilities
 
-This module provides utility functions for interacting with `bc-edu-sdk`,
-mainly for device discovery, port management, and common helper utilities.
+This module provides helper utility functions for interacting with the bc-edu-sdk,
+mainly used for device discovery, port management, and generic helper features.
 """
 
 import json
@@ -13,58 +13,58 @@ from logger import getLogger
 from bc_edu_sdk import main_mod
 
 # Configuration constants
-VENDOR_ID = 21059  # BrainCo vendor ID
-GLOVE_PRODUCT_ID = 6  # Glove device product ID
-ARMBAND_PRODUCT_ID_PRIMARY = 1  # Primary armband device product ID
-ARMBAND_PRODUCT_ID_SECONDARY = 5  # Secondary armband device product ID
+VENDOR_ID = 21059  # BrainCo VID
+GLOVE_PRODUCT_ID = 6  # Glove PID
+ARMBAND_PRODUCT_ID_PRIMARY = 1  # Primary Armband PID
+ARMBAND_PRODUCT_ID_SECONDARY = 5  # Secondary Armband PID
 
-# Initialize logger and SDK module
-# logger = getLogger(logging.DEBUG)  # Optional: use DEBUG level logging
-logger = getLogger(logging.INFO)  # Default: use INFO level logging
+# Initialize logging and SDK module
+# logger = getLogger(logging.DEBUG)  # Optional: use DEBUG log level
+logger = getLogger(logging.INFO)   # Default: use INFO log level
 libedu = main_mod
 
 def get_usb_available_ports() -> None:
     """
-    Get information for all available USB ports.
+    Get all available USB ports information
 
-    This is a convenience function to display all available USB ports
-    in the current system. It is mainly used for debugging and port discovery.
+    This is a helper function to print all available USB ports currently in the system,
+    mainly used for debugging and port discovery.
     """
     libedu.get_usb_available_ports()
 
 
 def _get_first_port_name(ports_data: bytes, device_type: str) -> Optional[str]:
     """
-    Generic helper to extract the first available port name from port data.
+    Helper function to extract the first available port name from port data
 
-    This function parses the port scan result of various devices and
-    extracts the first available port name. It supports JSON-formatted
-    port data and includes error handling and logging.
+    This function parses port scan results of various devices and extracts the first
+    available port name. It supports JSON format port data parsing with complete
+    error handling and logging.
 
     Args:
-        ports_data: Port data, JSON-formatted bytes
+        ports_data: Port data in JSON bytes
             Expected format: [{"port_name": "COM1", ...}, {"port_name": "COM2", ...}]
-        device_type: Device type name, used in logs (e.g. "Stark", "Glove", "Armband")
+        device_type: Device type name, used for logging identification (e.g. "Stark", "Glove", "Armband")
 
     Returns:
-        The first available port name, or None if parsing failed.
-        On success, returns something like "/dev/ttyUSB0" or "COM3".
+        The name of the first available port, or None if parsing fails
+        Returns the port name on success, e.g. "/dev/ttyUSB0", "COM3" etc.
 
     Note:
-        - The first port in the list is chosen by default
-        - Includes full error handling to ensure stability
-        - All operations are logged to help with debugging
+        - This function prefers to choose the first port in the list.
+        - Contains complete error handling to ensure program stability.
+        - All operations are logged to aid in debugging.
     """
     logger.info(f"Available {device_type} ports: {ports_data}")
 
     try:
-        # Decode bytes and parse JSON-formatted data
+        # Decode bytes object and parse JSON format data
         ports_json: List[Dict[str, Any]] = json.loads(ports_data.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         logger.error(f"Failed to parse {device_type} ports data: {e}")
         return None
 
-    # Check whether the parsed result is an empty list
+    # Check if parsed results are empty
     if not ports_json:
         logger.warning(f"No {device_type} ports found in scan results")
         return None
@@ -80,22 +80,19 @@ def _get_first_port_name(ports_data: bytes, device_type: str) -> Optional[str]:
 
 def get_glove_port_name() -> Optional[str]:
     """
-    Get the first available glove device port name.
+    Get the first available Glove device port name
 
-    Scan glove devices via USB VID/PID and return the first detected
-    port name. A specific vendor ID and product ID are used to identify
-    glove devices.
+    Scans for glove devices using USB VID/PID and returns the first detected port name.
+    Uses specific VENDOR_ID and PRODUCT_ID to identify the glove.
 
     Returns:
-        The first available port name, or None if no port was found
-        or parsing failed. On success, returns something like
-        "/dev/ttyUSB0" or "COM3".
+        The first available port name, or None if not found or parsing fails
+        Returns the port name on success, e.g. "/dev/ttyUSB0", "COM3" etc.
 
     Note:
-        - Uses VID=21059, PID=6 to identify glove devices
-        - This function is dedicated to detecting USB glove devices
-        - If multiple glove devices are present, only the first
-          detected port is returned
+        - Identifies the glove using VID=21059, PID=6.
+        - This function is specifically for USB-connected gloves.
+        - If there are multiple gloves, it only returns the first detected port.
 
     Example:
         >>> port = get_glove_port_name()
@@ -114,22 +111,19 @@ def get_glove_port_name() -> Optional[str]:
 
 def get_armband_port_name() -> Optional[str]:
     """
-    Get the first available armband device port name.
+    Get the first available Armband device port name
 
-    Scan armband devices via USB VID/PID and return the first detected
-    port name. Multiple product IDs are supported to improve compatibility.
+    Scans for armband devices using USB VID/PID and returns the first detected port name.
+    Supports multiple product IDs to increase device compatibility.
 
     Returns:
-        The first available port name, or None if no port was found
-        or parsing failed. On success, returns something like
-        "/dev/ttyUSB0" or "COM3".
+        The first available port name, or None if not found or parsing fails
+        Returns the port name on success, e.g. "/dev/ttyUSB0", "COM3" etc.
 
     Note:
-        - Tries the primary product ID (PID=1) first, then the secondary
-          product ID (PID=5)
-        - This function is dedicated to detecting USB armband devices
-        - If multiple armband devices are present, only the first
-          detected port is returned
+        - Tries the primary product ID (PID=1) first, then the secondary product ID (PID=5).
+        - This function is specifically for USB-connected armbands.
+        - If there are multiple armbands, it only returns the first detected port.
 
     Example:
         >>> port = get_armband_port_name()
@@ -139,14 +133,14 @@ def get_armband_port_name() -> Optional[str]:
         ...     print("No armband device found")
     """
     try:
-        # 首先尝试主要产品ID
+        # Try primary product ID first
         ports = libedu.available_usb_ports(VENDOR_ID, ARMBAND_PRODUCT_ID_PRIMARY)
         port_name = _get_first_port_name(ports, "Armband")
 
         if port_name:
             return port_name
 
-        # 如果主要产品ID未找到设备，尝试备用产品ID
+        # If primary product ID is not found, try secondary product ID
         logger.info("Primary armband product ID not found, trying secondary ID...")
         ports = libedu.available_usb_ports(VENDOR_ID, ARMBAND_PRODUCT_ID_SECONDARY)
         return _get_first_port_name(ports, "Armband")
@@ -158,10 +152,10 @@ def get_armband_port_name() -> Optional[str]:
 
 def get_all_device_ports() -> Dict[str, Optional[str]]:
     """
-    Get the port information for all supported devices.
+    Get all supported device port information
 
     Returns:
-        A dictionary containing all device types and their ports.
+        A dictionary containing all device types and their corresponding ports
         Format: {"glove": "COM3", "armband": "/dev/ttyUSB0"}
     """
     devices = {
@@ -175,13 +169,13 @@ def get_all_device_ports() -> Dict[str, Optional[str]]:
 
 def is_device_connected(device_type: str) -> bool:
     """
-    Check whether a specific type of device is connected.
+    Check if a device of a specified type is connected
 
     Args:
         device_type: Device type ("glove" or "armband")
 
     Returns:
-        True if the device is connected, otherwise False.
+        True if the device is connected, False otherwise
     """
     if device_type.lower() == "glove":
         return get_glove_port_name() is not None
@@ -194,10 +188,9 @@ def is_device_connected(device_type: str) -> bool:
 
 def scan_and_report_devices() -> None:
     """
-    Scan and report all connected devices.
+    Scan and report all connected devices
 
-    This is a convenience function for quickly checking the status
-    of all currently connected devices.
+    This is a helper function to quickly review the status of all currently connected devices.
     """
     logger.info("Scanning for connected devices...")
 
@@ -217,20 +210,30 @@ def scan_and_report_devices() -> None:
     get_usb_available_ports()
 
 
-def print_afe_timestamps(logger, data) -> None:
+def print_emg_timestamps(logger, data) -> None:
     """
-    Print timestamp information of AFE data.
+    Elegant single-line printing of EMG data batch summary and core status to avoid verbose logs
 
     Args:
         logger: Logger instance
-        data: List of AFE data
+        data: EMG data list
     """
-    if len(data) <= 6:
-        for item in data:
-            logger.info(f"{item}")
+    if not data:
         return
-    for item in data[:3]:
-        logger.info(f"{item}")
-    logger.info("...")
-    for item in data[-3:]:
-        logger.info(f"{item}")
+
+    first_seq = data[0].seq_num
+    last_seq = data[-1].seq_num
+    latest = data[-1]
+
+    bits = int(latest.lead_off_bits)
+    if bits == 0:
+        lead_off_str = "Normal"
+    else:
+        loose_channels = [f"CH{i+1}" for i in range(8) if (bits & (1 << i)) != 0]
+        lead_off_str = f"Loose({', '.join(loose_channels)})"
+
+    seq_range = f"{first_seq}" if first_seq == last_seq else f"{first_seq} ~ {last_seq}"
+    logger.info(
+        f"-> Received {len(data)} EMG packets (seq: {seq_range}) | "
+        f"lead_off: {lead_off_str}"
+    )
