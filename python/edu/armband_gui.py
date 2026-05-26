@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Import SDK resources
 from edu_utils import libedu, get_armband_port_name, logger
-from model import EMGData, IMUData, MagData
+from model import EMGData, IMUData, MagData, EulerData
 from filters_sdk import BWBandStopFilter, BWHighPassFilter
 
 # Configuration constants
@@ -53,15 +53,18 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.emg_buffer = np.zeros((NUM_CHANNELS, BUFFER_LENGTH))
         self.imu_buffer = np.zeros((6, IMU_BUFFER_LENGTH))  # Acc X, Y, Z, Gyro X, Y, Z
         self.mag_buffer = np.zeros((3, MAG_BUFFER_LENGTH))  # Mag X, Y, Z
+        self.euler_buffer = np.zeros((3, IMU_BUFFER_LENGTH))  # Yaw, Pitch, Roll
         
         # Sequence numbers for continuity checks
         self.last_emg_seq = None
         self.last_imu_seq = None
         self.last_mag_seq = None
+        self.last_euler_seq = None
         self.last_rendered_emg_seq = None
         self.last_rendered_fft_seq = None
         self.last_rendered_imu_seq = None
         self.last_rendered_mag_seq = None
+        self.last_rendered_euler_seq = None
         self.last_fft_update_time = 0.0  # Limit FFT calculation frequency to avoid CPU spikes
         
         # Visual objects
@@ -470,10 +473,13 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.seq_imu_lbl.setStyleSheet(f"color: #7eff9e; {_mono}")
         self.seq_mag_lbl = QtWidgets.QLabel("MAG   seq:      —")
         self.seq_mag_lbl.setStyleSheet(f"color: #ffcf7e; {_mono}")
+        self.seq_euler_lbl = QtWidgets.QLabel("EULER seq:      —")
+        self.seq_euler_lbl.setStyleSheet(f"color: #ff9f43; {_mono}")
         
         seq_lay.addWidget(self.seq_emg_lbl)
         seq_lay.addWidget(self.seq_imu_lbl)
         seq_lay.addWidget(self.seq_mag_lbl)
+        seq_lay.addWidget(self.seq_euler_lbl)
         
         dashboard.addWidget(seq_grp)
 
@@ -489,6 +495,7 @@ class ArmbandWindow(QtWidgets.QWidget):
         self._add_fft_tab("EMG FFT", "emg", NUM_CHANNELS, cols=4)
         self._add_signal_tab("IMU", "imu", 6, cols=3)
         self._add_signal_tab("MAG", "mag", 3, cols=3)
+        self._add_signal_tab("Euler", "euler", 3, cols=3)
 
         self.log_box = QtWidgets.QPlainTextEdit()
         self.log_box.setReadOnly(True)
@@ -534,12 +541,15 @@ class ArmbandWindow(QtWidgets.QWidget):
         
         IMU_LABELS = ["Acc X", "Acc Y", "Acc Z", "Gyro X", "Gyro Y", "Gyro Z"]
         MAG_LABELS = ["Mag X", "Mag Y", "Mag Z"]
+        EULER_LABELS = ["Yaw", "Pitch", "Roll"]
         
         for ch in range(channels):
             if stream == "imu":
                 title_text = IMU_LABELS[ch]
             elif stream == "mag":
                 title_text = MAG_LABELS[ch]
+            elif stream == "euler":
+                title_text = EULER_LABELS[ch]
             else:
                 title_text = f"EMG CH {ch + 1}"
                 
@@ -562,6 +572,9 @@ class ArmbandWindow(QtWidgets.QWidget):
                 hue = (190 + (ch * 12) % 60) % 360
             elif stream == "imu":
                 hue = (45 + (ch * 35) % 80) % 360
+            elif stream == "euler":
+                hues = [30, 345, 160] # Yaw (Orange-Gold), Pitch (Neon Pink), Roll (Emerald Green)
+                hue = hues[ch]
             else:
                 hue = (310 + (ch * 40) % 50) % 360
                 
@@ -719,13 +732,16 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.emg_buffer[:] = 0
         self.imu_buffer[:] = 0
         self.mag_buffer[:] = 0
+        self.euler_buffer[:] = 0
         self.last_emg_seq = None
         self.last_imu_seq = None
         self.last_mag_seq = None
+        self.last_euler_seq = None
         self.last_rendered_emg_seq = None
         self.last_rendered_fft_seq = None
         self.last_rendered_imu_seq = None
         self.last_rendered_mag_seq = None
+        self.last_rendered_euler_seq = None
         self.last_fft_update_time = 0.0
         
         if not self.args.mock and self.device:
@@ -734,6 +750,7 @@ class ArmbandWindow(QtWidgets.QWidget):
                 libedu.get_emg_buffer(9999, clean=True)
                 libedu.get_imu_calibration_buff(9999, clean=True)
                 libedu.get_mag_calibration_buff(9999, clean=True)
+                libedu.get_euler_buffer(9999, clean=True)
                 await self.device.start_sensor_data_stream()
             except Exception as e:
                 self._append_log("Streaming Error", f"Failed to start stream: {e}")
@@ -876,6 +893,28 @@ class ArmbandWindow(QtWidgets.QWidget):
                             
                         if self.recording:
                             self._write_csv_row("mag", [time.time(), 0] + mag)
+
+                    # Euler generation (2 samples per 20ms -> 100Hz)
+                    euler_samples = []
+                    for _ in range(2):
+                        yaw = 45.0 * np.sin(mock_t * 0.8)
+                        pitch = 30.0 * np.cos(mock_t * 1.2)
+                        roll = 15.0 * np.sin(mock_t * 2.0)
+                        euler_samples.append([yaw, pitch, roll])
+
+                    if self.last_euler_seq is None: self.last_euler_seq = 0
+                    self.last_euler_seq += 2
+                    self.seq_euler_lbl.setText(f"EULER seq: {self.last_euler_seq:>6}")
+
+                    N_euler = len(euler_samples)
+                    for i in range(3):
+                        i_samples = np.array([euler_samples[idx][i] for idx in range(N_euler)])
+                        self.euler_buffer[i] = np.roll(self.euler_buffer[i], -N_euler)
+                        self.euler_buffer[i][-N_euler:] = i_samples
+
+                    if self.recording:
+                        for samp in euler_samples:
+                            self._write_csv_row("euler", [time.time(), 0] + samp)
                 else:
                     # Real Hardware polling
                     await asyncio.sleep(0.015)
@@ -992,6 +1031,37 @@ class ArmbandWindow(QtWidgets.QWidget):
                                     row_vals = [all_mag[i][idx] for i in range(3)]
                                     rows_to_write.append([time.time(), self.last_mag_seq] + row_vals)
                                 self._write_csv_rows("mag", rows_to_write)
+
+                    # 4. Fetch Euler Buffer
+                    euler_buff = libedu.get_euler_buffer(100, clean=True)
+                    if euler_buff:
+                        all_euler = [[] for _ in range(3)]
+                        seq_nums_euler = []
+                        
+                        for row in euler_buff:
+                            euler_data = EulerData.from_data(row)
+                            seq_nums_euler.append(euler_data.seqnum)
+                            samp = [euler_data.yaw, euler_data.pitch, euler_data.roll]
+                            for i in range(3):
+                                all_euler[i].append(samp[i])
+                                
+                        if seq_nums_euler:
+                            self.last_euler_seq = seq_nums_euler[-1]
+                            self.seq_euler_lbl.setText(f"EULER seq: {self.last_euler_seq:>6}")
+                            
+                        N_euler = len(all_euler[0])
+                        if N_euler > 0:
+                            N_display = min(N_euler, IMU_BUFFER_LENGTH)
+                            for i in range(3):
+                                self.euler_buffer[i] = np.roll(self.euler_buffer[i], -N_display)
+                                self.euler_buffer[i][-N_display:] = all_euler[i][-N_display:]
+                                
+                            if self.recording:
+                                rows_to_write = []
+                                for idx in range(N_euler):
+                                    row_vals = [all_euler[i][idx] for i in range(3)]
+                                    rows_to_write.append([time.time(), self.last_euler_seq] + row_vals)
+                                self._write_csv_rows("euler", rows_to_write)
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -1055,6 +1125,13 @@ class ArmbandWindow(QtWidgets.QWidget):
                 self.last_rendered_mag_seq = self.last_mag_seq
                 for i in range(3):
                     self.curves["mag"][i].setData(self.mag_buffer[i])
+                    
+        # 5. Update Euler Tab
+        elif current_tab == 4:
+            if self.last_euler_seq != self.last_rendered_euler_seq:
+                self.last_rendered_euler_seq = self.last_euler_seq
+                for i in range(3):
+                    self.curves["euler"][i].setData(self.euler_buffer[i])
 
     def _on_tab_changed(self, index: int) -> None:
         """
@@ -1064,6 +1141,7 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.last_rendered_fft_seq = None
         self.last_rendered_imu_seq = None
         self.last_rendered_mag_seq = None
+        self.last_rendered_euler_seq = None
         self.last_fft_update_time = 0.0  # Force immediate calculation on first tab focus
 
     def _toggle_recording(self) -> None:
@@ -1087,6 +1165,7 @@ class ArmbandWindow(QtWidgets.QWidget):
             "emg": rec_dir / f"armband_{pid}_{ts}_emg.csv",
             "imu": rec_dir / f"armband_{pid}_{ts}_imu.csv",
             "mag": rec_dir / f"armband_{pid}_{ts}_mag.csv",
+            "euler": rec_dir / f"armband_{pid}_{ts}_euler.csv",
         }
         
         try:
@@ -1107,6 +1186,11 @@ class ArmbandWindow(QtWidgets.QWidget):
             f_mag = open(self.rec_files["mag"], "w", encoding="utf-8")
             f_mag.write("Timestamp,SeqNum,MagX,MagY,MagZ\n")
             self.rec_writers["mag"] = f_mag
+
+            # Euler file
+            f_euler = open(self.rec_files["euler"], "w", encoding="utf-8")
+            f_euler.write("Timestamp,SeqNum,Yaw,Pitch,Roll\n")
+            self.rec_writers["euler"] = f_euler
             
             self.recording = True
             self.rec_start_time = time.time()

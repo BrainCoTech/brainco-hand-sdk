@@ -48,7 +48,7 @@ def update_emg_buffer(emg_data: EMGData) -> None:
 
 def print_all_sensor_data() -> None:
     """
-    Fetch and print all sensor data (EMG, IMU, and MAG)
+    Fetch and print all sensor data (EMG, IMU, MAG, and EULER)
     """
     # 1. Fetch and process EMG data
     emg_buff = libedu.get_emg_buffer(FETCH_DATA_COUNT, clean=True)
@@ -90,13 +90,25 @@ def print_all_sensor_data() -> None:
         mag_seq_range = f"{first_mag_seq}" if first_mag_seq == last_mag_seq else f"{first_mag_seq} ~ {last_mag_seq}"
         mag_str = f"MAG x{len(mag_calibration_buff)} (seq: {mag_seq_range} | mag: {mag_vals})"
 
-    # Combine IMU and MAG into a single-line print if both exist to minimize console scrolling clutter
-    if imu_str and mag_str:
-        logger.info(f"-> Received {imu_str} | {mag_str}")
-    elif imu_str:
-        logger.info(f"-> Received {imu_str}")
-    elif mag_str:
-        logger.info(f"-> Received {mag_str}")
+    # 4. Fetch and process Euler angle data
+    euler_buff = libedu.get_euler_buffer(FETCH_DATA_COUNT, clean=True)
+    euler_str = ""
+    if len(euler_buff) > 0:
+        first_euler_seq = int(euler_buff[0][0])
+        last_euler_seq = int(euler_buff[-1][0])
+        latest_euler = euler_buff[-1]
+        
+        yaw, pitch, roll = latest_euler[1], latest_euler[2], latest_euler[3]
+        euler_seq_range = f"{first_euler_seq}" if first_euler_seq == last_euler_seq else f"{first_euler_seq} ~ {last_euler_seq}"
+        euler_str = f"EULER x{len(euler_buff)} (seq: {euler_seq_range} | yaw: {yaw:.2f} | pitch: {pitch:.2f} | roll: {roll:.2f})"
+
+    # Combine IMU, MAG, and EULER into a single-line print if they exist
+    parts = []
+    if imu_str: parts.append(imu_str)
+    if mag_str: parts.append(mag_str)
+    if euler_str: parts.append(euler_str)
+    if parts:
+        logger.info("-> Received " + " | ".join(parts))
 
 async def setup_armband_device() -> bool:
     """
@@ -186,6 +198,11 @@ def initialize_configuration() -> None:
     libedu.set_emg_buffer_cfg(EMG_BUFFER_LENGTH)
     libedu.set_msg_resp_callback(
         lambda device_id, msg: logger.warning(f"Message response from {device_id}: {msg}")
+    )
+    
+    # Register Euler Angle callback demo
+    libedu.set_euler_data_callback(
+        lambda data: logger.info(f"⚡ [Euler Callback] Received {len(data)} packets. Latest: Yaw={data[-1][1]:.2f}, Pitch={data[-1][2]:.2f}, Roll={data[-1][3]:.2f}") if data else None
     )
 
 

@@ -45,16 +45,16 @@ class GloveWindow(QtWidgets.QWidget):
         self.args = args
         self.cleanup_task: asyncio.Task | None = None
         self.device = None
-        
+
         # Real-time data buffers
         self.flex_buffer = np.zeros((NUM_CHANNELS, BUFFER_LENGTH))
         self.imu_buffer = np.zeros((6, IMU_BUFFER_LENGTH))  # Acc X, Y, Z, Gyro X, Y, Z
         self.mag_buffer = np.zeros((3, MAG_BUFFER_LENGTH))  # Mag X, Y, Z
-        
+
         # Visual objects
         self.curves: dict[str, list[Any]] = {}
         self.plots: dict[str, list[pg.PlotWidget]] = {}
-        
+
         # Session Recording state
         self.recording = False
         self.rec_start_time = None
@@ -64,10 +64,10 @@ class GloveWindow(QtWidgets.QWidget):
         self.rec_files = {}
         self.rec_writers = {}
         self.current_marker = ""
-        
+
         # Polling/Streaming state
         self.streaming = False
-        
+
         # Telemetry sequence numbers
         self.flex_seq = 0
         self.imu_seq = 0
@@ -76,11 +76,11 @@ class GloveWindow(QtWidgets.QWidget):
         self.last_rendered_imu_seq = None
         self.last_rendered_mag_seq = None
         self.connected = False
-        
+
         # UI styles and build
         self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
         self._build_ui()
-        
+
         # Start the GUI update timer for plotting
         self.plot_timer = QtCore.QTimer()
         self.plot_timer.setInterval(40)  # 25 FPS
@@ -120,35 +120,35 @@ class GloveWindow(QtWidgets.QWidget):
             font-weight: 800;
             letter-spacing: 0.5px;
         }
-        
+
         #sys_grp {
             border: 1px solid rgba(226, 232, 240, 0.15);
         }
         #sys_grp::title {
             color: #cbd5e1;
         }
-        
+
         #conn_grp {
             border: 1px solid rgba(0, 240, 255, 0.22);
         }
         #conn_grp::title {
             color: #00f0ff;
         }
-        
+
         #stream_grp {
             border: 1px solid rgba(57, 255, 20, 0.18);
         }
         #stream_grp::title {
             color: #39ff14;
         }
-        
+
         #rec_grp {
             border: 1px solid rgba(255, 0, 85, 0.22);
         }
         #rec_grp::title {
             color: #ff0055;
         }
-        
+
         QLineEdit, QComboBox {
             background-color: #070914;
             border: 1px solid #1f2340;
@@ -170,7 +170,7 @@ class GloveWindow(QtWidgets.QWidget):
             border: 1px solid #00f0ff;
             background-color: #0b0e24;
         }
-        
+
         QPushButton {
             background-color: rgba(30, 41, 59, 0.85);
             border: 1px solid #232a3b;
@@ -190,7 +190,7 @@ class GloveWindow(QtWidgets.QWidget):
             color: #475569;
             border-color: #171d2b;
         }
-        
+
         QPushButton#connect_btn {
             background-color: rgba(0, 240, 255, 0.08);
             color: #00f0ff;
@@ -206,7 +206,7 @@ class GloveWindow(QtWidgets.QWidget):
             color: #39ff14;
             border-color: rgba(57, 255, 20, 0.35);
         }
-        
+
         QPushButton#stream_btn {
             background-color: rgba(57, 255, 20, 0.08);
             color: #39ff14;
@@ -222,7 +222,7 @@ class GloveWindow(QtWidgets.QWidget):
             color: #ff0055;
             border-color: rgba(255, 0, 85, 0.45);
         }
-        
+
         QPushButton#rec_btn {
             background-color: rgba(255, 0, 85, 0.08);
             color: #ff0055;
@@ -238,7 +238,7 @@ class GloveWindow(QtWidgets.QWidget):
             color: #ffffff;
             border-color: #ff0055;
         }
-        
+
         QPushButton#connect_btn:disabled,
         QPushButton#stream_btn:disabled,
         QPushButton#rec_btn:disabled {
@@ -246,7 +246,7 @@ class GloveWindow(QtWidgets.QWidget):
             color: #475569;
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
-        
+
         QCheckBox {
             color: #94a3b8;
             font-size: 11px;
@@ -267,7 +267,7 @@ class GloveWindow(QtWidgets.QWidget):
             background-color: #00f0ff;
             border: 3px solid #070914;
         }
-        
+
         QTabWidget::pane {
             border: 1px solid #14172f;
             background-color: #060712;
@@ -292,7 +292,7 @@ class GloveWindow(QtWidgets.QWidget):
             color: #00f0ff;
             border-bottom: 2px solid #00f0ff;
         }
-        
+
         QPlainTextEdit {
             background-color: #04050a;
             border: 1px solid #101224;
@@ -302,7 +302,7 @@ class GloveWindow(QtWidgets.QWidget):
             font-size: 11px;
             padding: 4px;
         }
-        
+
         QLabel#rec_time_label {
             color: #4b526d;
             font-weight: bold;
@@ -332,11 +332,11 @@ class GloveWindow(QtWidgets.QWidget):
         sys_lay = QtWidgets.QVBoxLayout(sys_grp)
         sys_lay.setContentsMargins(12, 10, 12, 10)
         sys_lay.setSpacing(4)
-        
+
         logo_lbl = QtWidgets.QLabel("🖐️ GLOVE GUI DEMO")
         logo_lbl.setStyleSheet("color: #e2e8f0; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;")
         sys_lay.addWidget(logo_lbl)
-        
+
         self.status_label = QtWidgets.QLabel("System Ready")
         self.status_label.setStyleSheet("color: #39ff14; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
         self.status_label.setMinimumWidth(165)
@@ -363,10 +363,10 @@ class GloveWindow(QtWidgets.QWidget):
             self.port_combo.setFixedHeight(28)
             self.port_combo.setEditable(True)
             conn_lay.addWidget(self.port_combo)
-            
+
             # Scan serial ports
             self._scan_ports()
-            
+
             self.connect_btn = QtWidgets.QPushButton("Connect Device")
             self.connect_btn.setObjectName("connect_btn")
             self.connect_btn.setFixedHeight(28)
@@ -407,32 +407,32 @@ class GloveWindow(QtWidgets.QWidget):
         self.participant_edit.setFixedWidth(55)
         self.participant_edit.setFixedHeight(28)
         rec_lay.addWidget(self.participant_edit)
-  
+
         self.rec_btn = QtWidgets.QPushButton("REC")
         self.rec_btn.setObjectName("rec_btn")
         self.rec_btn.setFixedHeight(28)
         self.rec_btn.setEnabled(False)
         self.rec_btn.clicked.connect(self._toggle_recording)
         rec_lay.addWidget(self.rec_btn)
-  
+
         self.rec_time_label = QtWidgets.QLabel("00:00")
         self.rec_time_label.setObjectName("rec_time_label")
         rec_lay.addWidget(self.rec_time_label)
-  
+
         rec_lay.addSpacing(6)
-  
+
         self.marker_edit = QtWidgets.QLineEdit("fist")
         self.marker_edit.setFixedWidth(80)
         self.marker_edit.setFixedHeight(28)
         self.marker_edit.setEnabled(False)
         rec_lay.addWidget(self.marker_edit)
-  
+
         self.marker_btn = QtWidgets.QPushButton("Tag Marker")
         self.marker_btn.setFixedHeight(28)
         self.marker_btn.clicked.connect(self._send_marker)
         self.marker_btn.setEnabled(False)
         rec_lay.addWidget(self.marker_btn)
-        
+
         rec_lay.addStretch(1)
         dashboard.addWidget(rec_grp)
         dashboard.addStretch()
@@ -443,7 +443,7 @@ class GloveWindow(QtWidgets.QWidget):
         seq_lay = QtWidgets.QVBoxLayout(seq_grp)
         seq_lay.setContentsMargins(12, 6, 12, 6)
         seq_lay.setSpacing(2)
-        
+
         _mono = "font-size: 11px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;"
         self.seq_flex_lbl = QtWidgets.QLabel("FLEX  seq:      —")
         self.seq_flex_lbl.setStyleSheet(f"color: #7ecfff; {_mono}")
@@ -451,11 +451,11 @@ class GloveWindow(QtWidgets.QWidget):
         self.seq_imu_lbl.setStyleSheet(f"color: #7eff9e; {_mono}")
         self.seq_mag_lbl = QtWidgets.QLabel("MAG   seq:      —")
         self.seq_mag_lbl.setStyleSheet(f"color: #ffcf7e; {_mono}")
-        
+
         seq_lay.addWidget(self.seq_flex_lbl)
         seq_lay.addWidget(self.seq_imu_lbl)
         seq_lay.addWidget(self.seq_mag_lbl)
-        
+
         dashboard.addWidget(seq_grp)
 
         # ── Middle & Bottom Body ───────────────────────────────────────────────
@@ -476,7 +476,7 @@ class GloveWindow(QtWidgets.QWidget):
         self.log_box.setMaximumHeight(85)
         splitter.addWidget(self.log_box)
         splitter.setSizes([850, 80])
-        
+
         self._append_log("System", "Glove GUI initialized.")
         if self.args.mock:
             self._append_log("System", "MOCK MODE ENABLED. No physical device required.")
@@ -487,16 +487,16 @@ class GloveWindow(QtWidgets.QWidget):
             ports = [p.device for p in serial.tools.list_ports.comports()]
         except Exception:
             ports = []
-            
+
         auto_port = get_glove_port_name()
         if auto_port:
             ports.insert(0, auto_port)
-            
+
         # Add fallbacks
         for p in ["/dev/ttyUSB0", "/dev/tty.usbserial", "COM3", "COM4"]:
             if p not in ports:
                 ports.append(p)
-                
+
         self.port_combo.clear()
         self.port_combo.addItems(ports)
 
@@ -511,11 +511,11 @@ class GloveWindow(QtWidgets.QWidget):
         layout.setSpacing(6)
         self.curves[stream] = []
         self.plots[stream] = []
-        
-        FLEX_LABELS = ["Thumb", "Index", "Middle", "Ring", "Little", "Ext"]
+
+        FLEX_LABELS = ["Thumb Flex", "Thumb Abd", "Index", "Middle", "Ring", "Pinky"]
         IMU_LABELS = ["Acc X", "Acc Y", "Acc Z", "Gyro X", "Gyro Y", "Gyro Z"]
         MAG_LABELS = ["Mag X", "Mag Y", "Mag Z"]
-        
+
         for ch in range(channels):
             if stream == "flex":
                 title_text = FLEX_LABELS[ch]
@@ -523,7 +523,7 @@ class GloveWindow(QtWidgets.QWidget):
                 title_text = IMU_LABELS[ch]
             else:
                 title_text = MAG_LABELS[ch]
-                
+
             plot = pg.PlotWidget(title=title_text)
             plot.setBackground('#060712')
             plot.showGrid(x=True, y=True, alpha=0.15)
@@ -531,13 +531,13 @@ class GloveWindow(QtWidgets.QWidget):
             plot.setMenuEnabled(False)
             plot.getPlotItem().setDownsampling(auto=True, mode='peak')
             plot.getPlotItem().setClipToView(True)
-            
+
             # Stylize axes
             plot.getAxis('bottom').setPen(pg.mkPen('#232a45', width=1))
             plot.getAxis('bottom').setTextPen('#64748b')
             plot.getAxis('left').setPen(pg.mkPen('#232a45', width=1))
             plot.getAxis('left').setTextPen('#64748b')
-            
+
             # Select specific high-tech palette
             if stream == "flex":
                 hue = (145 + (ch * 25) % 60) % 360  # Cool glowing emerald
@@ -545,14 +545,14 @@ class GloveWindow(QtWidgets.QWidget):
                 hue = (45 + (ch * 35) % 80) % 360
             else:
                 hue = (310 + (ch * 40) % 50) % 360
-                
+
             color = pg.hsvColor(hue / 360.0, 0.85, 0.95)
             curve = plot.plot(pen=pg.mkPen(color, width=1.2))
-            
+
             self.curves[stream].append(curve)
             self.plots[stream].append(plot)
             layout.addWidget(plot, ch // cols, ch % cols)
-            
+
         self.tabs.addTab(widget, title)
 
     def _toggle_connection(self) -> None:
@@ -565,7 +565,7 @@ class GloveWindow(QtWidgets.QWidget):
         self.connect_btn.setEnabled(False)
         self.status_label.setText("Connecting...")
         self.status_label.setStyleSheet("color: #e2e8f0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
-        
+
         if self.args.mock:
             await asyncio.sleep(0.8)
             self.connected = True
@@ -578,28 +578,28 @@ class GloveWindow(QtWidgets.QWidget):
                 # Initialize device
                 self.device = libedu.PyEduDevice(port, BAUDRATE)
                 await self.device.start_data_stream(libedu.MessageParser("Glove-device", libedu.MsgType.Edu))
-                
+
                 # Setup configuration
                 await self.device.get_dongle_pair_stat()
                 await asyncio.sleep(0.5)
-                
+
                 # Configure Flex rate 50Hz
                 await self.device.set_flex_config(libedu.SamplingRate.SAMPLING_RATE_50)
                 await asyncio.sleep(0.5)
-                
+
                 # Configure IMU rate 100Hz (Calibrated data)
                 await self.device.set_imu_config(libedu.ImuSampleRate.IMU_SR_100, libedu.UploadDataType.CALIBRATED_DATA)
                 await asyncio.sleep(0.5)
-                
+
                 # Configure MAG rate 20Hz (Calibrated data)
                 await self.device.set_mag_config(libedu.MagSampleRate.MAG_SR_20, libedu.UploadDataType.CALIBRATED_DATA)
                 await asyncio.sleep(0.5)
-                
+
                 # Initialize Buffers in SDK
                 libedu.set_flex_buffer_cfg(BUFFER_LENGTH)
                 libedu.set_imu_buffer_cfg(IMU_BUFFER_LENGTH)
                 libedu.set_mag_buffer_cfg(MAG_BUFFER_LENGTH)
-                
+
                 self.connected = True
                 self._append_log("Connection", "Connected to Glove hardware successfully.")
                 self._update_ui_connection_state(True)
@@ -614,7 +614,7 @@ class GloveWindow(QtWidgets.QWidget):
         self.connect_btn.setEnabled(False)
         if self.streaming:
             await self._stop_stream_async()
-            
+
         if not self.args.mock and self.device:
             try:
                 self.device.stop_data_stream()
@@ -626,7 +626,7 @@ class GloveWindow(QtWidgets.QWidget):
             except Exception as e:
                 logger.error(f"Disconnection error: {e}")
                 self._append_log("Disconnection Error", str(e))
-                
+
         self.connected = False
         self._append_log("Connection", "Disconnected from Glove.")
         self._update_ui_connection_state(False)
@@ -637,7 +637,7 @@ class GloveWindow(QtWidgets.QWidget):
         self.connect_btn.style().unpolish(self.connect_btn)
         self.connect_btn.style().polish(self.connect_btn)
         self.connect_btn.update()
-        
+
         if connected:
             self.connect_btn.setText("Disconnect" if not self.args.mock else "⚡ Disconnect Mock")
             self.status_label.setText("CONNECTED (CLICK START)")
@@ -659,10 +659,10 @@ class GloveWindow(QtWidgets.QWidget):
     async def _start_stream_async(self) -> None:
         if not self.connected:
             return
-        
+
         self.stream_btn.setEnabled(False)
         self._append_log("Streaming", "Starting Glove sensor stream...")
-        
+
         # Reset local display buffers and sequence trackers
         self.flex_buffer[:] = 0
         self.imu_buffer[:] = 0
@@ -673,7 +673,7 @@ class GloveWindow(QtWidgets.QWidget):
         self.last_rendered_flex_seq = None
         self.last_rendered_imu_seq = None
         self.last_rendered_mag_seq = None
-        
+
         if not self.args.mock and self.device:
             try:
                 # Flush stale SDK buffers before starting stream
@@ -685,7 +685,7 @@ class GloveWindow(QtWidgets.QWidget):
                 self._append_log("Streaming Error", f"Failed to start stream: {e}")
                 self.stream_btn.setEnabled(True)
                 return
-                
+
         self.streaming = True
         self.stream_btn.setEnabled(True)
         self.stream_btn.setText("■ Stop Stream")
@@ -693,25 +693,25 @@ class GloveWindow(QtWidgets.QWidget):
         self.stream_btn.style().unpolish(self.stream_btn)
         self.stream_btn.style().polish(self.stream_btn)
         self.stream_btn.update()
-        
+
         self.rec_btn.setEnabled(True)
         self.marker_edit.setEnabled(True)
         self.marker_btn.setEnabled(True)
         self.status_label.setText("STREAMING")
         self.status_label.setStyleSheet("color: #39ff14; font-weight: bold; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
-        
+
         # Start acquisition background loop
         self.cleanup_task = asyncio.create_task(self._data_acquisition_loop())
 
     async def _stop_stream_async(self) -> None:
         self.stream_btn.setEnabled(False)
         self._append_log("Streaming", "Stopping sensor stream...")
-        
+
         if self.recording:
             self._stop_recording()
-            
+
         self.streaming = False
-        
+
         if self.cleanup_task:
             self.cleanup_task.cancel()
             try:
@@ -719,20 +719,20 @@ class GloveWindow(QtWidgets.QWidget):
             except asyncio.CancelledError:
                 pass
             self.cleanup_task = None
-            
+
         if not self.args.mock and self.device:
             try:
                 await self.device.stop_sensor_data_stream()
             except Exception as e:
                 self._append_log("Streaming Error", f"Stop stream failed: {e}")
-        
+
         self.stream_btn.setEnabled(True)
         self.stream_btn.setText("▶ Start Stream")
         self.stream_btn.setProperty("streaming", False)
         self.stream_btn.style().unpolish(self.stream_btn)
         self.stream_btn.style().polish(self.stream_btn)
         self.stream_btn.update()
-        
+
         self.rec_btn.setEnabled(False)
         self.marker_edit.setEnabled(False)
         self.marker_btn.setEnabled(False)
@@ -744,7 +744,7 @@ class GloveWindow(QtWidgets.QWidget):
         Background loop reading Glove data from bc-edu-sdk buffers at 50Hz
         """
         self._append_log("Acquisition", "Started background Glove data acquisition task.")
-        
+
         mock_t = 0.0
         consecutive_errors = 0
         while self.streaming:
@@ -753,7 +753,7 @@ class GloveWindow(QtWidgets.QWidget):
                     # Mock Data Generation
                     await asyncio.sleep(0.02)
                     mock_t += 0.02
-                    
+
                     # Generate 1 Flex sample per 20ms (50Hz)
                     base_amplitude = 500.0 * (0.5 + 0.5 * np.sin(mock_t * 1.0))
                     flex_sample = []
@@ -762,10 +762,10 @@ class GloveWindow(QtWidgets.QWidget):
                         val = base_amplitude * (0.8 + 0.2 * np.sin(mock_t * 2.5 + phase)) + 15.0 * np.random.randn()
                         val = np.clip(val, 0, 1023)
                         flex_sample.append(val)
-                        
+
                         self.flex_buffer[ch] = np.roll(self.flex_buffer[ch], -1)
                         self.flex_buffer[ch][-1] = val
-                        
+
                     self.flex_seq += 1
                     self.seq_flex_lbl.setText(f"FLEX  seq: {self.flex_seq:>6}")
                     if self.recording:
@@ -777,7 +777,7 @@ class GloveWindow(QtWidgets.QWidget):
                         acc = [0.1 * np.sin(mock_t * 1.5), 0.2 * np.cos(mock_t * 2), 9.8 + 0.05 * np.random.randn()]
                         gyro = [3.0 * np.sin(mock_t * 2.0), 8.0 * np.cos(mock_t * 1.0), 1.0 * np.random.randn()]
                         imu_samples.append(acc + gyro)
-                        
+
                     self.imu_seq += 2
                     self.seq_imu_lbl.setText(f"IMU   seq: {self.imu_seq:>6}")
                     N_imu = len(imu_samples)
@@ -785,11 +785,11 @@ class GloveWindow(QtWidgets.QWidget):
                         i_samples = np.array([imu_samples[idx][i] for idx in range(N_imu)])
                         self.imu_buffer[i] = np.roll(self.imu_buffer[i], -N_imu)
                         self.imu_buffer[i][-N_imu:] = i_samples
-                        
+
                     if self.recording:
                         for samp in imu_samples:
                             self._write_csv_row("imu", [time.time(), 0] + samp)
-                            
+
                     # Mag generation (1 sample per 50ms -> 20Hz -> roughly 0.4 samples per 20ms)
                     if np.random.rand() < 0.4:
                         self.mag_seq += 1
@@ -798,31 +798,31 @@ class GloveWindow(QtWidgets.QWidget):
                         for i in range(3):
                             self.mag_buffer[i] = np.roll(self.mag_buffer[i], -1)
                             self.mag_buffer[i][-1] = mag[i]
-                            
+
                         if self.recording:
                             self._write_csv_row("mag", [time.time(), 0] + mag)
                 else:
                     # Real Hardware polling
                     await asyncio.sleep(0.015)
-                    
+
                     # 1. Fetch Flex Buffer
                     flex_buff = libedu.get_flex_buffer(200, clean=True)
                     if flex_buff:
                         all_samples = [[] for _ in range(NUM_CHANNELS)]
                         seq_nums = []
-                        
+
                         for row in flex_buff:
                             flex_data = FlexData.from_data(row)
                             seq_nums.append(flex_data.seq_num)
                             channel_values = np.array_split(flex_data.channel_values, NUM_CHANNELS)
-                            
+
                             for ch in range(NUM_CHANNELS):
                                 all_samples[ch].extend(channel_values[ch])
-                                
+
                         if seq_nums:
                             self.flex_seq = seq_nums[-1]
                             self.seq_flex_lbl.setText(f"FLEX  seq: {self.flex_seq:>6}")
-                            
+
                         N_flex = len(all_samples[0])
                         if N_flex > 0:
                             N_display = min(N_flex, BUFFER_LENGTH)
@@ -830,7 +830,7 @@ class GloveWindow(QtWidgets.QWidget):
                                 ch_samples = np.array(all_samples[ch], dtype=float)
                                 self.flex_buffer[ch] = np.roll(self.flex_buffer[ch], -N_display)
                                 self.flex_buffer[ch][-N_display:] = ch_samples[-N_display:]
-                                
+
                             if self.recording:
                                 rows_to_write = []
                                 for idx in range(N_flex):
@@ -842,11 +842,11 @@ class GloveWindow(QtWidgets.QWidget):
                     imu_buff = libedu.get_imu_calibration_buff(100, clean=True)
                     if not imu_buff:
                         imu_buff = libedu.get_imu_buffer(100, clean=True)
-                        
+
                     if imu_buff:
                         all_imu = [[] for _ in range(6)]
                         seq_nums_imu = []
-                        
+
                         for row in imu_buff:
                             imu_data = IMUData.from_data(row)
                             seq_nums_imu.append(imu_data.seqnum)
@@ -855,18 +855,18 @@ class GloveWindow(QtWidgets.QWidget):
                             samp = acc + gyro
                             for i in range(6):
                                 all_imu[i].append(samp[i])
-                                
+
                         if seq_nums_imu:
                             self.imu_seq = seq_nums_imu[-1]
                             self.seq_imu_lbl.setText(f"IMU   seq: {self.imu_seq:>6}")
-                            
+
                         N_imu = len(all_imu[0])
                         if N_imu > 0:
                             N_display = min(N_imu, IMU_BUFFER_LENGTH)
                             for i in range(6):
                                 self.imu_buffer[i] = np.roll(self.imu_buffer[i], -N_display)
                                 self.imu_buffer[i][-N_display:] = all_imu[i][-N_display:]
-                                
+
                             if self.recording:
                                 rows_to_write = []
                                 for idx in range(N_imu):
@@ -878,29 +878,29 @@ class GloveWindow(QtWidgets.QWidget):
                     mag_buff = libedu.get_mag_calibration_buff(100, clean=True)
                     if not mag_buff:
                         mag_buff = libedu.get_mag_buffer(100, clean=True)
-                        
+
                     if mag_buff:
                         all_mag = [[] for _ in range(3)]
                         seq_nums_mag = []
-                        
+
                         for row in mag_buff:
                             mag_data = MagData.from_data(row)
                             seq_nums_mag.append(mag_data.seqnum)
                             mag = [mag_data.data.cord_x, mag_data.data.cord_y, mag_data.data.cord_z]
                             for i in range(3):
                                 all_mag[i].append(mag[i])
-                                
+
                         if seq_nums_mag:
                             self.mag_seq = seq_nums_mag[-1]
                             self.seq_mag_lbl.setText(f"MAG   seq: {self.mag_seq:>6}")
-                            
+
                         N_mag = len(all_mag[0])
                         if N_mag > 0:
                             N_display = min(N_mag, MAG_BUFFER_LENGTH)
                             for i in range(3):
                                 self.mag_buffer[i] = np.roll(self.mag_buffer[i], -N_display)
                                 self.mag_buffer[i][-N_display:] = all_mag[i][-N_display:]
-                                
+
                             if self.recording:
                                 rows_to_write = []
                                 for idx in range(N_mag):
@@ -926,25 +926,25 @@ class GloveWindow(QtWidgets.QWidget):
         """
         if not self.streaming:
             return
-            
+
         # Telemetry Seq labels are updated independently in the data acquisition loop
-        
+
         current_tab = self.tabs.currentIndex()
-        
+
         # 1. Update Flex Tab
         if current_tab == 0:
             if self.flex_seq != self.last_rendered_flex_seq:
                 self.last_rendered_flex_seq = self.flex_seq
                 for ch in range(NUM_CHANNELS):
                     self.curves["flex"][ch].setData(self.flex_buffer[ch])
-                
+
         # 2. Update IMU Tab
         elif current_tab == 1:
             if self.imu_seq != self.last_rendered_imu_seq:
                 self.last_rendered_imu_seq = self.imu_seq
                 for i in range(6):
                     self.curves["imu"][i].setData(self.imu_buffer[i])
-                
+
         # 3. Update Mag Tab
         elif current_tab == 2:
             if self.mag_seq != self.last_rendered_mag_seq:
@@ -971,56 +971,56 @@ class GloveWindow(QtWidgets.QWidget):
         if not pid:
             QtWidgets.QMessageBox.warning(self, "Invalid ID", "Please enter a valid Participant ID!")
             return
-            
+
         # Prepare saving folder
         rec_dir = Path("recordings")
         rec_dir.mkdir(parents=True, exist_ok=True)
-        
+
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.rec_files = {
             "flex": rec_dir / f"glove_{pid}_{ts}_flex.csv",
             "imu": rec_dir / f"glove_{pid}_{ts}_imu.csv",
             "mag": rec_dir / f"glove_{pid}_{ts}_mag.csv",
         }
-        
+
         try:
             # Initialize files and write headers
             self.rec_writers = {}
-            
+
             # Flex file
             f_flex = open(self.rec_files["flex"], "w", encoding="utf-8")
             f_flex.write("Timestamp,SeqNum,Flex_1,Flex_2,Flex_3,Flex_4,Flex_5,Flex_6,Marker\n")
             self.rec_writers["flex"] = f_flex
-            
+
             # IMU file
             f_imu = open(self.rec_files["imu"], "w", encoding="utf-8")
             f_imu.write("Timestamp,SeqNum,AccX,AccY,AccZ,GyroX,GyroY,GyroZ\n")
             self.rec_writers["imu"] = f_imu
-            
+
             # Mag file
             f_mag = open(self.rec_files["mag"], "w", encoding="utf-8")
             f_mag.write("Timestamp,SeqNum,MagX,MagY,MagZ\n")
             self.rec_writers["mag"] = f_mag
-            
+
             self.recording = True
             self.rec_start_time = time.time()
             self.rec_timer.start()
-            
+
             self.rec_btn.setText("STOP")
             self.rec_btn.setProperty("recording", True)
             self.rec_btn.style().unpolish(self.rec_btn)
             self.rec_btn.style().polish(self.rec_btn)
             self.rec_btn.update()
-            
+
             self.rec_time_label.setProperty("recording", True)
             self.rec_time_label.style().unpolish(self.rec_time_label)
             self.rec_time_label.style().polish(self.rec_time_label)
             self.rec_time_label.update()
             self.rec_time_label.setText("00:00")
-            
+
             self.participant_edit.setEnabled(False)
             self.connect_btn.setEnabled(False)
-            
+
             self._append_log("Recording", f"Glove recording started for Participant: {pid}")
             self._append_log("Recording", f"Saving session files into {rec_dir}/")
         except Exception as e:
@@ -1030,7 +1030,7 @@ class GloveWindow(QtWidgets.QWidget):
     def _stop_recording(self) -> None:
         self.recording = False
         self.rec_timer.stop()
-        
+
         # Close all file writers safely
         for key, writer in self.rec_writers.items():
             try:
@@ -1038,19 +1038,19 @@ class GloveWindow(QtWidgets.QWidget):
             except Exception:
                 pass
         self.rec_writers.clear()
-        
+
         self.rec_btn.setText("REC")
         self.rec_btn.setProperty("recording", False)
         self.rec_btn.style().unpolish(self.rec_btn)
         self.rec_btn.style().polish(self.rec_btn)
         self.rec_btn.update()
-        
+
         self.rec_time_label.setProperty("recording", False)
         self.rec_time_label.style().unpolish(self.rec_time_label)
         self.rec_time_label.style().polish(self.rec_time_label)
         self.rec_time_label.update()
         self.rec_time_label.setText("00:00")
-        
+
         self.participant_edit.setEnabled(True)
         self.connect_btn.setEnabled(True)
         self._append_log("Recording", "Glove recording stopped and files successfully saved.")

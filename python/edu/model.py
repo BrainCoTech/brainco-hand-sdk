@@ -73,3 +73,21 @@ class MagData:
 
     def __repr__(self):
         return f"MAG seqnum={self.seqnum}, data={self.data}"
+
+
+class EulerData:
+    @staticmethod
+    def from_data(arr: list):
+        # Ensure arr has at least 4 elements, pad with 0.0 if not enough to prevent IndexError
+        extended = arr + [0.0] * max(0, 4 - len(arr))
+        return EulerData(extended[0], extended[1:4])
+
+    def __init__(self, seqnum, euler):
+        self.seqnum = int(seqnum) & 0xFFFF
+        self.yaw = euler[0]
+        self.pitch = euler[1]
+        self.roll = euler[2]
+
+    def __repr__(self):
+        return f"Euler seqnum={self.seqnum}, yaw={self.yaw:.2f}, pitch={self.pitch:.2f}, roll={self.roll:.2f}"
+
