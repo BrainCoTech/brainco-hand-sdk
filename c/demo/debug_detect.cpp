@@ -355,12 +355,12 @@ int main(int argc, char const *argv[]) {
 
   // Priority-based scan order (matches Rust detect_modbus)
   const uint8_t revo2_ids[] = {0x7E, 0x7F};
-  const uint8_t revo1_ids[] = {1, 2};
+  const uint8_t revo1_ids[] = {1, 2, 10};
 
   const ScanConfig scan_configs[] = {
       {460800, revo2_ids, 2},  // Priority 1: Revo2 / Revo1 Advanced
-      {115200, revo1_ids, 2},  // Priority 2: Revo1 Basic/Touch
-      {460800, revo1_ids, 2},  // Priority 3: fallback
+      {115200, revo1_ids, 3},  // Priority 2: Revo1 Basic/Touch
+      {460800, revo1_ids, 3},  // Priority 3: fallback
       {1000000, revo2_ids, 2}, // Priority 4: high-speed
       {2000000, revo2_ids, 2}, // Priority 5: high-speed
       {115200, revo2_ids, 2},  // Priority 6: legacy

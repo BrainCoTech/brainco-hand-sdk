@@ -158,7 +158,7 @@ int main(int argc, char const *argv[]) {
 
     // Start DFU
     printf("[INFO] Starting firmware upgrade...\n");
-    start_dfu(ctx.handle, ctx.slave_id, firmware_path, 10);
+    start_dfu(ctx.handle, ctx.slave_id, firmware_path, 4);
 
     // Wait for completion
     printf("[INFO] Waiting for DFU to complete...\n");

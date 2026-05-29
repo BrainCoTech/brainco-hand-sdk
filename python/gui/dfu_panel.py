@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
-from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, QSettings
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -77,7 +77,7 @@ class DfuWorker(QObject):
     state_changed = Signal(int)
     finished = Signal(bool, str)
 
-    def __init__(self, device, slave_id: int, firmware_path: str, wait_secs: int = 180):
+    def __init__(self, device, slave_id: int, firmware_path: str, wait_secs: int = 4):
         super().__init__()
         self.device = device
         self.slave_id = slave_id
@@ -158,6 +158,7 @@ class DfuPanel(QWidget):
 
     def __init__(self):
         super().__init__()
+        self.settings = QSettings("BrainCo", "StarkSDK")
         self.shared_data: Optional["SharedDataManager"] = None
         self._dfu_thread: Optional[QThread] = None
         self._dfu_worker: Optional[DfuWorker] = None
@@ -370,6 +371,10 @@ class DfuPanel(QWidget):
     def _on_type_changed(self, index):
         key = self.firmware_type_combo.currentData()
         if key and key in FIRMWARE_TYPES:
+            saved_path = self.settings.value(f"last_firmware_path_{key}", "")
+            if saved_path and os.path.exists(saved_path):
+                self.firmware_path_edit.setText(saved_path)
+                return
             info = FIRMWARE_TYPES[key]
             default_path = info.get("default_path")
             if default_path and default_path.exists():
@@ -386,6 +391,9 @@ class DfuPanel(QWidget):
         )
         if filename:
             self.firmware_path_edit.setText(filename)
+            key = self.firmware_type_combo.currentData()
+            if key:
+                self.settings.setValue(f"last_firmware_path_{key}", filename)
 
     def _start_upgrade(self):
         if not self.device:
@@ -430,7 +438,7 @@ class DfuPanel(QWidget):
 
     def _launch_worker(self, firmware_path: str):
         self._dfu_thread = QThread(self)
-        self._dfu_worker = DfuWorker(self.device, self.slave_id, firmware_path)
+        self._dfu_worker = DfuWorker(self.device, self.slave_id, firmware_path, wait_secs=4)
         self._dfu_worker.moveToThread(self._dfu_thread)
 
         self._dfu_thread.started.connect(self._dfu_worker.run)

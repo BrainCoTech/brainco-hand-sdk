@@ -1,7 +1,7 @@
 # Stark SDK Installation:
 # 1. To install from internal OSS (recommended for pre-release): run `bash install_whl.sh`
 # 2. To install from public PyPI: uncomment the line below
-# bc-stark-sdk==2.0.1
+# bc-stark-sdk==2.0.2
 asyncio>=3.4.3
 colorlog>=6.9.0
 numpy<2.0.0  # PySide6 6.4.x requires numpy<2; upgrade to PySide6>=6.7.0 for numpy 2.x support

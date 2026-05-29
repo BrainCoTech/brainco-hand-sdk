@@ -1,6 +1,6 @@
 # BrainCo 灵巧手 SDK 开发示例
 
-[![版本](https://img.shields.io/badge/版本-v2.0.1-blue.svg)](VERSION)
+[![版本](https://img.shields.io/badge/版本-v2.0.2-blue.svg)](VERSION)
 [![许可证](https://img.shields.io/badge/许可证-专有-red.svg)]()
 
 [English](README.md) | [中文](README.zh.md)

@@ -93,8 +93,9 @@ class MainWindow(QMainWindow):
             self._update_texts()
 
         # Set window properties
-        title = "Stark SDK"
-        self.setWindowTitle(title)
+        sdk_version = getattr(sdk, "__version__", "Unknown") if sdk else "Unknown"
+        self.sdk_version = sdk_version
+        self.setWindowTitle(f"Stark SDK (v{sdk_version})")
         self.setMinimumSize(1000, 700)
         self.showMaximized()
 
@@ -120,37 +121,6 @@ class MainWindow(QMainWindow):
         self.tabs.setUsesScrollButtons(True)
         self.tabs.setElideMode(Qt.ElideNone)
         self.tabs.setDocumentMode(False)  # We use custom pane borders now instead of document mode
-        self.tabs.setStyleSheet("""
-            QTabBar::tab {
-                font-size: 13px;
-                font-weight: bold;
-                padding: 10px 18px;
-                margin-right: 2px;
-                border: 1px solid #cfd4d9;
-                border-bottom: none;
-                border-top-left-radius: 6px;
-                border-top-right-radius: 6px;
-                background-color: #e9ecef;
-                color: #495057;
-            }
-            QTabBar::tab:selected {
-                background-color: #ffffff;
-                border: 2px solid #5D9CEC;
-                border-bottom: 2px solid #ffffff;
-                color: #5D9CEC;
-            }
-            QTabBar::tab:hover:!selected {
-                background-color: #f8f9fa;
-            }
-            QTabWidget::pane {
-                border: 2px solid #5D9CEC;
-                border-radius: 6px;
-                border-top-left-radius: 0px;
-                border-top-right-radius: 6px;
-                top: -2px;
-                background-color: #ffffff;
-            }
-        """)
         self.tabs.currentChanged.connect(self._on_tab_changed)
         main_layout.addWidget(self.tabs, 1)
 
@@ -346,9 +316,9 @@ class MainWindow(QMainWindow):
         
         # Update title if mock
         if "Mock" in protocol:
-            self.setWindowTitle(f"Revo Control Panel (MOCK) - {protocol}")
+            self.setWindowTitle(f"Stark SDK (v{self.sdk_version}) - MOCK")
         else:
-            self.setWindowTitle(f"Revo Control Panel")
+            self.setWindowTitle(f"Stark SDK (v{self.sdk_version})")
 
         # Enable tabs
         self.tabs.setEnabled(True)
@@ -597,9 +567,10 @@ class MainWindow(QMainWindow):
 
     def _show_about(self):
         """Show about dialog"""
-        about_text = """
+        about_text = f"""
 <h2>Stark SDK GUI</h2>
 <p>Modern control interface for Stark dexterous hands</p>
+<p><b>SDK Version:</b> v{self.sdk_version}</p>
 
 <h3>Supported Protocols</h3>
 <ul>

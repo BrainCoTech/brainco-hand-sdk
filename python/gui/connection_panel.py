@@ -906,4 +906,4 @@ class ConnectionPanel(QWidget):
         finally:
             loop.close()
             
-        self._on_connect_success(ctx, slave_id, device_info, protocol)
+        self._on_connect_success(ctx, slave_id, device_info, "mock", protocol)

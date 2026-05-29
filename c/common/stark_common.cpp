@@ -54,38 +54,7 @@ bool get_and_print_device_info(DeviceHandler *handle, uint8_t slave_id) {
            info->serial_number, info->firmware_version);
 
     // Print hardware type
-    const char *hw_type = "Unknown";
-    switch (info->hardware_type) {
-    case STARK_HARDWARE_TYPE_REVO1_BASIC:
-      hw_type = "Revo1 Basic";
-      break;
-    case STARK_HARDWARE_TYPE_REVO1_TOUCH:
-      hw_type = "Revo1 Touch";
-      break;
-    case STARK_HARDWARE_TYPE_REVO2_BASIC:
-      hw_type = "Revo2 Basic";
-      break;
-    case STARK_HARDWARE_TYPE_REVO2_TOUCH:
-      hw_type = "Revo2 Touch (Capacitive)";
-      break;
-    case STARK_HARDWARE_TYPE_REVO1_ADVANCED:
-      hw_type = "Revo1 Advanced";
-      break;
-    case STARK_HARDWARE_TYPE_REVO1_ADVANCED_TOUCH:
-      hw_type = "Revo1 Advanced Touch";
-      break;
-    case STARK_HARDWARE_TYPE_REVO2_TOUCH_PRESSURE:
-      hw_type = "Revo2 Touch (Pressure/Modulus)";
-      break;
-    case STARK_HARDWARE_TYPE_REVO2_TOUCH_FORCE3D:
-      hw_type = "Revo2 Touch (Force3D)";
-      break;
-    case STARK_HARDWARE_TYPE_REVO2_TOUCH_ARRAY_PRESSURE:
-      hw_type = "Revo2 Touch (ArrayPressure)";
-      break;
-    default:
-      break;
-    }
+    const char *hw_type = get_hardware_type_name_str(info->hardware_type);
     printf("Hardware Type: %s (%hhu)\n", hw_type, info->hardware_type);
 
     free_device_info(info);
