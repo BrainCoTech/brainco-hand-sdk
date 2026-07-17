@@ -32,7 +32,7 @@ python -V
 ### 3. Install Dependencies
 ```shell
 # Install the required packages via PyPI simple index
-pip install -r requirements.txt --index-url https://pypi.org/simple/
+uv sync
 ```
 
 *Note: If automated installation fails, you can manually download the compiled wheel from [PyPI - bc-edu-sdk](https://pypi.org/project/bc-edu-sdk/) and install it locally:*
@@ -46,11 +46,15 @@ pip install --force-reinstall '/path/to/bc_edu_sdk.whl'
 
 ### 1. Console Data Stream Demos (CLI)
 Real-time optimized telemetry loggers that print calibrated raw and sensor outputs in a clean single-line format:
+- **One-Key Profile Stream Example (Recommended)**: Connects to the Stark armband and starts data streaming in a single high-level call using `SensorProfile`. Demonstrates one-key parameter hot-reloading dynamically.
+  ```shell
+  python start_stream_profile.py
+  ```
 - **Glove Example**: Connects to the Glove device via USB receiver dongle to stream Flex (bending), IMU, and Magnetometer data.
   ```shell
   python glove_example.py
   ```
-- **Armband Example**: Connects to the Armband device to stream 8-channel EMG, IMU, and Magnetometer data.
+- **Armband Example**: Connects to the Stark armband device and streams multi-sensor telemetry using the recommended high-level API with robust lifecycle guards.
   ```shell
   python armband_example.py
   ```
@@ -59,6 +63,15 @@ Real-time optimized telemetry loggers that print calibrated raw and sensor outpu
 - **EMG Filtering & Visualization Demo**: Collects EMG signals, applies 50Hz/60Hz grid notch filters and 10Hz highpass filters in real-time, and saves comparison plots locally under the `plots/` directory.
   ```shell
   python armband_filter_demo.py
+  ```
+- **IMU & Magnetometer Calibration Utility**: Collects RAW IMU/MAG samples and writes gyro zero-bias plus magnetometer calibration parameters back to the device. Defaults to armband; pass `--device glove` for glove hardware.
+  ```shell
+  python imu_mag_calibration.py --device armband
+  python imu_mag_calibration.py --device glove --imu-only
+  ```
+- **Armband Serial DFU Utility**: Uploads a firmware package over the armband serial link and reports transfer progress.
+  ```shell
+  python armband_serial_dfu.py path/to/firmware.ota
   ```
 
 ### 3. Desktop Workstation Interfaces (GUI)
@@ -71,8 +84,6 @@ Comprehensive PyQt-based dashboards displaying high-frequency real-time charts:
   ```shell
   python glove_gui.py
   ```
-
----
 
 ## 🤖 EMG Gesture Training & Robotic Control Flow
 

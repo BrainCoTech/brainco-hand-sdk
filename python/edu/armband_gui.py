@@ -36,25 +36,40 @@ from filters_sdk import BWBandStopFilter, BWHighPassFilter
 # Configuration constants
 SAMPLING_FREQUENCY = 250
 NUM_CHANNELS = 8
-BUFFER_LENGTH = 1250
-IMU_BUFFER_LENGTH = 500
-MAG_BUFFER_LENGTH = 500
+BUFFER_LENGTH = 500
+IMU_BUFFER_LENGTH = 200
+MAG_BUFFER_LENGTH = 200
 BAUDRATE = 115200
 
 
 class ArmbandWindow(QtWidgets.QWidget):
+    msg_received_signal = QtCore.Signal(str, str)
+    emg_received_signal = QtCore.Signal(list)
+    imu_received_signal = QtCore.Signal(list)
+    imu_calibrated_received_signal = QtCore.Signal(list)
+    mag_received_signal = QtCore.Signal(list)
+    mag_calibrated_received_signal = QtCore.Signal(list)
+    euler_received_signal = QtCore.Signal(list)
+
     def __init__(self, args: argparse.Namespace):
         super().__init__()
         self.args = args
         self.cleanup_task: asyncio.Task | None = None
         self.device = None
-        
+        self.msg_received_signal.connect(self._handle_msg_ui_thread)
+        self.emg_received_signal.connect(self._handle_emg_received_ui_thread)
+        self.imu_received_signal.connect(self._handle_imu_received_ui_thread)
+        self.imu_calibrated_received_signal.connect(self._handle_imu_received_ui_thread)
+        self.mag_received_signal.connect(self._handle_mag_received_ui_thread)
+        self.mag_calibrated_received_signal.connect(self._handle_mag_received_ui_thread)
+        self.euler_received_signal.connect(self._handle_euler_received_ui_thread)
+
         # Real-time data buffers
         self.emg_buffer = np.zeros((NUM_CHANNELS, BUFFER_LENGTH))
         self.imu_buffer = np.zeros((6, IMU_BUFFER_LENGTH))  # Acc X, Y, Z, Gyro X, Y, Z
         self.mag_buffer = np.zeros((3, MAG_BUFFER_LENGTH))  # Mag X, Y, Z
         self.euler_buffer = np.zeros((3, IMU_BUFFER_LENGTH))  # Yaw, Pitch, Roll
-        
+
         # Sequence numbers for continuity checks
         self.last_emg_seq = None
         self.last_imu_seq = None
@@ -66,17 +81,17 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.last_rendered_mag_seq = None
         self.last_rendered_euler_seq = None
         self.last_fft_update_time = 0.0  # Limit FFT calculation frequency to avoid CPU spikes
-        
+
         # Visual objects
         self.curves: dict[str, list[Any]] = {}
         self.plots: dict[str, list[pg.PlotWidget]] = {}
         self.fft_plots: dict[str, list[pg.PlotWidget]] = {}
-        
+
         # Filters configuration
         self.env_noise_50 = [BWBandStopFilter(4, sample_rate=SAMPLING_FREQUENCY, fl=49, fu=51) for _ in range(NUM_CHANNELS)]
         self.env_noise_60 = [BWBandStopFilter(4, sample_rate=SAMPLING_FREQUENCY, fl=59, fu=61) for _ in range(NUM_CHANNELS)]
         self.hp = [BWHighPassFilter(4, sample_rate=SAMPLING_FREQUENCY, f=10) for _ in range(NUM_CHANNELS)]
-        
+
         # Session Recording state
         self.recording = False
         self.rec_start_time = None
@@ -86,15 +101,15 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.rec_files = {}
         self.rec_writers = {}
         self.current_marker = ""
-        
+
         # Polling/Streaming state
         self.streaming = False
         self.connected = False
-        
+
         # UI styles and build
         self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
         self._build_ui()
-        
+
         # Start the GUI update timer for plotting
         self.plot_timer = QtCore.QTimer()
         self.plot_timer.setInterval(40)  # 25 FPS
@@ -134,57 +149,99 @@ class ArmbandWindow(QtWidgets.QWidget):
             font-weight: 800;
             letter-spacing: 0.5px;
         }
-        
+
         #sys_grp {
             border: 1px solid rgba(226, 232, 240, 0.15);
         }
         #sys_grp::title {
             color: #cbd5e1;
         }
-        
+
         #conn_grp {
             border: 1px solid rgba(0, 240, 255, 0.22);
         }
         #conn_grp::title {
             color: #00f0ff;
         }
-        
+
         #stream_grp {
             border: 1px solid rgba(57, 255, 20, 0.18);
         }
         #stream_grp::title {
             color: #39ff14;
         }
-        
+
         #rec_grp {
             border: 1px solid rgba(255, 0, 85, 0.22);
         }
         #rec_grp::title {
             color: #ff0055;
         }
-        
+
         QLineEdit, QComboBox {
             background-color: #070914;
             border: 1px solid #1f2340;
             border-radius: 5px;
             color: #f8fafc;
-            padding: 4px 8px;
+            padding: 4px 24px 4px 8px;
             font-size: 11px;
             font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+            selection-background-color: #1f8cff;
         }
         QComboBox::drop-down {
             subcontrol-origin: padding;
             subcontrol-position: top right;
-            width: 15px;
+            width: 20px;
             border-left-width: 1px;
             border-left-color: #1f2340;
             border-left-style: solid;
+            border-top-right-radius: 5px;
+            border-bottom-right-radius: 5px;
+            background-color: rgba(15, 23, 42, 0.9);
+        }
+        QComboBox::down-arrow {
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 5px solid #94a3b8;
+            margin-right: 6px;
+        }
+        QComboBox QAbstractItemView {
+            background-color: #070914;
+            color: #e2e8f0;
+            border: 1px solid rgba(234, 179, 8, 0.42);
+            border-radius: 5px;
+            padding: 3px;
+            outline: 0;
+            selection-background-color: rgba(234, 179, 8, 0.24);
+            selection-color: #ffffff;
+            font-size: 11px;
+            font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+        }
+        QComboBox QAbstractItemView::item {
+            min-height: 20px;
+            padding: 3px 8px;
+            border-radius: 3px;
+        }
+        QComboBox QAbstractItemView::item:hover {
+            background-color: rgba(0, 240, 255, 0.14);
+            color: #ffffff;
+        }
+        QComboBox QAbstractItemView::item:selected {
+            background-color: rgba(234, 179, 8, 0.30);
+            color: #ffffff;
         }
         QLineEdit:focus, QComboBox:focus {
             border: 1px solid #00f0ff;
             background-color: #0b0e24;
         }
-        
+        QComboBox:disabled {
+            color: #475569;
+            background-color: rgba(7, 9, 20, 0.55);
+            border-color: #171d2b;
+        }
+
         QPushButton {
             background-color: rgba(30, 41, 59, 0.85);
             border: 1px solid #232a3b;
@@ -204,7 +261,7 @@ class ArmbandWindow(QtWidgets.QWidget):
             color: #475569;
             border-color: #171d2b;
         }
-        
+
         QPushButton#connect_btn {
             background-color: rgba(0, 240, 255, 0.08);
             color: #00f0ff;
@@ -220,7 +277,7 @@ class ArmbandWindow(QtWidgets.QWidget):
             color: #39ff14;
             border-color: rgba(57, 255, 20, 0.35);
         }
-        
+
         QPushButton#stream_btn {
             background-color: rgba(57, 255, 20, 0.08);
             color: #39ff14;
@@ -236,7 +293,7 @@ class ArmbandWindow(QtWidgets.QWidget):
             color: #ff0055;
             border-color: rgba(255, 0, 85, 0.45);
         }
-        
+
         QPushButton#rec_btn {
             background-color: rgba(255, 0, 85, 0.08);
             color: #ff0055;
@@ -252,7 +309,7 @@ class ArmbandWindow(QtWidgets.QWidget):
             color: #ffffff;
             border-color: #ff0055;
         }
-        
+
         QPushButton#connect_btn:disabled,
         QPushButton#stream_btn:disabled,
         QPushButton#rec_btn:disabled {
@@ -260,7 +317,7 @@ class ArmbandWindow(QtWidgets.QWidget):
             color: #475569;
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
-        
+
         QCheckBox {
             color: #94a3b8;
             font-size: 11px;
@@ -281,7 +338,7 @@ class ArmbandWindow(QtWidgets.QWidget):
             background-color: #00f0ff;
             border: 3px solid #070914;
         }
-        
+
         QTabWidget::pane {
             border: 1px solid #14172f;
             background-color: #060712;
@@ -306,7 +363,7 @@ class ArmbandWindow(QtWidgets.QWidget):
             color: #00f0ff;
             border-bottom: 2px solid #00f0ff;
         }
-        
+
         QPlainTextEdit {
             background-color: #04050a;
             border: 1px solid #101224;
@@ -316,7 +373,7 @@ class ArmbandWindow(QtWidgets.QWidget):
             font-size: 11px;
             padding: 4px;
         }
-        
+
         QLabel#rec_time_label {
             color: #4b526d;
             font-weight: bold;
@@ -346,11 +403,11 @@ class ArmbandWindow(QtWidgets.QWidget):
         sys_lay = QtWidgets.QVBoxLayout(sys_grp)
         sys_lay.setContentsMargins(12, 10, 12, 10)
         sys_lay.setSpacing(4)
-        
+
         logo_lbl = QtWidgets.QLabel("⚡ ARMBAND GUI DEMO")
         logo_lbl.setStyleSheet("color: #e2e8f0; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;")
         sys_lay.addWidget(logo_lbl)
-        
+
         self.status_label = QtWidgets.QLabel("System Ready")
         self.status_label.setStyleSheet("color: #39ff14; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
         self.status_label.setMinimumWidth(165)
@@ -377,10 +434,10 @@ class ArmbandWindow(QtWidgets.QWidget):
             self.port_combo.setFixedHeight(28)
             self.port_combo.setEditable(True)
             conn_lay.addWidget(self.port_combo)
-            
+
             # Scan serial ports
             self._scan_ports()
-            
+
             self.connect_btn = QtWidgets.QPushButton("Connect Device")
             self.connect_btn.setObjectName("connect_btn")
             self.connect_btn.setFixedHeight(28)
@@ -414,6 +471,29 @@ class ArmbandWindow(QtWidgets.QWidget):
 
         dashboard.addWidget(stream_grp)
 
+        # 5. Device Metadata Card
+        info_grp = QtWidgets.QGroupBox("🏷️ DEVICE METADATA")
+        info_grp.setObjectName("info_grp")
+        info_lay = QtWidgets.QGridLayout(info_grp)
+        info_lay.setContentsMargins(12, 10, 12, 10)
+        info_lay.setSpacing(4)
+
+        self.dongle_stat_lbl = QtWidgets.QLabel("Pairing: Disconnected")
+        self.dongle_stat_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
+        self.dongle_ver_lbl = QtWidgets.QLabel("Dongle SN: --")
+        self.dongle_ver_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
+        self.glove_ver_lbl = QtWidgets.QLabel("Armband: --")
+        self.glove_ver_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
+        self.glove_sn_lbl = QtWidgets.QLabel("Armband SN: --")
+        self.glove_sn_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
+
+        info_lay.addWidget(self.dongle_stat_lbl, 0, 0)
+        info_lay.addWidget(self.dongle_ver_lbl, 0, 1)
+        info_lay.addWidget(self.glove_ver_lbl, 1, 0)
+        info_lay.addWidget(self.glove_sn_lbl, 1, 1)
+
+        dashboard.addWidget(info_grp)
+
         # 4. Recording Card
         rec_grp = QtWidgets.QGroupBox("⏺ TELEMETRY RECORDER")
         rec_grp.setObjectName("rec_grp")
@@ -429,32 +509,32 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.participant_edit.setFixedWidth(55)
         self.participant_edit.setFixedHeight(28)
         rec_lay.addWidget(self.participant_edit)
-  
+
         self.rec_btn = QtWidgets.QPushButton("REC")
         self.rec_btn.setObjectName("rec_btn")
         self.rec_btn.setFixedHeight(28)
         self.rec_btn.setEnabled(False)
         self.rec_btn.clicked.connect(self._toggle_recording)
         rec_lay.addWidget(self.rec_btn)
-  
+
         self.rec_time_label = QtWidgets.QLabel("00:00")
         self.rec_time_label.setObjectName("rec_time_label")
         rec_lay.addWidget(self.rec_time_label)
-  
+
         rec_lay.addSpacing(6)
-  
+
         self.marker_edit = QtWidgets.QLineEdit("gesture_1")
         self.marker_edit.setFixedWidth(80)
         self.marker_edit.setFixedHeight(28)
         self.marker_edit.setEnabled(False)
         rec_lay.addWidget(self.marker_edit)
-  
+
         self.marker_btn = QtWidgets.QPushButton("Tag Marker")
         self.marker_btn.setFixedHeight(28)
         self.marker_btn.clicked.connect(self._send_marker)
         self.marker_btn.setEnabled(False)
         rec_lay.addWidget(self.marker_btn)
-        
+
         rec_lay.addStretch(1)
         dashboard.addWidget(rec_grp)
         dashboard.addStretch()
@@ -465,7 +545,7 @@ class ArmbandWindow(QtWidgets.QWidget):
         seq_lay = QtWidgets.QVBoxLayout(seq_grp)
         seq_lay.setContentsMargins(12, 6, 12, 6)
         seq_lay.setSpacing(2)
-        
+
         _mono = "font-size: 11px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;"
         self.seq_emg_lbl = QtWidgets.QLabel("EMG   seq:      —")
         self.seq_emg_lbl.setStyleSheet(f"color: #c8a2ff; {_mono}")
@@ -475,12 +555,12 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.seq_mag_lbl.setStyleSheet(f"color: #ffcf7e; {_mono}")
         self.seq_euler_lbl = QtWidgets.QLabel("EULER seq:      —")
         self.seq_euler_lbl.setStyleSheet(f"color: #ff9f43; {_mono}")
-        
+
         seq_lay.addWidget(self.seq_emg_lbl)
         seq_lay.addWidget(self.seq_imu_lbl)
         seq_lay.addWidget(self.seq_mag_lbl)
         seq_lay.addWidget(self.seq_euler_lbl)
-        
+
         dashboard.addWidget(seq_grp)
 
         # ── Middle & Bottom Body ───────────────────────────────────────────────
@@ -503,33 +583,221 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.log_box.setMaximumHeight(85)
         splitter.addWidget(self.log_box)
         splitter.setSizes([850, 80])
-        
+
         self._append_log("System", "Armband GUI initialized.")
         if self.args.mock:
             self._append_log("System", "MOCK MODE ENABLED. No physical device required.")
 
+    def _auto_connect_and_stream(self) -> None:
+        if self.args.mock or not hasattr(self, "_auto_connect_port") or not self._auto_connect_port:
+            return
+        self._append_log("AutoPilot", f"Only one physical port detected: '{self._auto_connect_port}'. Automatically connecting...")
+
+        async def run_auto() -> None:
+            try:
+                await self._connect_device()
+                if self.connected:
+                    self._append_log("AutoPilot", "Connection successful! Automatically starting data stream...")
+                    await self._start_stream_async()
+            except Exception as e:
+                self._append_log("AutoPilot Error", f"Auto connect/stream failed: {e}")
+
+        asyncio.ensure_future(run_auto())
+
     def _scan_ports(self) -> None:
         try:
             import serial.tools.list_ports
-            ports = [p.device for p in serial.tools.list_ports.comports()]
+            ports = [
+                p.device for p in serial.tools.list_ports.comports()
+                if "debug-console" not in p.device
+                and "cu." not in p.device
+                and "bluetooth" not in p.device.lower()
+            ]
         except Exception:
             ports = []
-            
+
         auto_port = get_armband_port_name()
-        if auto_port:
+        if auto_port and auto_port not in ports:
             ports.insert(0, auto_port)
-            
+
+        real_port_count = len(ports)
+        self._auto_connect_port = ports[0] if real_port_count == 1 else None
+
         # Add fallbacks
         for p in ["/dev/ttyUSB0", "/dev/tty.usbserial", "COM3", "COM4"]:
             if p not in ports:
                 ports.append(p)
-                
+
         self.port_combo.clear()
         self.port_combo.addItems(ports)
+
+        if self._auto_connect_port:
+            QtCore.QTimer.singleShot(500, self._auto_connect_and_stream)
 
     def _append_log(self, source: str, message: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         self.log_box.appendPlainText(f"[{ts}] [{source.upper()}] {message}")
+
+    def _on_emg_data(self, data: list) -> None:
+        try:
+            self.emg_received_signal.emit(data)
+        except RuntimeError:
+            pass
+
+    def _on_imu_data(self, data: list) -> None:
+        try:
+            self.imu_received_signal.emit(data)
+        except RuntimeError:
+            pass
+
+    def _on_imu_calibrated_data(self, data: list) -> None:
+        try:
+            self.imu_calibrated_received_signal.emit(data)
+        except RuntimeError:
+            pass
+
+    def _on_mag_data(self, data: list) -> None:
+        try:
+            self.mag_received_signal.emit(data)
+        except RuntimeError:
+            pass
+
+    def _on_mag_calibrated_data(self, data: list) -> None:
+        try:
+            self.mag_calibrated_received_signal.emit(data)
+        except RuntimeError:
+            pass
+
+    def _on_euler_data(self, data: list) -> None:
+        try:
+            self.euler_received_signal.emit(data)
+        except RuntimeError:
+            pass
+
+    def _handle_emg_received_ui_thread(self, data: list) -> None:
+        if not self.streaming or not data:
+            return
+        all_samples = [[] for _ in range(NUM_CHANNELS)]
+        seq_nums = []
+        for row in data:
+            emg_data = EMGData.from_data(row)
+            seq_nums.append(emg_data.seq_num)
+            channel_values = np.array_split(emg_data.channel_values, NUM_CHANNELS)
+            for ch in range(NUM_CHANNELS):
+                all_samples[ch].extend(channel_values[ch])
+        if seq_nums:
+            self.last_emg_seq = seq_nums[-1]
+            self.seq_emg_lbl.setText(f"EMG   seq: {self.last_emg_seq:>6}")
+        N_emg = len(all_samples[0])
+        if N_emg <= 0:
+            return
+        N_display = min(N_emg, BUFFER_LENGTH)
+        for ch in range(NUM_CHANNELS):
+            ch_samples = np.array(all_samples[ch], dtype=float)
+            if self.filter_checkbox.isChecked():
+                for idx in range(N_emg):
+                    val = ch_samples[idx]
+                    val = self.env_noise_50[ch].filter(val)
+                    val = self.env_noise_60[ch].filter(val)
+                    ch_samples[idx] = self.hp[ch].filter(val)
+            self.emg_buffer[ch] = np.roll(self.emg_buffer[ch], -N_display)
+            self.emg_buffer[ch][-N_display:] = ch_samples[-N_display:]
+        if self.recording:
+            rows_to_write = []
+            for idx in range(N_emg):
+                row_vals = [all_samples[ch][idx] for ch in range(NUM_CHANNELS)]
+                rows_to_write.append([time.time(), self.last_emg_seq] + row_vals + [self.current_marker])
+            self._write_csv_rows("emg", rows_to_write)
+
+    def _handle_imu_received_ui_thread(self, data: list) -> None:
+        if not self.streaming or not data:
+            return
+        all_imu = [[] for _ in range(6)]
+        seq_nums_imu = []
+        for row in data:
+            if len(row) < 7:
+                continue
+            imu_data = IMUData.from_data(row)
+            seq_nums_imu.append(imu_data.seqnum)
+            values = [imu_data.acc.cord_x, imu_data.acc.cord_y, imu_data.acc.cord_z, imu_data.gyro.cord_x, imu_data.gyro.cord_y, imu_data.gyro.cord_z]
+            for i in range(6):
+                all_imu[i].append(values[i])
+        if seq_nums_imu:
+            self.last_imu_seq = seq_nums_imu[-1]
+            self.seq_imu_lbl.setText(f"IMU   seq: {self.last_imu_seq:>6}")
+        N_imu = len(all_imu[0])
+        if N_imu <= 0:
+            return
+        N_display = min(N_imu, IMU_BUFFER_LENGTH)
+        for i in range(6):
+            self.imu_buffer[i] = np.roll(self.imu_buffer[i], -N_display)
+            self.imu_buffer[i][-N_display:] = all_imu[i][-N_display:]
+        if self.recording:
+            rows_to_write = []
+            for idx in range(N_imu):
+                row_vals = [all_imu[i][idx] for i in range(6)]
+                rows_to_write.append([time.time(), self.last_imu_seq] + row_vals)
+            self._write_csv_rows("imu", rows_to_write)
+
+    def _handle_mag_received_ui_thread(self, data: list) -> None:
+        if not self.streaming or not data:
+            return
+        all_mag = [[] for _ in range(3)]
+        seq_nums_mag = []
+        for row in data:
+            if len(row) < 4:
+                continue
+            mag_data = MagData.from_data(row)
+            seq_nums_mag.append(mag_data.seqnum)
+            values = [mag_data.data.cord_x, mag_data.data.cord_y, mag_data.data.cord_z]
+            for i in range(3):
+                all_mag[i].append(values[i])
+        if seq_nums_mag:
+            self.last_mag_seq = seq_nums_mag[-1]
+            self.seq_mag_lbl.setText(f"MAG   seq: {self.last_mag_seq:>6}")
+        N_mag = len(all_mag[0])
+        if N_mag <= 0:
+            return
+        N_display = min(N_mag, MAG_BUFFER_LENGTH)
+        for i in range(3):
+            self.mag_buffer[i] = np.roll(self.mag_buffer[i], -N_display)
+            self.mag_buffer[i][-N_display:] = all_mag[i][-N_display:]
+        if self.recording:
+            rows_to_write = []
+            for idx in range(N_mag):
+                row_vals = [all_mag[i][idx] for i in range(3)]
+                rows_to_write.append([time.time(), self.last_mag_seq] + row_vals)
+            self._write_csv_rows("mag", rows_to_write)
+
+    def _handle_euler_received_ui_thread(self, data: list) -> None:
+        if not self.streaming or not data:
+            return
+        all_euler = [[] for _ in range(3)]
+        seq_nums_euler = []
+        for row in data:
+            if len(row) < 4:
+                continue
+            euler_data = EulerData.from_data(row)
+            seq_nums_euler.append(euler_data.seqnum)
+            values = [euler_data.yaw, euler_data.pitch, euler_data.roll]
+            for i in range(3):
+                all_euler[i].append(values[i])
+        if seq_nums_euler:
+            self.last_euler_seq = seq_nums_euler[-1]
+            self.seq_euler_lbl.setText(f"EULER seq: {self.last_euler_seq:>6}")
+        N_euler = len(all_euler[0])
+        if N_euler <= 0:
+            return
+        N_display = min(N_euler, IMU_BUFFER_LENGTH)
+        for i in range(3):
+            self.euler_buffer[i] = np.roll(self.euler_buffer[i], -N_display)
+            self.euler_buffer[i][-N_display:] = all_euler[i][-N_display:]
+        if self.recording:
+            rows_to_write = []
+            for idx in range(N_euler):
+                row_vals = [all_euler[i][idx] for i in range(3)]
+                rows_to_write.append([time.time(), self.last_euler_seq] + row_vals)
+            self._write_csv_rows("euler", rows_to_write)
 
     def _add_signal_tab(self, title: str, stream: str, channels: int, cols: int) -> None:
         widget = QtWidgets.QWidget()
@@ -538,11 +806,11 @@ class ArmbandWindow(QtWidgets.QWidget):
         layout.setSpacing(6)
         self.curves[stream] = []
         self.plots[stream] = []
-        
+
         IMU_LABELS = ["Acc X", "Acc Y", "Acc Z", "Gyro X", "Gyro Y", "Gyro Z"]
         MAG_LABELS = ["Mag X", "Mag Y", "Mag Z"]
         EULER_LABELS = ["Yaw", "Pitch", "Roll"]
-        
+
         for ch in range(channels):
             if stream == "imu":
                 title_text = IMU_LABELS[ch]
@@ -552,7 +820,7 @@ class ArmbandWindow(QtWidgets.QWidget):
                 title_text = EULER_LABELS[ch]
             else:
                 title_text = f"EMG CH {ch + 1}"
-                
+
             plot = pg.PlotWidget(title=title_text)
             plot.setBackground('#060712')
             plot.showGrid(x=True, y=True, alpha=0.15)
@@ -560,13 +828,26 @@ class ArmbandWindow(QtWidgets.QWidget):
             plot.setMenuEnabled(False)
             plot.getPlotItem().setDownsampling(auto=True, mode='peak')
             plot.getPlotItem().setClipToView(True)
-            
+
+            # Set physical units labels on left axis
+            if stream == "emg":
+                plot.setLabel('left', 'Value', units='uV')
+            elif stream == "imu":
+                if ch < 3:
+                    plot.setLabel('left', 'Acc', units='g')
+                else:
+                    plot.setLabel('left', 'Gyro', units='°/s')
+            elif stream == "mag":
+                plot.setLabel('left', 'Mag', units='Gauss')
+            elif stream == "euler":
+                plot.setLabel('left', 'Angle', units='°')
+
             # Stylize axes
             plot.getAxis('bottom').setPen(pg.mkPen('#232a45', width=1))
             plot.getAxis('bottom').setTextPen('#64748b')
             plot.getAxis('left').setPen(pg.mkPen('#232a45', width=1))
             plot.getAxis('left').setTextPen('#64748b')
-            
+
             # Select specific high-tech palette
             if stream == "emg":
                 hue = (190 + (ch * 12) % 60) % 360
@@ -577,14 +858,14 @@ class ArmbandWindow(QtWidgets.QWidget):
                 hue = hues[ch]
             else:
                 hue = (310 + (ch * 40) % 50) % 360
-                
+
             color = pg.hsvColor(hue / 360.0, 0.85, 0.95)
             curve = plot.plot(pen=pg.mkPen(color, width=1.2))
-            
+
             self.curves[stream].append(curve)
             self.plots[stream].append(plot)
             layout.addWidget(plot, ch // cols, ch % cols)
-            
+
         self.tabs.addTab(widget, title)
 
     def _add_fft_tab(self, title: str, stream: str, channels: int, cols: int) -> None:
@@ -606,7 +887,7 @@ class ArmbandWindow(QtWidgets.QWidget):
             plot.getPlotItem().setDownsampling(auto=True, mode='peak')
             plot.getPlotItem().setClipToView(True)
             plot.setLabel('bottom', 'Freq', units='Hz')
-            
+
             plot.getAxis('bottom').setPen(pg.mkPen('#232a45', width=1))
             plot.getAxis('bottom').setTextPen('#64748b')
             plot.getAxis('left').setPen(pg.mkPen('#232a45', width=1))
@@ -619,7 +900,7 @@ class ArmbandWindow(QtWidgets.QWidget):
             self.curves[fft_key].append(curve)
             self.fft_plots[fft_key].append(plot)
             layout.addWidget(plot, ch // cols, ch % cols)
-            
+
         self.tabs.addTab(widget, title)
 
     def _toggle_connection(self) -> None:
@@ -632,7 +913,7 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.connect_btn.setEnabled(False)
         self.status_label.setText("Connecting...")
         self.status_label.setStyleSheet("color: #e2e8f0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
-        
+
         if self.args.mock:
             await asyncio.sleep(0.8)
             self.connected = True
@@ -642,28 +923,30 @@ class ArmbandWindow(QtWidgets.QWidget):
             port = self.port_combo.currentText().strip()
             self._append_log("Connection", f"Connecting to Armband on {port}...")
             try:
-                # Initialize device
-                self.device = libedu.PyEduDevice(port, BAUDRATE)
-                await self.device.start_data_stream(libedu.MessageParser("ARMBAND-device", libedu.MsgType.Edu))
-                
+                # NOTE: This step-by-step manual sequence (open_serial_stream -> set_configs -> start_sensor_data_stream)
+                # is an advanced path for custom lifecycles. For general use cases, the new high-level
+                # EduDevice.start_stream(...) API using SensorProfile is strongly recommended as the preferred default.
+                self.device = libedu.EduDevice(port, BAUDRATE)
+                await self.device.open_serial_stream(libedu.MessageParser("ARMBAND-device", libedu.MsgType.Edu))
+
                 # Setup configuration
                 await self.device.get_dongle_pair_stat()
                 await asyncio.sleep(0.5)
-                
+
                 await self.device.set_emg_config(libedu.AfeSampleRate.AFE_SR_250, 0xFF)
                 await asyncio.sleep(0.5)
-                
+
                 await self.device.set_imu_config(libedu.ImuSampleRate.IMU_SR_100, libedu.UploadDataType.CALIBRATED_DATA)
                 await asyncio.sleep(0.5)
-                
+
                 await self.device.set_mag_config(libedu.MagSampleRate.MAG_SR_20, libedu.UploadDataType.CALIBRATED_DATA)
                 await asyncio.sleep(0.5)
-                
+
                 # Initialize Buffers in SDK
                 libedu.set_emg_buffer_cfg(BUFFER_LENGTH)
                 libedu.set_imu_buffer_cfg(IMU_BUFFER_LENGTH)
                 libedu.set_mag_buffer_cfg(MAG_BUFFER_LENGTH)
-                
+
                 self.connected = True
                 self._append_log("Connection", "Connected to Armband hardware successfully.")
                 self._update_ui_connection_state(True)
@@ -678,10 +961,10 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.connect_btn.setEnabled(False)
         if self.streaming:
             await self._stop_stream_async()
-            
+
         if not self.args.mock and self.device:
             try:
-                self.device.stop_data_stream()
+                await self.device.stop_stream()
             except Exception as e:
                 logger.error(f"Disconnection error (stop serial): {e}")
                 self._append_log("Disconnection Error (stop serial)", str(e))
@@ -691,7 +974,7 @@ class ArmbandWindow(QtWidgets.QWidget):
             except Exception as e:
                 logger.error(f"Disconnection error: {e}")
                 self._append_log("Disconnection Error", str(e))
-                
+
         self.connected = False
         self._append_log("Connection", "Disconnected from device.")
         self._update_ui_connection_state(False)
@@ -702,7 +985,7 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.connect_btn.style().unpolish(self.connect_btn)
         self.connect_btn.style().polish(self.connect_btn)
         self.connect_btn.update()
-        
+
         if connected:
             self.connect_btn.setText("Disconnect" if not self.args.mock else "⚡ Disconnect Mock")
             self.status_label.setText("CONNECTED (CLICK START)")
@@ -724,10 +1007,10 @@ class ArmbandWindow(QtWidgets.QWidget):
     async def _start_stream_async(self) -> None:
         if not self.connected:
             return
-        
+
         self.stream_btn.setEnabled(False)
         self._append_log("Streaming", "Starting sensor stream...")
-        
+
         # Reset local display buffers and sequence trackers
         self.emg_buffer[:] = 0
         self.imu_buffer[:] = 0
@@ -743,20 +1026,23 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.last_rendered_mag_seq = None
         self.last_rendered_euler_seq = None
         self.last_fft_update_time = 0.0
-        
+
         if not self.args.mock and self.device:
             try:
-                # Flush stale SDK buffers before starting stream
-                libedu.get_emg_buffer(9999, clean=True)
-                libedu.get_imu_calibration_buff(9999, clean=True)
-                libedu.get_mag_calibration_buff(9999, clean=True)
-                libedu.get_euler_buffer(9999, clean=True)
+                libedu.set_emg_data_callback(self._on_emg_data)
+                libedu.set_imu_data_callback(None)
+                libedu.set_imu_calibration_data_callback(self._on_imu_calibrated_data)
+                libedu.set_mag_data_callback(None)
+                libedu.set_mag_calibration_data_callback(self._on_mag_calibrated_data)
+                libedu.set_euler_data_callback(self._on_euler_data)
+                self.streaming = True
                 await self.device.start_sensor_data_stream()
             except Exception as e:
+                self.streaming = False
                 self._append_log("Streaming Error", f"Failed to start stream: {e}")
                 self.stream_btn.setEnabled(True)
                 return
-                
+
         self.streaming = True
         self.stream_btn.setEnabled(True)
         self.stream_btn.setText("■ Stop Stream")
@@ -764,25 +1050,25 @@ class ArmbandWindow(QtWidgets.QWidget):
         self.stream_btn.style().unpolish(self.stream_btn)
         self.stream_btn.style().polish(self.stream_btn)
         self.stream_btn.update()
-        
+
         self.rec_btn.setEnabled(True)
         self.marker_edit.setEnabled(True)
         self.marker_btn.setEnabled(True)
         self.status_label.setText("STREAMING")
         self.status_label.setStyleSheet("color: #39ff14; font-weight: bold; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
-        
+
         # Start acquisition background loop
         self.cleanup_task = asyncio.create_task(self._data_acquisition_loop())
 
     async def _stop_stream_async(self) -> None:
         self.stream_btn.setEnabled(False)
         self._append_log("Streaming", "Stopping sensor stream...")
-        
+
         if self.recording:
             self._stop_recording()
-            
+
         self.streaming = False
-        
+
         if self.cleanup_task:
             self.cleanup_task.cancel()
             try:
@@ -790,20 +1076,26 @@ class ArmbandWindow(QtWidgets.QWidget):
             except asyncio.CancelledError:
                 pass
             self.cleanup_task = None
-            
+
         if not self.args.mock and self.device:
             try:
+                libedu.set_emg_data_callback(None)
+                libedu.set_imu_data_callback(None)
+                libedu.set_imu_calibration_data_callback(None)
+                libedu.set_mag_data_callback(None)
+                libedu.set_mag_calibration_data_callback(None)
+                libedu.set_euler_data_callback(None)
                 await self.device.stop_sensor_data_stream()
             except Exception as e:
                 self._append_log("Streaming Error", f"Stop stream failed: {e}")
-                
+
         self.stream_btn.setEnabled(True)
         self.stream_btn.setText("▶ Start Stream")
         self.stream_btn.setProperty("streaming", False)
         self.stream_btn.style().unpolish(self.stream_btn)
         self.stream_btn.style().polish(self.stream_btn)
         self.stream_btn.update()
-        
+
         self.rec_btn.setEnabled(False)
         self.marker_edit.setEnabled(False)
         self.marker_btn.setEnabled(False)
@@ -815,7 +1107,9 @@ class ArmbandWindow(QtWidgets.QWidget):
         Background loop reading data from bc-edu-sdk buffers at 50Hz (every 20ms)
         """
         self._append_log("Acquisition", "Started background data acquisition task.")
-        
+        if not self.args.mock:
+            return
+
         mock_t = 0.0
         consecutive_errors = 0
         while self.streaming:
@@ -824,7 +1118,7 @@ class ArmbandWindow(QtWidgets.QWidget):
                     # Mock Data Generation
                     await asyncio.sleep(0.02)  # 20ms intervals
                     mock_t += 0.02
-                    
+
                     # Generate 5 EMG samples (250Hz rate -> 5 samples per 20ms)
                     emg_samples = []
                     for _ in range(5):
@@ -835,12 +1129,12 @@ class ArmbandWindow(QtWidgets.QWidget):
                         for ch in range(NUM_CHANNELS):
                             sig[ch] = envelope * np.sin(mock_t * 15.0 + ch * 0.2) + noise[ch]
                         emg_samples.append(sig)
-                        
+
                     # Save to display buffer & write to CSV in batch
                     if self.last_emg_seq is None: self.last_emg_seq = 0
                     self.last_emg_seq += 5
                     self.seq_emg_lbl.setText(f"EMG   seq: {self.last_emg_seq:>6}")
-                    
+
                     N_emg = len(emg_samples)
                     for ch in range(NUM_CHANNELS):
                         ch_samples = np.zeros(N_emg)
@@ -851,11 +1145,11 @@ class ArmbandWindow(QtWidgets.QWidget):
                                 val = self.env_noise_60[ch].filter(val)
                                 val = self.hp[ch].filter(val)
                             ch_samples[idx] = val
-                        
+
                         # Roll once for all N_emg points
                         self.emg_buffer[ch] = np.roll(self.emg_buffer[ch], -N_emg)
                         self.emg_buffer[ch][-N_emg:] = ch_samples
-                        
+
                     if self.recording:
                         for sig in emg_samples:
                             self._write_csv_row("emg", [time.time(), 0] + list(sig) + [self.current_marker])
@@ -866,21 +1160,21 @@ class ArmbandWindow(QtWidgets.QWidget):
                         acc = [0.2 * np.sin(mock_t * 2), 0.3 * np.cos(mock_t * 3), 9.8 + 0.1 * np.random.randn()]
                         gyro = [5.0 * np.sin(mock_t * 1.5), 10.0 * np.cos(mock_t * 1.2), 2.0 * np.random.randn()]
                         imu_samples.append(acc + gyro)
-                        
+
                     if self.last_imu_seq is None: self.last_imu_seq = 0
                     self.last_imu_seq += 2
                     self.seq_imu_lbl.setText(f"IMU   seq: {self.last_imu_seq:>6}")
-                    
+
                     N_imu = len(imu_samples)
                     for i in range(6):
                         i_samples = np.array([imu_samples[idx][i] for idx in range(N_imu)])
                         self.imu_buffer[i] = np.roll(self.imu_buffer[i], -N_imu)
                         self.imu_buffer[i][-N_imu:] = i_samples
-                        
+
                     if self.recording:
                         for samp in imu_samples:
                             self._write_csv_row("imu", [time.time(), 0] + samp)
-                            
+
                     # Mag generation (1 sample per 50ms -> 20Hz -> roughly 0.4 samples per 20ms)
                     if np.random.rand() < 0.4:
                         if self.last_mag_seq is None: self.last_mag_seq = 0
@@ -890,7 +1184,7 @@ class ArmbandWindow(QtWidgets.QWidget):
                         for i in range(3):
                             self.mag_buffer[i] = np.roll(self.mag_buffer[i], -1)
                             self.mag_buffer[i][-1] = mag[i]
-                            
+
                         if self.recording:
                             self._write_csv_row("mag", [time.time(), 0] + mag)
 
@@ -915,153 +1209,6 @@ class ArmbandWindow(QtWidgets.QWidget):
                     if self.recording:
                         for samp in euler_samples:
                             self._write_csv_row("euler", [time.time(), 0] + samp)
-                else:
-                    # Real Hardware polling
-                    await asyncio.sleep(0.015)
-                    
-                    # 1. Fetch EMG Buffer
-                    emg_buff = libedu.get_emg_buffer(200, clean=True)
-                    if emg_buff:
-                        all_samples = [[] for _ in range(NUM_CHANNELS)]
-                        seq_nums = []
-                        
-                        for row in emg_buff:
-                            emg_data = EMGData.from_data(row)
-                            seq_nums.append(emg_data.seq_num)
-                            channel_values = np.array_split(emg_data.channel_values, NUM_CHANNELS)
-                            points_count = len(channel_values[0])
-                            
-                            for ch in range(NUM_CHANNELS):
-                                all_samples[ch].extend(channel_values[ch])
-                                
-                        if seq_nums:
-                            self.last_emg_seq = seq_nums[-1]
-                            self.seq_emg_lbl.setText(f"EMG   seq: {self.last_emg_seq:>6}")
-                            
-                        N_emg = len(all_samples[0])
-                        if N_emg > 0:
-                            N_display = min(N_emg, BUFFER_LENGTH)
-                            for ch in range(NUM_CHANNELS):
-                                ch_samples = np.array(all_samples[ch], dtype=float)
-                                if self.filter_checkbox.isChecked():
-                                    for idx in range(N_emg):
-                                        val = ch_samples[idx]
-                                        val = self.env_noise_50[ch].filter(val)
-                                        val = self.env_noise_60[ch].filter(val)
-                                        val = self.hp[ch].filter(val)
-                                        ch_samples[idx] = val
-                                        
-                                self.emg_buffer[ch] = np.roll(self.emg_buffer[ch], -N_display)
-                                self.emg_buffer[ch][-N_display:] = ch_samples[-N_display:]
-                                
-                            if self.recording:
-                                rows_to_write = []
-                                for idx in range(N_emg):
-                                    row_vals = [all_samples[ch][idx] for ch in range(NUM_CHANNELS)]
-                                    rows_to_write.append([time.time(), self.last_emg_seq] + row_vals + [self.current_marker])
-                                self._write_csv_rows("emg", rows_to_write)
-
-                    # 2. Fetch IMU Buffer (prefer Calibrated)
-                    imu_buff = libedu.get_imu_calibration_buff(100, clean=True)
-                    if not imu_buff:
-                        # fallback to raw if calibrated is empty
-                        imu_buff = libedu.get_imu_buffer(100, clean=True)
-                        
-                    if imu_buff:
-                        all_imu = [[] for _ in range(6)]
-                        seq_nums_imu = []
-                        
-                        for row in imu_buff:
-                            imu_data = IMUData.from_data(row)
-                            seq_nums_imu.append(imu_data.seqnum)
-                            acc = [imu_data.acc.cord_x, imu_data.acc.cord_y, imu_data.acc.cord_z]
-                            gyro = [imu_data.gyro.cord_x, imu_data.gyro.cord_y, imu_data.gyro.cord_z]
-                            samp = acc + gyro
-                            for i in range(6):
-                                all_imu[i].append(samp[i])
-                                
-                        if seq_nums_imu:
-                            self.last_imu_seq = seq_nums_imu[-1]
-                            self.seq_imu_lbl.setText(f"IMU   seq: {self.last_imu_seq:>6}")
-                            
-                        N_imu = len(all_imu[0])
-                        if N_imu > 0:
-                            N_display = min(N_imu, IMU_BUFFER_LENGTH)
-                            for i in range(6):
-                                self.imu_buffer[i] = np.roll(self.imu_buffer[i], -N_display)
-                                self.imu_buffer[i][-N_display:] = all_imu[i][-N_display:]
-                                
-                            if self.recording:
-                                rows_to_write = []
-                                for idx in range(N_imu):
-                                    row_vals = [all_imu[i][idx] for i in range(6)]
-                                    rows_to_write.append([time.time(), self.last_imu_seq] + row_vals)
-                                self._write_csv_rows("imu", rows_to_write)
-
-                    # 3. Fetch Mag Buffer
-                    mag_buff = libedu.get_mag_calibration_buff(100, clean=True)
-                    if not mag_buff:
-                        mag_buff = libedu.get_mag_buffer(100, clean=True)
-                        
-                    if mag_buff:
-                        all_mag = [[] for _ in range(3)]
-                        seq_nums_mag = []
-                        
-                        for row in mag_buff:
-                            mag_data = MagData.from_data(row)
-                            seq_nums_mag.append(mag_data.seqnum)
-                            mag = [mag_data.data.cord_x, mag_data.data.cord_y, mag_data.data.cord_z]
-                            for i in range(3):
-                                all_mag[i].append(mag[i])
-                                
-                        if seq_nums_mag:
-                            self.last_mag_seq = seq_nums_mag[-1]
-                            self.seq_mag_lbl.setText(f"MAG   seq: {self.last_mag_seq:>6}")
-                            
-                        N_mag = len(all_mag[0])
-                        if N_mag > 0:
-                            N_display = min(N_mag, MAG_BUFFER_LENGTH)
-                            for i in range(3):
-                                self.mag_buffer[i] = np.roll(self.mag_buffer[i], -N_display)
-                                self.mag_buffer[i][-N_display:] = all_mag[i][-N_display:]
-                                
-                            if self.recording:
-                                rows_to_write = []
-                                for idx in range(N_mag):
-                                    row_vals = [all_mag[i][idx] for i in range(3)]
-                                    rows_to_write.append([time.time(), self.last_mag_seq] + row_vals)
-                                self._write_csv_rows("mag", rows_to_write)
-
-                    # 4. Fetch Euler Buffer
-                    euler_buff = libedu.get_euler_buffer(100, clean=True)
-                    if euler_buff:
-                        all_euler = [[] for _ in range(3)]
-                        seq_nums_euler = []
-                        
-                        for row in euler_buff:
-                            euler_data = EulerData.from_data(row)
-                            seq_nums_euler.append(euler_data.seqnum)
-                            samp = [euler_data.yaw, euler_data.pitch, euler_data.roll]
-                            for i in range(3):
-                                all_euler[i].append(samp[i])
-                                
-                        if seq_nums_euler:
-                            self.last_euler_seq = seq_nums_euler[-1]
-                            self.seq_euler_lbl.setText(f"EULER seq: {self.last_euler_seq:>6}")
-                            
-                        N_euler = len(all_euler[0])
-                        if N_euler > 0:
-                            N_display = min(N_euler, IMU_BUFFER_LENGTH)
-                            for i in range(3):
-                                self.euler_buffer[i] = np.roll(self.euler_buffer[i], -N_display)
-                                self.euler_buffer[i][-N_display:] = all_euler[i][-N_display:]
-                                
-                            if self.recording:
-                                rows_to_write = []
-                                for idx in range(N_euler):
-                                    row_vals = [all_euler[i][idx] for i in range(3)]
-                                    rows_to_write.append([time.time(), self.last_euler_seq] + row_vals)
-                                self._write_csv_rows("euler", rows_to_write)
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -1081,18 +1228,18 @@ class ArmbandWindow(QtWidgets.QWidget):
         """
         if not self.streaming:
             return
-            
+
         # Telemetry Seq labels are updated independently in the data acquisition loop
-        
+
         current_tab = self.tabs.currentIndex()
-        
+
         # 1. Update EMG Time Domain Tab
         if current_tab == 0:
             if self.last_emg_seq != self.last_rendered_emg_seq:
                 self.last_rendered_emg_seq = self.last_emg_seq
                 for ch in range(NUM_CHANNELS):
                     self.curves["emg"][ch].setData(self.emg_buffer[ch])
-                
+
         # 2. Update EMG FFT Tab (Welch PSD estimation)
         elif current_tab == 1 and self.fft_checkbox.isChecked():
             if self.last_emg_seq != self.last_rendered_fft_seq:
@@ -1111,21 +1258,21 @@ class ArmbandWindow(QtWidgets.QWidget):
                                 self.curves["emg_fft"][ch].setData(freqs[mask], psd[mask])
                             except Exception:
                                 pass
-                        
+
         # 3. Update IMU Tab
         elif current_tab == 2:
             if self.last_imu_seq != self.last_rendered_imu_seq:
                 self.last_rendered_imu_seq = self.last_imu_seq
                 for i in range(6):
                     self.curves["imu"][i].setData(self.imu_buffer[i])
-                
+
         # 4. Update Mag Tab
         elif current_tab == 3:
             if self.last_mag_seq != self.last_rendered_mag_seq:
                 self.last_rendered_mag_seq = self.last_mag_seq
                 for i in range(3):
                     self.curves["mag"][i].setData(self.mag_buffer[i])
-                    
+
         # 5. Update Euler Tab
         elif current_tab == 4:
             if self.last_euler_seq != self.last_rendered_euler_seq:
@@ -1155,11 +1302,11 @@ class ArmbandWindow(QtWidgets.QWidget):
         if not pid:
             QtWidgets.QMessageBox.warning(self, "Invalid ID", "Please enter a valid Participant ID!")
             return
-            
+
         # Prepare saving folder
         rec_dir = Path("recordings")
         rec_dir.mkdir(parents=True, exist_ok=True)
-        
+
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.rec_files = {
             "emg": rec_dir / f"armband_{pid}_{ts}_emg.csv",
@@ -1167,21 +1314,21 @@ class ArmbandWindow(QtWidgets.QWidget):
             "mag": rec_dir / f"armband_{pid}_{ts}_mag.csv",
             "euler": rec_dir / f"armband_{pid}_{ts}_euler.csv",
         }
-        
+
         try:
             # Initialize files and write headers
             self.rec_writers = {}
-            
+
             # EMG file
             f_emg = open(self.rec_files["emg"], "w", encoding="utf-8")
             f_emg.write("Timestamp,SeqNum,EMG_1,EMG_2,EMG_3,EMG_4,EMG_5,EMG_6,EMG_7,EMG_8,Marker\n")
             self.rec_writers["emg"] = f_emg
-            
+
             # IMU file
             f_imu = open(self.rec_files["imu"], "w", encoding="utf-8")
             f_imu.write("Timestamp,SeqNum,AccX,AccY,AccZ,GyroX,GyroY,GyroZ\n")
             self.rec_writers["imu"] = f_imu
-            
+
             # Mag file
             f_mag = open(self.rec_files["mag"], "w", encoding="utf-8")
             f_mag.write("Timestamp,SeqNum,MagX,MagY,MagZ\n")
@@ -1191,26 +1338,26 @@ class ArmbandWindow(QtWidgets.QWidget):
             f_euler = open(self.rec_files["euler"], "w", encoding="utf-8")
             f_euler.write("Timestamp,SeqNum,Yaw,Pitch,Roll\n")
             self.rec_writers["euler"] = f_euler
-            
+
             self.recording = True
             self.rec_start_time = time.time()
             self.rec_timer.start()
-            
+
             self.rec_btn.setText("STOP")
             self.rec_btn.setProperty("recording", True)
             self.rec_btn.style().unpolish(self.rec_btn)
             self.rec_btn.style().polish(self.rec_btn)
             self.rec_btn.update()
-            
+
             self.rec_time_label.setProperty("recording", True)
             self.rec_time_label.style().unpolish(self.rec_time_label)
             self.rec_time_label.style().polish(self.rec_time_label)
             self.rec_time_label.update()
             self.rec_time_label.setText("00:00")
-            
+
             self.participant_edit.setEnabled(False)
             self.connect_btn.setEnabled(False)
-            
+
             self._append_log("Recording", f"Session recording started for Participant: {pid}")
             self._append_log("Recording", f"Saving session files into {rec_dir}/")
         except Exception as e:
@@ -1220,7 +1367,7 @@ class ArmbandWindow(QtWidgets.QWidget):
     def _stop_recording(self) -> None:
         self.recording = False
         self.rec_timer.stop()
-        
+
         # Close all file writers safely
         for key, writer in self.rec_writers.items():
             try:
@@ -1228,19 +1375,19 @@ class ArmbandWindow(QtWidgets.QWidget):
             except Exception:
                 pass
         self.rec_writers.clear()
-        
+
         self.rec_btn.setText("REC")
         self.rec_btn.setProperty("recording", False)
         self.rec_btn.style().unpolish(self.rec_btn)
         self.rec_btn.style().polish(self.rec_btn)
         self.rec_btn.update()
-        
+
         self.rec_time_label.setProperty("recording", False)
         self.rec_time_label.style().unpolish(self.rec_time_label)
         self.rec_time_label.style().polish(self.rec_time_label)
         self.rec_time_label.update()
         self.rec_time_label.setText("00:00")
-        
+
         self.participant_edit.setEnabled(True)
         self.connect_btn.setEnabled(True)
         self._append_log("Recording", "Session recording stopped and files successfully saved.")
@@ -1276,9 +1423,11 @@ class ArmbandWindow(QtWidgets.QWidget):
 
     def closeEvent(self, event) -> None:
         self.plot_timer.stop()
-        if self.streaming:
-            # Synch-wrapper or trigger stop async
-            asyncio.ensure_future(self._stop_stream_async())
+        if self.connected and not self.args.mock and self.device:
+            try:
+                asyncio.run(self.device.stop_stream())
+            except Exception:
+                pass
         event.accept()
 
 

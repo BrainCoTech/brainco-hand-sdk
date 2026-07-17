@@ -47,6 +47,8 @@ class IMUCord:
 class IMUData:
     @staticmethod
     def from_data(arr: list):
+        if len(arr) >= 13:
+            return IMUData(arr[0], arr[1:4], arr[7:10])
         # Ensure arr has at least 7 elements, pad with 0.0 if not enough to prevent IndexError
         extended = arr + [0.0] * max(0, 7 - len(arr))
         return IMUData(extended[0], extended[1:4], extended[4:7])

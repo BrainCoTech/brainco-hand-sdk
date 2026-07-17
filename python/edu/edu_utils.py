@@ -14,7 +14,8 @@ from bc_edu_sdk import main_mod
 
 # Configuration constants
 VENDOR_ID = 21059  # BrainCo VID
-GLOVE_PRODUCT_ID = 6  # Glove PID
+GLOVE_PRODUCT_ID_PRIMARY = 6  # Primary Glove PID
+GLOVE_PRODUCT_ID_SECONDARY = 2  # Secondary Glove PID (e.g. Education Glove)
 ARMBAND_PRODUCT_ID_PRIMARY = 1  # Primary Armband PID
 ARMBAND_PRODUCT_ID_SECONDARY = 5  # Secondary Armband PID
 
@@ -90,7 +91,7 @@ def get_glove_port_name() -> Optional[str]:
         Returns the port name on success, e.g. "/dev/ttyUSB0", "COM3" etc.
 
     Note:
-        - Identifies the glove using VID=21059, PID=6.
+        - Identifies the glove using VID=21059, PID=6 or PID=2.
         - This function is specifically for USB-connected gloves.
         - If there are multiple gloves, it only returns the first detected port.
 
@@ -102,8 +103,18 @@ def get_glove_port_name() -> Optional[str]:
         ...     print("No glove device found")
     """
     try:
-        ports = libedu.available_usb_ports(VENDOR_ID, GLOVE_PRODUCT_ID)
+        # Try primary product ID first
+        ports = libedu.available_usb_ports(VENDOR_ID, GLOVE_PRODUCT_ID_PRIMARY)
+        port_name = _get_first_port_name(ports, "Glove")
+
+        if port_name:
+            return port_name
+
+        # If primary product ID is not found, try secondary product ID
+        logger.info("Primary glove product ID not found, trying secondary ID...")
+        ports = libedu.available_usb_ports(VENDOR_ID, GLOVE_PRODUCT_ID_SECONDARY)
         return _get_first_port_name(ports, "Glove")
+
     except Exception as e:
         logger.error(f"Error scanning for glove devices: {e}")
         return None

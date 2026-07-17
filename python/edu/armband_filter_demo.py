@@ -25,7 +25,6 @@ from edu_utils import *
 SAMPLING_FREQUENCY = 250  # EMG sampling frequency (Hz)
 NUM_CHANNELS = 8  # Number of EMG channels
 EMG_BUFFER_LENGTH = 1250  # EMG data buffer length (number of data points)
-FETCH_DATA_COUNT = 100  # Number of data points fetched each time
 BAUDRATE = 115200  # Serial port baudrate
 DATA_PRINT_INTERVAL = 0.5  # Data print interval (seconds)
 
@@ -83,69 +82,67 @@ def update_emg_buffer(emg_data: EMGData) -> None:
         emg_values[i, -1] = raw_value  # Append the latest data point
 
 
-def print_emg_data() -> None:
+def on_emg_data(data: list[list[float]]) -> None:
     """
-    Fetch, process, and print EMG signals
+    Process EMG packets from the SDK callback.
     """
-    emg_buff = libedu.get_emg_buffer(FETCH_DATA_COUNT, clean=True)
-    
-    # Log buffer count in debug level to reduce console noise
-    logger.debug(f"Got EMG buffer len={len(emg_buff)}")
-
-    if len(emg_buff) == 0:
+    if not data:
         return
 
     emg_data_list = []
-    for row in emg_buff:
+    for row in data:
         emg_data = EMGData.from_data(row)
         emg_data_list.append(emg_data)
         update_emg_buffer(emg_data)
 
-    # Print elegant summary timestamp info
     print_emg_timestamps(logger, emg_data_list)
-
-    # Offline plot saving
     save_channel_plot()
 
 
-async def setup_armband_device() -> bool:
+async def setup_armband_device():
     """
     Setup and connect the armband device
+
+    Returns:
+        EduDevice: Returns the device instance if connection succeeds, None otherwise
     """
     libedu.get_usb_available_ports()
     port_name = get_armband_port_name()
 
     if port_name is None:
         logger.error("No armband device found. Please plug in the receiver dongle.")
-        return False
+        return None
 
     try:
-        device = libedu.PyEduDevice(port_name, BAUDRATE)
+        device = libedu.EduDevice(port_name, BAUDRATE)
+        parser = libedu.MessageParser("ARMBAND-device", libedu.MsgType.Edu)
 
-        # Open the serial port and start the background parsing stream
-        await device.start_data_stream(libedu.MessageParser("ARMBAND-device", libedu.MsgType.Edu))
-        logger.info("Serial port opened, background parser started")
+        # Configure sensor sampling rates using recommended SensorProfile
+        profile = libedu.SensorProfile(
+            flex_rate=None,
+            imu_rate=libedu.ImuSampleRate.IMU_SR_100,
+            imu_data_type=libedu.UploadDataType.CALIBRATED_DATA,
+            emg_rate=libedu.AfeSampleRate.AFE_SR_250,
+            emg_channel_bits=0xFF,
+            mag_rate=libedu.MagSampleRate.MAG_SR_20,
+            mag_data_type=libedu.UploadDataType.CALIBRATED_DATA
+        )
+
+        # One-key lifecycle: open serial parser, apply sensor configs, then send START_DATA_STREAM.
+        await device.start_stream(parser, profile)
+        logger.info("Serial stream opened, sensor config applied, and firmware data stream started via start_stream API")
 
         # Query device info and dongle pairing status
         await device.get_device_info()
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
         await device.get_dongle_pair_stat()
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
 
-        # Configure sensor sampling rates
-        await device.set_emg_config(libedu.AfeSampleRate.AFE_SR_250, 0xFF)
-        await device.set_imu_config(libedu.ImuSampleRate.IMU_SR_100, libedu.UploadDataType.CALIBRATED_DATA)
-        await device.set_mag_config(libedu.MagSampleRate.MAG_SR_20, libedu.UploadDataType.CALIBRATED_DATA)
-        logger.info("Sensor configurations applied successfully")
-
-        # Start sensor data stream
-        await device.start_sensor_data_stream()
-        logger.info("Sensor data stream started")
-        return True
+        return device
 
     except Exception as e:
         logger.error(f"Failed to setup armband device: {e}")
-        return False
+        return None
 
 
 def initialize_configuration() -> None:
@@ -157,6 +154,7 @@ def initialize_configuration() -> None:
     libedu.set_msg_resp_callback(
         lambda device_id, msg: logger.debug(f"Message response from {device_id}: {msg}")
     )
+    libedu.set_emg_data_callback(on_emg_data)
 
 
 async def main() -> None:
@@ -165,7 +163,8 @@ async def main() -> None:
     """
     initialize_configuration()
 
-    if await setup_armband_device():
+    device = await setup_armband_device()
+    if device is not None:
         logger.info("Armband device setup completed successfully. Waiting for EMG packets...")
     else:
         logger.error("Failed to setup armband device")
@@ -174,12 +173,19 @@ async def main() -> None:
     logger.info("Starting EMG data collection loop...")
     try:
         while True:
-            print_emg_data()
             await asyncio.sleep(DATA_PRINT_INTERVAL)
     except KeyboardInterrupt:
         logger.info("EMG data collection stopped by user")
     except Exception as e:
         logger.error(f"Error in data collection loop: {e}")
+        raise e
+    finally:
+        logger.info("Stopping sensor data stream and releasing serial port...")
+        try:
+            await device.stop_stream()
+        except Exception as e:
+            logger.error(f"Error stopping data stream: {e}")
+        libedu.set_emg_data_callback(None)
 
 
 if __name__ == "__main__":

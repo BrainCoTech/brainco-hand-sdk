@@ -33,16 +33,59 @@ from model import FlexData, IMUData, MagData
 
 # Configuration constants
 NUM_CHANNELS = 6
-BUFFER_LENGTH = 1250
-IMU_BUFFER_LENGTH = 500
-MAG_BUFFER_LENGTH = 500
+BUFFER_LENGTH = 250
+IMU_BUFFER_LENGTH = 125
+MAG_BUFFER_LENGTH = 125
 BAUDRATE = 115200
+
+# Sensor conversion coefficients (LSB -> Physical units)
+ACC_COEFFICIENT = 1.0 / 8192.0      # LSB -> g
+GYRO_COEFFICIENT = 1.0 / 16.4       # LSB -> °/s
+MAG_COEFFICIENT = 1.0 / 65536.0     # LSB -> Gauss
+
+# Sampling rate config mappings
+FLEX_RATES = {
+    "Off": libedu.SamplingRate.SAMPLING_RATE_OFF,
+    "25 Hz": libedu.SamplingRate.SAMPLING_RATE_25,
+    "50 Hz": libedu.SamplingRate.SAMPLING_RATE_50,
+    "100 Hz": libedu.SamplingRate.SAMPLING_RATE_100,
+    "200 Hz": libedu.SamplingRate.SAMPLING_RATE_200,
+}
+
+IMU_RATES = {
+    "Off": libedu.ImuSampleRate.IMU_SR_OFF,
+    "25 Hz": libedu.ImuSampleRate.IMU_SR_25,
+    "50 Hz": libedu.ImuSampleRate.IMU_SR_50,
+    "100 Hz": libedu.ImuSampleRate.IMU_SR_100,
+    "400 Hz": libedu.ImuSampleRate.IMU_SR_400,
+}
+
+MAG_RATES = {
+    "Off": libedu.MagSampleRate.MAG_SR_OFF,
+    "10 Hz": libedu.MagSampleRate.MAG_SR_10,
+    "20 Hz": libedu.MagSampleRate.MAG_SR_20,
+    "50 Hz": libedu.MagSampleRate.MAG_SR_50,
+    "100 Hz": libedu.MagSampleRate.MAG_SR_100,
+}
 
 
 class GloveWindow(QtWidgets.QWidget):
+    msg_received_signal = QtCore.Signal(str, str)
+    flex_received_signal = QtCore.Signal(list)
+    imu_received_signal = QtCore.Signal(list)
+    imu_calibrated_received_signal = QtCore.Signal(list)
+    mag_received_signal = QtCore.Signal(list)
+    mag_calibrated_received_signal = QtCore.Signal(list)
+
     def __init__(self, args: argparse.Namespace):
         super().__init__()
         self.args = args
+        self.msg_received_signal.connect(self._handle_msg_ui_thread)
+        self.flex_received_signal.connect(self._handle_flex_received_ui_thread)
+        self.imu_received_signal.connect(self._handle_imu_received_ui_thread)
+        self.imu_calibrated_received_signal.connect(self._handle_imu_calibrated_received_ui_thread)
+        self.mag_received_signal.connect(self._handle_mag_received_ui_thread)
+        self.mag_calibrated_received_signal.connect(self._handle_mag_calibrated_received_ui_thread)
         self.cleanup_task: asyncio.Task | None = None
         self.device = None
 
@@ -76,6 +119,12 @@ class GloveWindow(QtWidgets.QWidget):
         self.last_rendered_imu_seq = None
         self.last_rendered_mag_seq = None
         self.connected = False
+        self.imu_source_logged = False
+        self._active_acc_coef = 1.0 / 8192.0
+        self._active_gyro_coef = 1.0 / 16.4
+        self.calibrating_imu = False
+        self._collecting_imu_calibration = False
+        self._imu_calibration_samples: list[dict[str, list[int]]] = []
 
         # UI styles and build
         self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
@@ -121,25 +170,18 @@ class GloveWindow(QtWidgets.QWidget):
             letter-spacing: 0.5px;
         }
 
-        #sys_grp {
-            border: 1px solid rgba(226, 232, 240, 0.15);
-        }
-        #sys_grp::title {
-            color: #cbd5e1;
-        }
-
-        #conn_grp {
+        #control_grp {
             border: 1px solid rgba(0, 240, 255, 0.22);
         }
-        #conn_grp::title {
+        #control_grp::title {
             color: #00f0ff;
         }
 
-        #stream_grp {
-            border: 1px solid rgba(57, 255, 20, 0.18);
+        #config_grp {
+            border: 1px solid rgba(234, 179, 8, 0.22);
         }
-        #stream_grp::title {
-            color: #39ff14;
+        #config_grp::title {
+            color: #eab308;
         }
 
         #rec_grp {
@@ -154,21 +196,63 @@ class GloveWindow(QtWidgets.QWidget):
             border: 1px solid #1f2340;
             border-radius: 5px;
             color: #f8fafc;
-            padding: 4px 8px;
+            padding: 4px 24px 4px 8px;
             font-size: 11px;
             font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+            selection-background-color: #1f8cff;
         }
         QComboBox::drop-down {
             subcontrol-origin: padding;
             subcontrol-position: top right;
-            width: 15px;
+            width: 20px;
             border-left-width: 1px;
             border-left-color: #1f2340;
             border-left-style: solid;
+            border-top-right-radius: 5px;
+            border-bottom-right-radius: 5px;
+            background-color: rgba(15, 23, 42, 0.9);
+        }
+        QComboBox::down-arrow {
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 5px solid #94a3b8;
+            margin-right: 6px;
+        }
+        QComboBox QAbstractItemView {
+            background-color: #070914;
+            color: #e2e8f0;
+            border: 1px solid rgba(234, 179, 8, 0.42);
+            border-radius: 5px;
+            padding: 3px;
+            outline: 0;
+            selection-background-color: rgba(234, 179, 8, 0.24);
+            selection-color: #ffffff;
+            font-size: 11px;
+            font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+        }
+        QComboBox QAbstractItemView::item {
+            min-height: 20px;
+            padding: 3px 8px;
+            border-radius: 3px;
+        }
+        QComboBox QAbstractItemView::item:hover {
+            background-color: rgba(0, 240, 255, 0.14);
+            color: #ffffff;
+        }
+        QComboBox QAbstractItemView::item:selected {
+            background-color: rgba(234, 179, 8, 0.30);
+            color: #ffffff;
         }
         QLineEdit:focus, QComboBox:focus {
             border: 1px solid #00f0ff;
             background-color: #0b0e24;
+        }
+        QComboBox:disabled {
+            color: #475569;
+            background-color: rgba(7, 9, 20, 0.55);
+            border-color: #171d2b;
         }
 
         QPushButton {
@@ -326,125 +410,76 @@ class GloveWindow(QtWidgets.QWidget):
         dashboard.setSpacing(8)
         root.addLayout(dashboard)
 
-        # 1. System Status Card
-        sys_grp = QtWidgets.QGroupBox("💻 SYSTEM UNIT")
-        sys_grp.setObjectName("sys_grp")
-        sys_lay = QtWidgets.QVBoxLayout(sys_grp)
-        sys_lay.setContentsMargins(12, 10, 12, 10)
-        sys_lay.setSpacing(4)
+        # 1. Device Hub Card
+        control_grp = QtWidgets.QGroupBox("📡 DEVICE HUB")
+        control_grp.setObjectName("control_grp")
+        control_lay = QtWidgets.QGridLayout(control_grp)
+        control_lay.setContentsMargins(12, 10, 12, 10)
+        control_lay.setSpacing(6)
 
-        logo_lbl = QtWidgets.QLabel("🖐️ GLOVE GUI DEMO")
-        logo_lbl.setStyleSheet("color: #e2e8f0; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;")
-        sys_lay.addWidget(logo_lbl)
+        logo_lbl = QtWidgets.QLabel("🖐️ GLOVE GUI")
+        logo_lbl.setStyleSheet("color: #e2e8f0; font-size: 11px; font-weight: 800; letter-spacing: 0.5px;")
 
         self.status_label = QtWidgets.QLabel("System Ready")
         self.status_label.setStyleSheet("color: #39ff14; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
-        self.status_label.setMinimumWidth(165)
-        sys_lay.addWidget(self.status_label)
-        dashboard.addWidget(sys_grp)
+        self.status_label.setMinimumWidth(110)
+        self.status_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
 
-        # 2. Hardware Connection Card
-        conn_grp = QtWidgets.QGroupBox("📡 DEVICE HUB")
-        conn_grp.setObjectName("conn_grp")
-        conn_lay = QtWidgets.QHBoxLayout(conn_grp)
-        conn_lay.setContentsMargins(10, 8, 10, 8)
-        conn_lay.setSpacing(6)
-        conn_lay.setAlignment(QtCore.Qt.AlignVCenter)
+        control_lay.addWidget(logo_lbl, 0, 0)
+        control_lay.addWidget(self.status_label, 0, 1)
+
+        self.connect_btn = QtWidgets.QPushButton("Connect")
+        self.connect_btn.setObjectName("connect_btn")
+        self.connect_btn.setFixedHeight(26)
+        self.connect_btn.clicked.connect(self._toggle_connection)
 
         if self.args.mock:
-            self.connect_btn = QtWidgets.QPushButton("⚡ Connect Mock")
-            self.connect_btn.setObjectName("connect_btn")
-            self.connect_btn.setFixedHeight(28)
-            self.connect_btn.clicked.connect(self._toggle_connection)
-            conn_lay.addWidget(self.connect_btn)
+            self.connect_btn.setText("⚡ Connect Mock")
+            control_lay.addWidget(self.connect_btn, 1, 0, 1, 2)
         else:
             self.port_combo = QtWidgets.QComboBox()
-            self.port_combo.setFixedWidth(135)
-            self.port_combo.setFixedHeight(28)
+            self.port_combo.setFixedHeight(26)
             self.port_combo.setEditable(True)
-            conn_lay.addWidget(self.port_combo)
-
-            # Scan serial ports
             self._scan_ports()
-
-            self.connect_btn = QtWidgets.QPushButton("Connect Device")
-            self.connect_btn.setObjectName("connect_btn")
-            self.connect_btn.setFixedHeight(28)
-            self.connect_btn.clicked.connect(self._toggle_connection)
-            conn_lay.addWidget(self.connect_btn)
-
-        dashboard.addWidget(conn_grp)
-
-        # 3. Stream Controls Card
-        stream_grp = QtWidgets.QGroupBox("📊 FLOW ENGINE")
-        stream_grp.setObjectName("stream_grp")
-        stream_lay = QtWidgets.QHBoxLayout(stream_grp)
-        stream_lay.setContentsMargins(10, 8, 10, 8)
-        stream_lay.setSpacing(10)
-        stream_lay.setAlignment(QtCore.Qt.AlignVCenter)
+            control_lay.addWidget(self.port_combo, 1, 0)
+            control_lay.addWidget(self.connect_btn, 1, 1)
 
         self.stream_btn = QtWidgets.QPushButton("▶ Start Stream")
         self.stream_btn.setObjectName("stream_btn")
-        self.stream_btn.setFixedHeight(28)
+        self.stream_btn.setFixedHeight(26)
         self.stream_btn.setEnabled(False)
         self.stream_btn.clicked.connect(self._toggle_stream)
-        stream_lay.addWidget(self.stream_btn)
+        control_lay.addWidget(self.stream_btn, 2, 0, 1, 2)
 
-        dashboard.addWidget(stream_grp)
+        dashboard.addWidget(control_grp)
 
-        # 4. Recording Card
-        rec_grp = QtWidgets.QGroupBox("⏺ TELEMETRY RECORDER")
-        rec_grp.setObjectName("rec_grp")
-        rec_lay = QtWidgets.QHBoxLayout(rec_grp)
-        rec_lay.setContentsMargins(10, 8, 10, 8)
-        rec_lay.setSpacing(6)
-        rec_lay.setAlignment(QtCore.Qt.AlignVCenter)
+        # 2. Config & Metadata Card
+        config_grp = QtWidgets.QGroupBox("⚙️ DEVICE & SENSOR CONFIG")
+        config_grp.setObjectName("config_grp")
+        config_lay = QtWidgets.QGridLayout(config_grp)
+        config_lay.setContentsMargins(12, 10, 12, 10)
+        config_lay.setSpacing(6)
 
-        pid_lbl = QtWidgets.QLabel("PID:")
-        pid_lbl.setFixedWidth(24)
-        rec_lay.addWidget(pid_lbl)
-        self.participant_edit = QtWidgets.QLineEdit("P001")
-        self.participant_edit.setFixedWidth(55)
-        self.participant_edit.setFixedHeight(28)
-        rec_lay.addWidget(self.participant_edit)
+        # Metadata Layout (Left column)
+        meta_lay = QtWidgets.QVBoxLayout()
+        meta_lay.setSpacing(3)
 
-        self.rec_btn = QtWidgets.QPushButton("REC")
-        self.rec_btn.setObjectName("rec_btn")
-        self.rec_btn.setFixedHeight(28)
-        self.rec_btn.setEnabled(False)
-        self.rec_btn.clicked.connect(self._toggle_recording)
-        rec_lay.addWidget(self.rec_btn)
+        self.dongle_stat_lbl = QtWidgets.QLabel("Pairing: Disconnected")
+        self.dongle_stat_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
+        self.dongle_ver_lbl = QtWidgets.QLabel("Dongle: --")
+        self.dongle_ver_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
+        self.glove_ver_lbl = QtWidgets.QLabel("Glove: --")
+        self.glove_ver_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
+        self.glove_sn_lbl = QtWidgets.QLabel("Glove SN: --")
+        self.glove_sn_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
 
-        self.rec_time_label = QtWidgets.QLabel("00:00")
-        self.rec_time_label.setObjectName("rec_time_label")
-        rec_lay.addWidget(self.rec_time_label)
+        meta_lay.addWidget(self.dongle_stat_lbl)
+        meta_lay.addWidget(self.dongle_ver_lbl)
+        meta_lay.addWidget(self.glove_ver_lbl)
+        meta_lay.addWidget(self.glove_sn_lbl)
 
-        rec_lay.addSpacing(6)
-
-        self.marker_edit = QtWidgets.QLineEdit("fist")
-        self.marker_edit.setFixedWidth(80)
-        self.marker_edit.setFixedHeight(28)
-        self.marker_edit.setEnabled(False)
-        rec_lay.addWidget(self.marker_edit)
-
-        self.marker_btn = QtWidgets.QPushButton("Tag Marker")
-        self.marker_btn.setFixedHeight(28)
-        self.marker_btn.clicked.connect(self._send_marker)
-        self.marker_btn.setEnabled(False)
-        rec_lay.addWidget(self.marker_btn)
-
-        rec_lay.addStretch(1)
-        dashboard.addWidget(rec_grp)
-        dashboard.addStretch()
-
-        # 5. Rightmost Telemetry Seq Status Card
-        seq_grp = QtWidgets.QGroupBox("📈 TELEMETRY SEQ")
-        seq_grp.setObjectName("seq_grp")
-        seq_lay = QtWidgets.QVBoxLayout(seq_grp)
-        seq_lay.setContentsMargins(12, 6, 12, 6)
-        seq_lay.setSpacing(2)
-
-        _mono = "font-size: 11px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;"
+        # Telemetry sequence labels
+        _mono = "font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;"
         self.seq_flex_lbl = QtWidgets.QLabel("FLEX  seq:      —")
         self.seq_flex_lbl.setStyleSheet(f"color: #7ecfff; {_mono}")
         self.seq_imu_lbl = QtWidgets.QLabel("IMU   seq:      —")
@@ -452,11 +487,148 @@ class GloveWindow(QtWidgets.QWidget):
         self.seq_mag_lbl = QtWidgets.QLabel("MAG   seq:      —")
         self.seq_mag_lbl.setStyleSheet(f"color: #ffcf7e; {_mono}")
 
-        seq_lay.addWidget(self.seq_flex_lbl)
-        seq_lay.addWidget(self.seq_imu_lbl)
-        seq_lay.addWidget(self.seq_mag_lbl)
+        meta_lay.addSpacing(4)
+        meta_lay.addWidget(self.seq_flex_lbl)
+        meta_lay.addWidget(self.seq_imu_lbl)
+        meta_lay.addWidget(self.seq_mag_lbl)
 
-        dashboard.addWidget(seq_grp)
+        config_lay.addLayout(meta_lay, 0, 0, 3, 1)
+
+        # Divider frame
+        divider = QtWidgets.QFrame()
+        divider.setFrameShape(QtWidgets.QFrame.VLine)
+        divider.setFrameShadow(QtWidgets.QFrame.Sunken)
+        divider.setStyleSheet("color: rgba(234, 179, 8, 0.15);")
+        config_lay.addWidget(divider, 0, 1, 3, 1)
+
+        # Rates dropdowns (Right column)
+        rate_lay = QtWidgets.QGridLayout()
+        rate_lay.setSpacing(6)
+
+        flex_lbl = QtWidgets.QLabel("Flex:")
+        flex_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-weight: bold; font-family: monospace;")
+        self.flex_rate_combo = QtWidgets.QComboBox()
+        self.flex_rate_combo.setFixedHeight(24)
+        self.flex_rate_combo.addItems(list(FLEX_RATES.keys()))
+        self.flex_rate_combo.setCurrentText("200 Hz")
+        self.flex_rate_combo.currentTextChanged.connect(self._on_flex_rate_changed)
+
+        imu_lbl = QtWidgets.QLabel("IMU:")
+        imu_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-weight: bold; font-family: monospace;")
+        self.imu_rate_combo = QtWidgets.QComboBox()
+        self.imu_rate_combo.setFixedHeight(24)
+        self.imu_rate_combo.addItems(list(IMU_RATES.keys()))
+        self.imu_rate_combo.setCurrentText("100 Hz")
+        self.imu_rate_combo.currentTextChanged.connect(self._on_imu_rate_changed)
+
+        mag_lbl = QtWidgets.QLabel("MAG:")
+        mag_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-weight: bold; font-family: monospace;")
+        self.mag_rate_combo = QtWidgets.QComboBox()
+        self.mag_rate_combo.setFixedHeight(24)
+        self.mag_rate_combo.addItems(list(MAG_RATES.keys()))
+        self.mag_rate_combo.setCurrentText("100 Hz")
+        self.mag_rate_combo.currentTextChanged.connect(self._on_mag_rate_changed)
+
+        rate_lay.addWidget(flex_lbl, 0, 0)
+        rate_lay.addWidget(self.flex_rate_combo, 0, 1)
+        rate_lay.addWidget(imu_lbl, 1, 0)
+        rate_lay.addWidget(self.imu_rate_combo, 1, 1)
+        rate_lay.addWidget(mag_lbl, 2, 0)
+        rate_lay.addWidget(self.mag_rate_combo, 2, 1)
+
+        config_lay.addLayout(rate_lay, 0, 2, 3, 1)
+
+        self.calib_btn = QtWidgets.QPushButton("⚙️ Calibrate IMU")
+        self.calib_btn.setEnabled(False)
+        self.calib_btn.setFixedHeight(26)
+        self.calib_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2d3748;
+                color: #e2e8f0;
+                border: 1px solid #4a5568;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-family: monospace;
+                font-size: 10px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #4a5568;
+            }
+            QPushButton:pressed {
+                background-color: #1a202c;
+            }
+            QPushButton:disabled {
+                background-color: #1a202c;
+                color: #4d5568;
+                border: 1px solid #1a202c;
+            }
+        """)
+        self.calib_btn.clicked.connect(self._start_imu_calibration)
+
+        config_lay.addWidget(self.calib_btn, 3, 0, 1, 3)
+
+        dashboard.addWidget(config_grp)
+
+        # 3. Recorder Card
+        rec_grp = QtWidgets.QGroupBox("⏺ TELEMETRY RECORDER")
+        rec_grp.setObjectName("rec_grp")
+        rec_lay = QtWidgets.QVBoxLayout(rec_grp)
+        rec_lay.setContentsMargins(12, 10, 12, 10)
+        rec_lay.setSpacing(8)
+
+        row1_lay = QtWidgets.QHBoxLayout()
+        row1_lay.setSpacing(6)
+
+        pid_lbl = QtWidgets.QLabel("PID:")
+        pid_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-weight: bold; font-family: monospace;")
+        self.participant_edit = QtWidgets.QLineEdit("P001")
+        self.participant_edit.setFixedWidth(55)
+        self.participant_edit.setFixedHeight(24)
+
+        self.rec_btn = QtWidgets.QPushButton("REC")
+        self.rec_btn.setObjectName("rec_btn")
+        self.rec_btn.setFixedHeight(24)
+        self.rec_btn.setEnabled(False)
+        self.rec_btn.clicked.connect(self._toggle_recording)
+
+        self.rec_time_label = QtWidgets.QLabel("00:00")
+        self.rec_time_label.setObjectName("rec_time_label")
+        self.rec_time_label.setStyleSheet("font-family: monospace; font-size: 11px;")
+
+        row1_lay.addWidget(pid_lbl)
+        row1_lay.addWidget(self.participant_edit)
+        row1_lay.addWidget(self.rec_btn)
+        row1_lay.addWidget(self.rec_time_label)
+        row1_lay.addStretch(1)
+
+        row2_lay = QtWidgets.QHBoxLayout()
+        row2_lay.setSpacing(6)
+
+        tag_lbl = QtWidgets.QLabel("Tag:")
+        tag_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-weight: bold; font-family: monospace;")
+
+        self.marker_edit = QtWidgets.QLineEdit("fist")
+        self.marker_edit.setFixedWidth(80)
+        self.marker_edit.setFixedHeight(24)
+        self.marker_edit.setEnabled(False)
+
+        self.marker_btn = QtWidgets.QPushButton("Tag Marker")
+        self.marker_btn.setFixedHeight(24)
+        self.marker_btn.clicked.connect(self._send_marker)
+        self.marker_btn.setEnabled(False)
+
+        row2_lay.addWidget(tag_lbl)
+        row2_lay.addWidget(self.marker_edit)
+        row2_lay.addWidget(self.marker_btn)
+        row2_lay.addStretch(1)
+
+        rec_lay.addLayout(row1_lay)
+        rec_lay.addLayout(row2_lay)
+        rec_lay.addStretch(1)
+
+        dashboard.addWidget(rec_grp)
+        dashboard.addStretch()
 
         # ── Middle & Bottom Body ───────────────────────────────────────────────
         splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
@@ -481,16 +653,583 @@ class GloveWindow(QtWidgets.QWidget):
         if self.args.mock:
             self._append_log("System", "MOCK MODE ENABLED. No physical device required.")
 
+    def _on_flex_data(self, data: list) -> None:
+        try:
+            self.flex_received_signal.emit(data)
+        except RuntimeError:
+            pass
+
+    def _handle_flex_received_ui_thread(self, data: list) -> None:
+        if not self.streaming or not data:
+            return
+        if self.calibrating_imu:
+            return
+
+        all_samples = [[] for _ in range(NUM_CHANNELS)]
+        seq_nums_flex = []
+
+        for row in data:
+            if len(row) < NUM_CHANNELS + 1:
+                continue
+            seq_nums_flex.append(row[0])
+            for ch in range(NUM_CHANNELS):
+                all_samples[ch].append(row[ch + 1])
+
+        if seq_nums_flex:
+            self.flex_seq = int(seq_nums_flex[-1]) & 0xFFFF
+            self.seq_flex_lbl.setText(f"FLEX  seq: {self.flex_seq:>6}")
+
+            # Print active dataType to console log periodically (every 1s)
+            now = time.time()
+            if now - getattr(self, "_last_flex_log_time", 0) > 1.0:
+                self._last_flex_log_time = now
+                msg = f"Flex data stream active (seq: {self.flex_seq})"
+                self._append_log("System", msg)
+                logger.info(msg)
+
+        N_flex = len(all_samples[0])
+        if N_flex > 0:
+            N_display = min(N_flex, BUFFER_LENGTH)
+            for ch in range(NUM_CHANNELS):
+                ch_samples = np.array(all_samples[ch], dtype=float)
+                self.flex_buffer[ch] = np.roll(self.flex_buffer[ch], -N_display)
+                self.flex_buffer[ch][-N_display:] = ch_samples[-N_display:]
+
+            if self.recording:
+                rows_to_write = []
+                for idx in range(N_flex):
+                    row_vals = [all_samples[ch][idx] for ch in range(NUM_CHANNELS)]
+                    rows_to_write.append([time.time(), int(seq_nums_flex[idx]) & 0xFFFF] + row_vals + [self.current_marker])
+                self._write_csv_rows("flex", rows_to_write)
+
+    def _on_imu_data(self, data: list) -> None:
+        try:
+            self.imu_received_signal.emit(data)
+        except RuntimeError:
+            pass
+
+    def _handle_imu_received_ui_thread(self, data: list) -> None:
+        if not self.streaming or not data:
+            return
+        if self.calibrating_imu:
+            if self._collecting_imu_calibration:
+                self._collect_imu_calibration_rows(data)
+            return
+
+        all_imu = [[] for _ in range(6)]
+        seq_nums_imu = []
+
+        for row in data:
+            if len(row) < 7:
+                continue
+            seq_nums_imu.append(row[0])
+
+            acc = [row[1], row[2], row[3]]
+            gyro = [row[4], row[5], row[6]]
+
+            for ch in range(3):
+                all_imu[ch].append(acc[ch])
+                all_imu[ch + 3].append(gyro[ch])
+
+        if seq_nums_imu:
+            self.imu_seq = int(seq_nums_imu[-1]) & 0xFFFF
+            self.seq_imu_lbl.setText(f"IMU   seq: {self.imu_seq:>6}")
+
+            # Print active dataType to console log periodically (every 1s)
+            now = time.time()
+            if now - getattr(self, "_last_imu_log_time", 0) > 1.0:
+                self._last_imu_log_time = now
+                last_row = data[-1]
+                acc_vals = last_row[1:4]
+                gyro_vals = last_row[4:7]
+                msg = (
+                    f"IMU data stream active: RAW_DATA (seq: {self.imu_seq}) | "
+                    f"Acc: [{acc_vals[0]:.3f}, {acc_vals[1]:.3f}, {acc_vals[2]:.3f}] g | "
+                    f"Gyro: [{gyro_vals[0]:.2f}, {gyro_vals[1]:.2f}, {gyro_vals[2]:.2f}] °/s"
+                )
+                self._append_log("System", msg)
+                logger.info(msg)
+
+        N_imu = len(all_imu[0])
+        if N_imu > 0:
+            N_display = min(N_imu, IMU_BUFFER_LENGTH)
+            for ch in range(6):
+                ch_samples = np.array(all_imu[ch], dtype=float)
+                self.imu_buffer[ch] = np.roll(self.imu_buffer[ch], -N_display)
+                self.imu_buffer[ch][-N_display:] = ch_samples[-N_display:]
+
+            if self.recording:
+                rows_to_write = []
+                for idx in range(N_imu):
+                    row_vals = [all_imu[ch][idx] for ch in range(6)]
+                    rows_to_write.append([time.time(), int(seq_nums_imu[idx]) & 0xFFFF] + row_vals)
+                self._write_csv_rows("imu", rows_to_write)
+
+    def _on_imu_data_calibrated(self, data: list) -> None:
+        try:
+            self.imu_calibrated_received_signal.emit(data)
+        except RuntimeError:
+            pass
+
+    def _handle_imu_calibrated_received_ui_thread(self, data: list) -> None:
+        if not self.streaming or not data:
+            return
+        if self.calibrating_imu:
+            return
+
+        all_imu = [[] for _ in range(6)]
+        seq_nums_imu = []
+
+        for row in data:
+            if len(row) < 7:
+                continue
+            seq_nums_imu.append(row[0])
+
+            acc = [row[1], row[2], row[3]]
+            gyro = [row[4], row[5], row[6]]
+
+            for ch in range(3):
+                all_imu[ch].append(acc[ch])
+                all_imu[ch + 3].append(gyro[ch])
+
+        if seq_nums_imu:
+            self.imu_seq = int(seq_nums_imu[-1]) & 0xFFFF
+            self.seq_imu_lbl.setText(f"IMU   seq: {self.imu_seq:>6}")
+
+            # Print active dataType to console log periodically (every 1s)
+            now = time.time()
+            if now - getattr(self, "_last_imu_log_time", 0) > 1.0:
+                self._last_imu_log_time = now
+                last_row = data[-1]
+                acc_vals = last_row[1:4]
+                gyro_vals = last_row[4:7]
+                msg = (
+                    f"IMU data stream active: CALIBRATED_DATA (seq: {self.imu_seq}) | "
+                    f"Acc: [{acc_vals[0]:.3f}, {acc_vals[1]:.3f}, {acc_vals[2]:.3f}] g | "
+                    f"Gyro: [{gyro_vals[0]:.2f}, {gyro_vals[1]:.2f}, {gyro_vals[2]:.2f}] °/s"
+                )
+                self._append_log("System", msg)
+                logger.info(msg)
+
+        N_imu = len(all_imu[0])
+        if N_imu > 0:
+            N_display = min(N_imu, IMU_BUFFER_LENGTH)
+            for ch in range(6):
+                ch_samples = np.array(all_imu[ch], dtype=float)
+                self.imu_buffer[ch] = np.roll(self.imu_buffer[ch], -N_display)
+                self.imu_buffer[ch][-N_display:] = ch_samples[-N_display:]
+
+            if self.recording:
+                rows_to_write = []
+                for idx in range(N_imu):
+                    row_vals = [all_imu[ch][idx] for ch in range(6)]
+                    rows_to_write.append([time.time(), int(seq_nums_imu[idx]) & 0xFFFF] + row_vals)
+                self._write_csv_rows("imu", rows_to_write)
+
+    def _on_mag_data(self, data: list) -> None:
+        try:
+            self.mag_received_signal.emit(data)
+        except RuntimeError:
+            pass
+
+    def _handle_mag_received_ui_thread(self, data: list) -> None:
+        if not self.streaming or not data:
+            return
+        if self.calibrating_imu:
+            return
+
+        all_mag = [[] for _ in range(3)]
+        seq_nums_mag = []
+
+        for row in data:
+            if len(row) < 4:
+                continue
+            seq_nums_mag.append(row[0])
+
+            mag = [row[1], row[2], row[3]]
+            for ch in range(3):
+                all_mag[ch].append(mag[ch])
+
+        if seq_nums_mag:
+            self.mag_seq = int(seq_nums_mag[-1]) & 0xFFFF
+            self.seq_mag_lbl.setText(f"MAG   seq: {self.mag_seq:>6}")
+
+            now = time.time()
+            if now - getattr(self, "_last_mag_log_time", 0) > 1.0:
+                self._last_mag_log_time = now
+                last_row = data[-1]
+                mag_vals = last_row[1:4]
+                msg = (
+                    f"MAG data stream active: RAW_DATA (seq: {self.mag_seq}) | "
+                    f"Mag: [{mag_vals[0]:.3f}, {mag_vals[1]:.3f}, {mag_vals[2]:.3f}] Gauss"
+                )
+                self._append_log("System", msg)
+                logger.info(msg)
+
+        N_mag = len(all_mag[0])
+        if N_mag > 0:
+            self.mag_buffer = np.roll(self.mag_buffer, -N_mag, axis=1)
+            for ch in range(3):
+                self.mag_buffer[ch][-N_mag:] = all_mag[ch]
+
+            if self.recording:
+                rows_to_write = []
+                for idx in range(N_mag):
+                    row_vals = [all_mag[ch][idx] for ch in range(3)]
+                    rows_to_write.append([time.time(), int(seq_nums_mag[idx]) & 0xFFFF] + row_vals)
+                self._write_csv_rows("mag", rows_to_write)
+
+    def _on_mag_calibrated(self, data: list) -> None:
+        try:
+            self.mag_calibrated_received_signal.emit(data)
+        except RuntimeError:
+            pass
+
+    def _handle_mag_calibrated_received_ui_thread(self, data: list) -> None:
+        if not self.streaming or not data:
+            return
+        if self.calibrating_imu:
+            return
+
+        all_mag = [[] for _ in range(3)]
+        seq_nums_mag = []
+
+        for row in data:
+            if len(row) < 4:
+                continue
+            seq_nums_mag.append(row[0])
+
+            mag = [row[1], row[2], row[3]]
+            for ch in range(3):
+                all_mag[ch].append(mag[ch])
+
+        if seq_nums_mag:
+            self.mag_seq = int(seq_nums_mag[-1]) & 0xFFFF
+            self.seq_mag_lbl.setText(f"MAG   seq: {self.mag_seq:>6}")
+
+            now = time.time()
+            if now - getattr(self, "_last_mag_log_time", 0) > 1.0:
+                self._last_mag_log_time = now
+                last_row = data[-1]
+                mag_vals = last_row[1:4]
+                msg = (
+                    f"MAG data stream active: CALIBRATED_DATA (seq: {self.mag_seq}) | "
+                    f"Mag: [{mag_vals[0]:.3f}, {mag_vals[1]:.3f}, {mag_vals[2]:.3f}] Gauss"
+                )
+                self._append_log("System", msg)
+                logger.info(msg)
+
+        N_mag = len(all_mag[0])
+        if N_mag > 0:
+            self.mag_buffer = np.roll(self.mag_buffer, -N_mag, axis=1)
+            for ch in range(3):
+                self.mag_buffer[ch][-N_mag:] = all_mag[ch]
+
+            if self.recording:
+                rows_to_write = []
+                for idx in range(N_mag):
+                    row_vals = [all_mag[ch][idx] for ch in range(3)]
+                    rows_to_write.append([time.time(), int(seq_nums_mag[idx]) & 0xFFFF] + row_vals)
+                self._write_csv_rows("mag", rows_to_write)
+
+    def _on_msg_callback(self, device_id: str, msg_json: str) -> None:
+        try:
+            self.msg_received_signal.emit(device_id, msg_json)
+        except RuntimeError:
+            pass
+
+    def _handle_msg_ui_thread(self, device_id: str, msg_json: str) -> None:
+        try:
+            import json
+            data = json.loads(msg_json)
+            self._append_log("Protocol", f"Resp: {msg_json}")
+
+            if "Dongle2App" in data:
+                dongle = data["Dongle2App"]
+                pair_stat = dongle.get("pairingStatus") or dongle.get("pairing_status")
+                if pair_stat:
+                    pair_stat_str = str(pair_stat)
+                    self.dongle_stat_lbl.setText(f"Pairing: {pair_stat_str}")
+                    if pair_stat_str == "PAIRED" or pair_stat_str == "Paired":
+                        self.dongle_stat_lbl.setStyleSheet("color: #39ff14; font-size: 10px; font-family: monospace;")
+                    else:
+                        self.dongle_stat_lbl.setStyleSheet("color: #ff0055; font-size: 10px; font-family: monospace;")
+
+                dev_info = dongle.get("deviceInfo") or dongle.get("device_info")
+                if dev_info:
+                    fw_v = dev_info.get("fwVersion") or dev_info.get("fw_version", "--")
+                    sn = dev_info.get("sn", "--")
+                    self.dongle_ver_lbl.setText(f"Dongle SN: {sn} (v{fw_v})")
+
+            elif "Sensor2App" in data:
+                sensor = data["Sensor2App"]
+                dev_info = sensor.get("deviceInfo") or sensor.get("device_info")
+                if dev_info:
+                    fw_v = dev_info.get("fwVersion") or dev_info.get("fw_version", "--")
+                    sn = dev_info.get("sn", "--")
+                    model = dev_info.get("model", "Glove")
+                    self.glove_ver_lbl.setText(f"Glove: {model}")
+                    self.glove_sn_lbl.setText(f"Glove SN: {sn} (v{fw_v})")
+                    self.glove_ver_lbl.setStyleSheet("color: #39ff14; font-size: 10px; font-family: monospace;")
+                    self.glove_sn_lbl.setStyleSheet("color: #39ff14; font-size: 10px; font-family: monospace;")
+
+                imu_resp = sensor.get("imuResp") or sensor.get("imu_resp")
+                if imu_resp:
+                    acc_coef = imu_resp.get("accCoefficient") or imu_resp.get("acc_coefficient")
+                    if acc_coef and acc_coef > 0.0:
+                        self._active_acc_coef = acc_coef
+                    gyro_coef = imu_resp.get("gyroCoefficient") or imu_resp.get("gyro_coefficient")
+                    if gyro_coef and gyro_coef > 0.0:
+                        self._active_gyro_coef = gyro_coef
+        except Exception as e:
+            logger.error(f"Error handling UI metadata update: {e}")
+
+    def _start_imu_calibration(self) -> None:
+        if not self.streaming or self.args.mock:
+            return
+        asyncio.ensure_future(self._run_imu_calibration_async())
+
+    def _collect_imu_calibration_rows(self, rows: list[list[float]]) -> None:
+        acc_coef = getattr(self, "_active_acc_coef", 1.0 / 8192.0)
+        gyro_coef = getattr(self, "_active_gyro_coef", 1.0 / 16.4)
+        if acc_coef <= 0.0 or gyro_coef <= 0.0:
+            return
+
+        for row in rows:
+            if len(row) < 7:
+                continue
+
+            acc = [float(row[1]), float(row[2]), float(row[3])]
+            gyro = [float(row[4]), float(row[5]), float(row[6])]
+            if not np.all(np.isfinite(acc + gyro)):
+                continue
+            if any(abs(v) >= 1900.0 for v in gyro):
+                continue
+
+            self._imu_calibration_samples.append({
+                "acc": [int(round(v / acc_coef)) for v in acc],
+                "gyro": [int(round(v / gyro_coef)) for v in gyro],
+            })
+
+    async def _run_imu_calibration_async(self) -> None:
+        self.calibrating_imu = True
+        self.plot_timer.stop()
+        self.calib_btn.setEnabled(False)
+        self.calib_btn.setText("⏳ Calibrating (Keep Still)...")
+        self._append_log("Calibration", "IMU calibration started. Please keep the glove static on the table...")
+
+        # Get active IMU rate
+        imu_rate_str = self.imu_rate_combo.currentText()
+        active_imu_rate = IMU_RATES.get(imu_rate_str, libedu.ImuSampleRate.IMU_SR_100)
+
+        # 1. Switch device to RAW_DATA mode
+        switched_to_raw = False
+        calibration_applied = False
+        calibration_stream_started = False
+        sensor_stream_stopped = False
+        try:
+            await self.device.stop_sensor_data_stream()
+            sensor_stream_stopped = True
+            await asyncio.sleep(0.2)
+
+            await self.device.set_imu_config(active_imu_rate, libedu.UploadDataType.RAW_DATA)
+            switched_to_raw = True
+            await asyncio.sleep(0.3)
+
+            libedu.set_imu_data_callback(self._on_imu_data)
+            await self.device.start_sensor_data_stream()
+            calibration_stream_started = True
+            await asyncio.sleep(0.5)
+            self._imu_calibration_samples.clear()
+            self._collecting_imu_calibration = True
+        except Exception as e:
+            self._append_log("Calibration Error", f"Failed to enter isolated RAW_DATA sampling mode: {e}")
+            try:
+                libedu.set_imu_data_callback(None)
+            except Exception:
+                pass
+            self.calib_btn.setText("⚙️ Calibrate IMU")
+            self.calib_btn.setEnabled(True)
+            if switched_to_raw:
+                try:
+                    await self.device.set_imu_config(active_imu_rate, libedu.UploadDataType.CALIBRATED_DATA)
+                except Exception:
+                    pass
+            if sensor_stream_stopped:
+                try:
+                    await self.device.start_sensor_data_stream()
+                except Exception:
+                    pass
+            self.calibrating_imu = False
+            if not self.plot_timer.isActive():
+                self.plot_timer.start()
+            return
+
+        try:
+            await asyncio.sleep(2.5)
+            self._collecting_imu_calibration = False
+            valid_samples = list(self._imu_calibration_samples)
+
+            await self.device.stop_sensor_data_stream()
+            calibration_stream_started = False
+
+            if len(valid_samples) < 30:
+                self._append_log("Calibration Error", f"Too few valid samples collected ({len(valid_samples)}). Calibration failed.")
+                return
+
+            acc_x = [s["acc"][0] for s in valid_samples]
+            acc_y = [s["acc"][1] for s in valid_samples]
+            acc_z = [s["acc"][2] for s in valid_samples]
+            gyro_x = [s["gyro"][0] for s in valid_samples]
+            gyro_y = [s["gyro"][1] for s in valid_samples]
+            gyro_z = [s["gyro"][2] for s in valid_samples]
+
+            mean_acc_x = float(np.mean(acc_x))
+            mean_acc_y = float(np.mean(acc_y))
+            mean_acc_z = float(np.mean(acc_z))
+            mean_gyro_x = float(np.mean(gyro_x))
+            mean_gyro_y = float(np.mean(gyro_y))
+            mean_gyro_z = float(np.mean(gyro_z))
+
+            acc_offset = [mean_acc_x, mean_acc_y, mean_acc_z]
+            gyro_offset = [mean_gyro_x, mean_gyro_y, mean_gyro_z]
+
+            # Deduct gravity component dynamically using active coefficient (gravity in LSB = 1.0 / active_coef)
+            active_coef = getattr(self, "_active_acc_coef", 1.0 / 8192.0)
+            acc_offset[2] = acc_offset[2] - (1.0 / active_coef)
+
+            self._append_log("Calibration", f"Offset calculated (LSB): Acc Offset={acc_offset}, Gyro Offset={gyro_offset}")
+            self._append_log(
+                "Calibration",
+                (
+                    f"Raw gyro stats (LSB): "
+                    f"X mean={mean_gyro_x:.3f} min={min(gyro_x)} max={max(gyro_x)}, "
+                    f"Y mean={mean_gyro_y:.3f} min={min(gyro_y)} max={max(gyro_y)}, "
+                    f"Z mean={mean_gyro_z:.3f} min={min(gyro_z)} max={max(gyro_z)}, "
+                    f"samples={len(valid_samples)}"
+                ),
+            )
+            logger.info(f"🎯 Offset calculated (LSB): Acc Offset={acc_offset}, Gyro Offset={gyro_offset}")
+            logger.info(
+                "📊 Raw gyro stats (LSB): "
+                f"X mean={mean_gyro_x:.3f} min={min(gyro_x)} max={max(gyro_x)}, "
+                f"Y mean={mean_gyro_y:.3f} min={min(gyro_y)} max={max(gyro_y)}, "
+                f"Z mean={mean_gyro_z:.3f} min={min(gyro_z)} max={max(gyro_z)}, "
+                f"samples={len(valid_samples)}"
+            )
+            if valid_samples:
+                logger.info(f"🔍 First raw sample in calibration: {valid_samples[0]}")
+
+            # 5. Send calibration offsets to firmware (firmware expects final config to be CALIBRATED_DATA)
+            try:
+                await self.device.set_imu_calibration_config(
+                    active_imu_rate,
+                    libedu.UploadDataType.CALIBRATED_DATA,
+                    acc_offset,
+                    gyro_offset
+                )
+                calibration_applied = True
+                self._append_log("Calibration", "IMU calibration parameters successfully updated in Glove firmware!")
+            except Exception as e:
+                self._append_log("Calibration Error", f"Failed to send calibration config to device: {e}")
+        finally:
+            self._collecting_imu_calibration = False
+            try:
+                libedu.set_imu_data_callback(None)
+            except Exception:
+                pass
+            if calibration_stream_started:
+                try:
+                    await self.device.stop_sensor_data_stream()
+                except Exception as e:
+                    self._append_log("Calibration Error", f"Failed to stop RAW_DATA sampling stream: {e}")
+            if switched_to_raw and not calibration_applied:
+                try:
+                    await self.device.set_imu_config(active_imu_rate, libedu.UploadDataType.CALIBRATED_DATA)
+                    self._append_log("Calibration", "IMU stream restored to CALIBRATED_DATA.")
+                except Exception as e:
+                    self._append_log("Calibration Error", f"Failed to restore IMU CALIBRATED_DATA mode: {e}")
+            if sensor_stream_stopped and self.streaming:
+                try:
+                    await self.device.start_sensor_data_stream()
+                except Exception as e:
+                    self._append_log("Calibration Error", f"Failed to restart sensor data stream: {e}")
+            self.calibrating_imu = False
+            if not self.plot_timer.isActive():
+                self.plot_timer.start()
+            self.calib_btn.setText("⚙️ Calibrate IMU")
+            self.calib_btn.setEnabled(True)
+
+    def _on_flex_rate_changed(self, text: str) -> None:
+        if self.connected and not self.args.mock and self.device:
+            rate = FLEX_RATES.get(text, libedu.SamplingRate.SAMPLING_RATE_200)
+            asyncio.create_task(self._send_flex_config(rate))
+
+    async def _send_flex_config(self, rate) -> None:
+        try:
+            await self.device.set_flex_config(rate)
+            self._append_log("Config", f"Flex sampling rate changed to: {self.flex_rate_combo.currentText()}")
+        except Exception as e:
+            self._append_log("Config Error", f"Failed to set Flex config: {e}")
+
+    def _on_imu_rate_changed(self, text: str) -> None:
+        if self.connected and not self.args.mock and self.device:
+            rate = IMU_RATES.get(text, libedu.ImuSampleRate.IMU_SR_100)
+            asyncio.create_task(self._send_imu_config(rate))
+
+    async def _send_imu_config(self, rate) -> None:
+        try:
+            await self.device.set_imu_config(rate, libedu.UploadDataType.CALIBRATED_DATA)
+            self._append_log("Config", f"IMU sampling rate changed to: {self.imu_rate_combo.currentText()}")
+        except Exception as e:
+            self._append_log("Config Error", f"Failed to set IMU config: {e}")
+
+    def _on_mag_rate_changed(self, text: str) -> None:
+        if self.connected and not self.args.mock and self.device:
+            rate = MAG_RATES.get(text, libedu.MagSampleRate.MAG_SR_100)
+            asyncio.create_task(self._send_mag_config(rate))
+
+    async def _send_mag_config(self, rate) -> None:
+        try:
+            await self.device.set_mag_config(rate, libedu.UploadDataType.CALIBRATED_DATA)
+            self._append_log("Config", f"MAG sampling rate changed to: {self.mag_rate_combo.currentText()}")
+        except Exception as e:
+            self._append_log("Config Error", f"Failed to set MAG config: {e}")
+
+    def _auto_connect_and_stream(self) -> None:
+        if self.args.mock or not hasattr(self, "_auto_connect_port") or not self._auto_connect_port:
+            return
+        self._append_log("AutoPilot", f"Only one physical port detected: '{self._auto_connect_port}'. Automatically connecting...")
+
+        async def run_auto() -> None:
+            try:
+                await self._connect_device()
+                if self.connected:
+                    self._append_log("AutoPilot", "Connection successful. Automatically starting sensor stream...")
+                    await self._start_stream_async()
+            except Exception as e:
+                self._append_log("AutoPilot Error", f"Auto connect/stream failed: {e}")
+
+        asyncio.ensure_future(run_auto())
+
     def _scan_ports(self) -> None:
         try:
             import serial.tools.list_ports
-            ports = [p.device for p in serial.tools.list_ports.comports()]
+            ports = [
+                p.device for p in serial.tools.list_ports.comports()
+                if "debug-console" not in p.device
+                and "cu." not in p.device
+                and "bluetooth" not in p.device.lower()
+            ]
         except Exception:
             ports = []
 
         auto_port = get_glove_port_name()
-        if auto_port:
+        if auto_port and auto_port not in ports:
             ports.insert(0, auto_port)
+
+        real_port_count = len(ports)
+        self._auto_connect_port = ports[0] if real_port_count == 1 else None
 
         # Add fallbacks
         for p in ["/dev/ttyUSB0", "/dev/tty.usbserial", "COM3", "COM4"]:
@@ -499,6 +1238,9 @@ class GloveWindow(QtWidgets.QWidget):
 
         self.port_combo.clear()
         self.port_combo.addItems(ports)
+
+        if self._auto_connect_port:
+            QtCore.QTimer.singleShot(500, self._auto_connect_and_stream)
 
     def _append_log(self, source: str, message: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -531,6 +1273,17 @@ class GloveWindow(QtWidgets.QWidget):
             plot.setMenuEnabled(False)
             plot.getPlotItem().setDownsampling(auto=True, mode='peak')
             plot.getPlotItem().setClipToView(True)
+
+            # Set physical units labels on left axis
+            if stream == "flex":
+                plot.setLabel('left', 'Value', units='ADC')
+            elif stream == "imu":
+                if ch < 3:
+                    plot.setLabel('left', 'Acc', units='g')
+                else:
+                    plot.setLabel('left', 'Gyro', units='°/s')
+            elif stream == "mag":
+                plot.setLabel('left', 'Mag', units='Gauss')
 
             # Stylize axes
             plot.getAxis('bottom').setPen(pg.mkPen('#232a45', width=1))
@@ -576,23 +1329,40 @@ class GloveWindow(QtWidgets.QWidget):
             self._append_log("Connection", f"Connecting to Glove on {port}...")
             try:
                 # Initialize device
-                self.device = libedu.PyEduDevice(port, BAUDRATE)
-                await self.device.start_data_stream(libedu.MessageParser("Glove-device", libedu.MsgType.Edu))
+                # NOTE: This step-by-step manual sequence (open_serial_stream -> set_configs -> start_sensor_data_stream)
+                # is an advanced path for custom lifecycles. For general use cases, the new high-level
+                # EduDevice.start_stream(...) API using SensorProfile is strongly recommended as the preferred default.
+                self.device = libedu.EduDevice(port, BAUDRATE)
+                await self.device.open_serial_stream(libedu.MessageParser("Glove-device", libedu.MsgType.Edu))
 
-                # Setup configuration
+                # Register message response callback
+                libedu.set_msg_resp_callback(self._on_msg_callback)
+
+                # Query Dongle and Device Metadata
+                self._append_log("Connection", "Querying Dongle and Device metadata...")
+                await self.device.get_dongle_info()
+                await asyncio.sleep(0.15)
                 await self.device.get_dongle_pair_stat()
+                await asyncio.sleep(0.15)
+                await self.device.get_device_info()
+                await asyncio.sleep(0.2)
+
+                # Configure Flex rate
+                flex_rate_str = self.flex_rate_combo.currentText()
+                flex_rate = FLEX_RATES.get(flex_rate_str, libedu.SamplingRate.SAMPLING_RATE_200)
+                await self.device.set_flex_config(flex_rate)
                 await asyncio.sleep(0.5)
 
-                # Configure Flex rate 50Hz
-                await self.device.set_flex_config(libedu.SamplingRate.SAMPLING_RATE_50)
+                # Configure IMU rate (Calibrated data)
+                imu_rate_str = self.imu_rate_combo.currentText()
+                imu_rate = IMU_RATES.get(imu_rate_str, libedu.ImuSampleRate.IMU_SR_100)
+                await self.device.set_imu_config(imu_rate, libedu.UploadDataType.CALIBRATED_DATA)
                 await asyncio.sleep(0.5)
 
-                # Configure IMU rate 100Hz (Calibrated data)
-                await self.device.set_imu_config(libedu.ImuSampleRate.IMU_SR_100, libedu.UploadDataType.CALIBRATED_DATA)
-                await asyncio.sleep(0.5)
-
-                # Configure MAG rate 20Hz (Calibrated data)
-                await self.device.set_mag_config(libedu.MagSampleRate.MAG_SR_20, libedu.UploadDataType.CALIBRATED_DATA)
+                # Configure MAG rate (Calibrated data)
+                mag_rate_str = self.mag_rate_combo.currentText()
+                mag_rate = MAG_RATES.get(mag_rate_str, libedu.MagSampleRate.MAG_SR_100)
+                await self.device.set_mag_config(mag_rate, libedu.UploadDataType.CALIBRATED_DATA)
                 await asyncio.sleep(0.5)
 
                 # Initialize Buffers in SDK
@@ -617,7 +1387,7 @@ class GloveWindow(QtWidgets.QWidget):
 
         if not self.args.mock and self.device:
             try:
-                self.device.stop_data_stream()
+                await self.device.stop_stream()
             except Exception as e:
                 logger.error(f"Disconnection error (stop serial): {e}")
                 self._append_log("Disconnection Error (stop serial)", str(e))
@@ -646,9 +1416,23 @@ class GloveWindow(QtWidgets.QWidget):
             self.stream_btn.setEnabled(True)
         else:
             self.connect_btn.setText("Connect Device" if not self.args.mock else "⚡ Connect Mock")
-            self.status_label.setText("System Ready")
-            self.status_label.setStyleSheet("color: #64748b; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
+            self.status_label.setText("DISCONNECTED")
+            self.status_label.setStyleSheet("color: #6b7280; font-size: 10px; font-weight: bold; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
             self.stream_btn.setEnabled(False)
+
+            # Reset metadata labels
+            self.dongle_stat_lbl.setText("Pairing: Disconnected")
+            self.dongle_stat_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
+            self.dongle_ver_lbl.setText("Dongle: --")
+            self.glove_ver_lbl.setText("Glove: --")
+            self.glove_ver_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
+            self.glove_sn_lbl.setText("Glove SN: --")
+            self.glove_sn_lbl.setStyleSheet("color: #a0aec0; font-size: 10px; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
+
+            # Reset sequence labels
+            self.seq_flex_lbl.setText("FLEX  seq:      —")
+            self.seq_imu_lbl.setText("IMU   seq:      —")
+            self.seq_mag_lbl.setText("MAG   seq:      —")
 
     def _toggle_stream(self) -> None:
         if self.streaming:
@@ -676,12 +1460,17 @@ class GloveWindow(QtWidgets.QWidget):
 
         if not self.args.mock and self.device:
             try:
-                # Flush stale SDK buffers before starting stream
-                libedu.get_flex_buffer(9999, clean=True)
-                libedu.get_imu_calibration_buff(9999, clean=True)
-                libedu.get_mag_calibration_buff(9999, clean=True)
+                libedu.set_flex_data_callback(self._on_flex_data)
+                libedu.set_imu_data_callback(None)
+                libedu.set_imu_calibration_data_callback(self._on_imu_data_calibrated)
+                libedu.set_mag_data_callback(None)
+                libedu.set_mag_calibration_data_callback(self._on_mag_calibrated)
+                self.streaming = True
+                self._append_log("Streaming", "Sending START_DATA_STREAM command...")
                 await self.device.start_sensor_data_stream()
+                self._append_log("Streaming", "START_DATA_STREAM command sent.")
             except Exception as e:
+                self.streaming = False
                 self._append_log("Streaming Error", f"Failed to start stream: {e}")
                 self.stream_btn.setEnabled(True)
                 return
@@ -695,13 +1484,15 @@ class GloveWindow(QtWidgets.QWidget):
         self.stream_btn.update()
 
         self.rec_btn.setEnabled(True)
+        if not self.args.mock:
+            self.calib_btn.setEnabled(True)
         self.marker_edit.setEnabled(True)
         self.marker_btn.setEnabled(True)
         self.status_label.setText("STREAMING")
         self.status_label.setStyleSheet("color: #39ff14; font-weight: bold; font-family: 'Menlo', 'Monaco', 'Consolas', monospace;")
 
-        # Start acquisition background loop
-        self.cleanup_task = asyncio.create_task(self._data_acquisition_loop())
+        if self.args.mock:
+            self.cleanup_task = asyncio.create_task(self._data_acquisition_loop())
 
     async def _stop_stream_async(self) -> None:
         self.stream_btn.setEnabled(False)
@@ -711,6 +1502,7 @@ class GloveWindow(QtWidgets.QWidget):
             self._stop_recording()
 
         self.streaming = False
+        self.imu_source_logged = False
 
         if self.cleanup_task:
             self.cleanup_task.cancel()
@@ -722,6 +1514,11 @@ class GloveWindow(QtWidgets.QWidget):
 
         if not self.args.mock and self.device:
             try:
+                libedu.set_flex_data_callback(None)
+                libedu.set_imu_data_callback(None)
+                libedu.set_imu_calibration_data_callback(None)
+                libedu.set_mag_data_callback(None)
+                libedu.set_mag_calibration_data_callback(None)
                 await self.device.stop_sensor_data_stream()
             except Exception as e:
                 self._append_log("Streaming Error", f"Stop stream failed: {e}")
@@ -734,6 +1531,7 @@ class GloveWindow(QtWidgets.QWidget):
         self.stream_btn.update()
 
         self.rec_btn.setEnabled(False)
+        self.calib_btn.setEnabled(False)
         self.marker_edit.setEnabled(False)
         self.marker_btn.setEnabled(False)
         self.status_label.setText("CONNECTED (CLICK START)")
@@ -744,6 +1542,8 @@ class GloveWindow(QtWidgets.QWidget):
         Background loop reading Glove data from bc-edu-sdk buffers at 50Hz
         """
         self._append_log("Acquisition", "Started background Glove data acquisition task.")
+        if not self.args.mock:
+            return
 
         mock_t = 0.0
         consecutive_errors = 0
@@ -801,112 +1601,6 @@ class GloveWindow(QtWidgets.QWidget):
 
                         if self.recording:
                             self._write_csv_row("mag", [time.time(), 0] + mag)
-                else:
-                    # Real Hardware polling
-                    await asyncio.sleep(0.015)
-
-                    # 1. Fetch Flex Buffer
-                    flex_buff = libedu.get_flex_buffer(200, clean=True)
-                    if flex_buff:
-                        all_samples = [[] for _ in range(NUM_CHANNELS)]
-                        seq_nums = []
-
-                        for row in flex_buff:
-                            flex_data = FlexData.from_data(row)
-                            seq_nums.append(flex_data.seq_num)
-                            channel_values = np.array_split(flex_data.channel_values, NUM_CHANNELS)
-
-                            for ch in range(NUM_CHANNELS):
-                                all_samples[ch].extend(channel_values[ch])
-
-                        if seq_nums:
-                            self.flex_seq = seq_nums[-1]
-                            self.seq_flex_lbl.setText(f"FLEX  seq: {self.flex_seq:>6}")
-
-                        N_flex = len(all_samples[0])
-                        if N_flex > 0:
-                            N_display = min(N_flex, BUFFER_LENGTH)
-                            for ch in range(NUM_CHANNELS):
-                                ch_samples = np.array(all_samples[ch], dtype=float)
-                                self.flex_buffer[ch] = np.roll(self.flex_buffer[ch], -N_display)
-                                self.flex_buffer[ch][-N_display:] = ch_samples[-N_display:]
-
-                            if self.recording:
-                                rows_to_write = []
-                                for idx in range(N_flex):
-                                    row_vals = [all_samples[ch][idx] for ch in range(NUM_CHANNELS)]
-                                    rows_to_write.append([time.time(), self.flex_seq] + row_vals + [self.current_marker])
-                                self._write_csv_rows("flex", rows_to_write)
-
-                    # 2. Fetch IMU Buffer
-                    imu_buff = libedu.get_imu_calibration_buff(100, clean=True)
-                    if not imu_buff:
-                        imu_buff = libedu.get_imu_buffer(100, clean=True)
-
-                    if imu_buff:
-                        all_imu = [[] for _ in range(6)]
-                        seq_nums_imu = []
-
-                        for row in imu_buff:
-                            imu_data = IMUData.from_data(row)
-                            seq_nums_imu.append(imu_data.seqnum)
-                            acc = [imu_data.acc.cord_x, imu_data.acc.cord_y, imu_data.acc.cord_z]
-                            gyro = [imu_data.gyro.cord_x, imu_data.gyro.cord_y, imu_data.gyro.cord_z]
-                            samp = acc + gyro
-                            for i in range(6):
-                                all_imu[i].append(samp[i])
-
-                        if seq_nums_imu:
-                            self.imu_seq = seq_nums_imu[-1]
-                            self.seq_imu_lbl.setText(f"IMU   seq: {self.imu_seq:>6}")
-
-                        N_imu = len(all_imu[0])
-                        if N_imu > 0:
-                            N_display = min(N_imu, IMU_BUFFER_LENGTH)
-                            for i in range(6):
-                                self.imu_buffer[i] = np.roll(self.imu_buffer[i], -N_display)
-                                self.imu_buffer[i][-N_display:] = all_imu[i][-N_display:]
-
-                            if self.recording:
-                                rows_to_write = []
-                                for idx in range(N_imu):
-                                    row_vals = [all_imu[i][idx] for i in range(6)]
-                                    rows_to_write.append([time.time(), self.imu_seq] + row_vals)
-                                self._write_csv_rows("imu", rows_to_write)
-
-                    # 3. Fetch Mag Buffer
-                    mag_buff = libedu.get_mag_calibration_buff(100, clean=True)
-                    if not mag_buff:
-                        mag_buff = libedu.get_mag_buffer(100, clean=True)
-
-                    if mag_buff:
-                        all_mag = [[] for _ in range(3)]
-                        seq_nums_mag = []
-
-                        for row in mag_buff:
-                            mag_data = MagData.from_data(row)
-                            seq_nums_mag.append(mag_data.seqnum)
-                            mag = [mag_data.data.cord_x, mag_data.data.cord_y, mag_data.data.cord_z]
-                            for i in range(3):
-                                all_mag[i].append(mag[i])
-
-                        if seq_nums_mag:
-                            self.mag_seq = seq_nums_mag[-1]
-                            self.seq_mag_lbl.setText(f"MAG   seq: {self.mag_seq:>6}")
-
-                        N_mag = len(all_mag[0])
-                        if N_mag > 0:
-                            N_display = min(N_mag, MAG_BUFFER_LENGTH)
-                            for i in range(3):
-                                self.mag_buffer[i] = np.roll(self.mag_buffer[i], -N_display)
-                                self.mag_buffer[i][-N_display:] = all_mag[i][-N_display:]
-
-                            if self.recording:
-                                rows_to_write = []
-                                for idx in range(N_mag):
-                                    row_vals = [all_mag[i][idx] for i in range(3)]
-                                    rows_to_write.append([time.time(), self.mag_seq] + row_vals)
-                                self._write_csv_rows("mag", rows_to_write)
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -924,7 +1618,7 @@ class GloveWindow(QtWidgets.QWidget):
         """
         GUI timer callback updating PlotWidgets
         """
-        if not self.streaming:
+        if not self.streaming or self.calibrating_imu:
             return
 
         # Telemetry Seq labels are updated independently in the data acquisition loop
@@ -1085,10 +1779,36 @@ class GloveWindow(QtWidgets.QWidget):
             self._append_log("Marker Tagged", "Active marker cleared.")
 
     def closeEvent(self, event) -> None:
+        if getattr(self, "_is_shutting_down", False):
+            event.accept()
+            return
+
+        event.ignore()
+        asyncio.ensure_future(self._safe_shutdown_async())
+
+    async def _safe_shutdown_async(self) -> None:
+        self._is_shutting_down = True
         self.plot_timer.stop()
-        if self.streaming:
-            asyncio.ensure_future(self._stop_stream_async())
-        event.accept()
+
+        try:
+            libedu.set_msg_resp_callback(None)
+            libedu.set_flex_data_callback(None)
+            libedu.set_imu_data_callback(None)
+            libedu.set_imu_calibration_data_callback(None)
+            libedu.set_mag_data_callback(None)
+            libedu.set_mag_calibration_data_callback(None)
+        except Exception:
+            pass
+
+        if self.connected and not self.args.mock and self.device:
+            try:
+                await self.device.stop_sensor_data_stream()
+                await self.device.stop_stream()
+            except Exception:
+                pass
+
+        self.close()
+        QtWidgets.QApplication.quit()
 
 
 def main() -> None:
@@ -1100,8 +1820,6 @@ def main() -> None:
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
 
-    # Allow Ctrl+C to gracefully quit the Qt event loop
-    signal.signal(signal.SIGINT, lambda *_: app.quit())
     # QTimer trick: ensure Python interpreter runs periodically so signal handlers fire
     _signal_timer = QtCore.QTimer()
     _signal_timer.setInterval(200)
@@ -1110,6 +1828,9 @@ def main() -> None:
 
     win = GloveWindow(args)
     win.show()
+
+    # Allow Ctrl+C to gracefully quit the Qt event loop by closing the window
+    signal.signal(signal.SIGINT, lambda *_: win.close())
 
     with loop:
         sys.exit(loop.run_forever())
