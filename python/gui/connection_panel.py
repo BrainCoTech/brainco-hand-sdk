@@ -370,7 +370,7 @@ class ConnectionPanel(QWidget):
         self.modbus_baud_label = QLabel(tr("baud") + ":")
         modbus_layout.addWidget(self.modbus_baud_label)
         self.baudrate_combo = QComboBox()
-        self.baudrate_combo.addItems(["115200", "460800", "921600", "1000000", "2000000", "3000000", "5000000"])
+        self.baudrate_combo.addItems(["115200", "460800", "921600", "1000000", "2000000", "3000000", "4000000", "5000000", "6000000"])
         self.baudrate_combo.setCurrentText("5000000")
         modbus_layout.addWidget(self.baudrate_combo)
 

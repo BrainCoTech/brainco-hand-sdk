@@ -60,6 +60,8 @@ def _int_to_baudrate_fallback(value: int):
         2000000: sdk.Baudrate.Baud2Mbps,
         3000000: sdk.Baudrate.Baud3Mbps,
         5000000: sdk.Baudrate.Baud5Mbps,
+        6000000: sdk.Baudrate.Baud6Mbps,
+        4000000: sdk.Baudrate.Baud4Mbps,
     }
     return baudrate_map.get(value, sdk.Baudrate.Baud460800)
 
@@ -81,6 +83,8 @@ def baudrate_to_int(baudrate) -> int:
         sdk.Baudrate.Baud2Mbps: 2000000,
         sdk.Baudrate.Baud3Mbps: 3000000,
         sdk.Baudrate.Baud5Mbps: 5000000,
+        sdk.Baudrate.Baud6Mbps: 6000000,
+        sdk.Baudrate.Baud4Mbps: 4000000,
     }
     return _baudrate_bps_map.get(baudrate, 0)
 
