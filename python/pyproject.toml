@@ -1,0 +1,24 @@
+[project]
+name = "bc-stark-sdk-examples"
+version = "2.0.2"
+description = "BC Stark SDK Python examples"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "bc-stark-sdk>=2.0.3",
+    "asyncio>=3.4.3",
+    "colorlog>=6.9.0",
+    "PySide6>=6.5.0",
+    "pyqtgraph>=0.13.0",
+    "PyOpenGL>=3.1.5",
+    "numpy>=1.20,<2.0",
+    "pyserial>=3.5",
+    "qasync>=0.24.0",
+]
+
+[tool.setuptools]
+packages = []
+
+[tool.uv]
+package = false
+

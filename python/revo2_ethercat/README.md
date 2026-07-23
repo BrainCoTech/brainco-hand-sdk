@@ -12,11 +12,15 @@
 cd python
 
 # Install dependencies
-(py310) ➜  python git:(main) ✗ pip3 install -r requirements.txt
+# Option 1: Conda / pip
+pip install -e .
+
+# Option 2: uv
+uv sync
 
 ## EtherCAT Communication Protocol
-(py310) ➜  python git:(main) ✗ cd revo2_ethercat
-(py310) ➜  revo2_ethercat git:(main) ✗ python ec_sdo.py # SDO read/configure
-(py310) ➜  revo2_ethercat git:(main) ✗ python ec_pdo.py # PDO read joint status, control device
-(py310) ➜  revo2_ethercat git:(main) ✗ python ec_dfu.py # Firmware OTA
+cd revo2_ethercat
+python ec_sdo.py # SDO read/configure
+python ec_pdo.py # PDO read joint status, control device
+python ec_dfu.py # Firmware OTA
 ```

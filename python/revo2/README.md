@@ -13,21 +13,25 @@
 cd python
 
 # Install dependencies
-(py310) ➜  python git:(main) ✗ pip3 install -r requirements.txt
+# Option 1: Conda / pip
+pip install -e .
 
-(py310) ➜  python git:(main) ✗ cd revo2
+# Option 2: uv
+uv sync
+
+cd revo2
 # Control/read info - single hand
-(py310) ➜  revo2 git:(main) ✗ python revo2_ctrl.py
+python revo2_ctrl.py
 # Control/read info - single hand (capacitive tactile hand)
-(py310) ➜  revo2 git:(main) ✗ python revo2_touch.py
+python revo2_touch.py
 # Control/read info - single hand (pressure-sensitive tactile hand)
-(py310) ➜  revo2 git:(main) ✗ python revo2_touch_pressure.py
+python revo2_touch_pressure.py
 # Control/read info - multiple hands
-(py310) ➜  revo2 git:(main) ✗ python revo2_ctrl_multi.py
+python revo2_ctrl_multi.py
 # Control dual hands
-(py310) ➜  revo2 git:(main) ✗ python revo2_ctrl_dual.py
+python revo2_ctrl_dual.py
 # Action sequences
-(py310) ➜  revo2 git:(main) ✗ python revo2_action_seq.py
+python revo2_action_seq.py
 # Update configuration, modify device ID, baud rate, Turbo mode, etc.
-(py310) ➜  revo2 git:(main) ✗ python revo2_cfg.py
+python revo2_cfg.py
 ```

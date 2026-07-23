@@ -13,7 +13,11 @@
 cd python
 
 # Install dependencies
-pip3 install -r requirements.txt
+# Option 1: Conda / pip
+pip install -e .
+
+# Option 2: uv
+uv sync
 
 cd revo1
 # Control device - single dexterous hand

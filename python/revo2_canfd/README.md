@@ -13,18 +13,22 @@
 cd python
 
 # Install dependencies
-(py310) ➜  python git:(main) ✗ pip3 install -r requirements.txt
+# Option 1: Conda / pip
+pip install -e .
+
+# Option 2: uv
+uv sync
 
 ## CANFD Communication Protocol
-(py310) ➜  python git:(main) ✗ cd revo2_canfd
+cd revo2_canfd
 
 # ZLG USBCAN-FD device, supports Windows and Linux
-(py310) ➜  revo2_canfd git:(main) ✗ python zlg_canfd.py # Read device info, control device
-(py310) ➜  revo2_canfd git:(main) ✗ python zlg_canfd_touch_pressure.py # Pressure-sensitive tactile hand example
+python zlg_canfd.py # Read device info, control device
+python zlg_canfd_touch_pressure.py # Pressure-sensitive tactile hand example
 
 # SocketCAN (Linux)
-(py310) ➜  revo2_canfd git:(main) ✗ STARK_SOCKETCAN_IFACE=can0 python socketcan_canfd.py # Read device info, control device
-(py310) ➜  revo2_canfd git:(main) ✗ STARK_SOCKETCAN_IFACE=can0 STARK_SLAVE_ID=0x7f python socketcan_canfd.py # Select slave id
-(py310) ➜  revo2_canfd git:(main) ✗ STARK_SOCKETCAN_IFACE=can0 python socketcan_canfd_touch_pressure.py # Touch pressure example
-(py310) ➜  revo2_canfd git:(main) ✗ STARK_SOCKETCAN_IFACE=can0 python socketcan_canfd_dfu.py # Firmware OTA
+STARK_SOCKETCAN_IFACE=can0 python socketcan_canfd.py # Read device info, control device
+STARK_SOCKETCAN_IFACE=can0 STARK_SLAVE_ID=0x7f python socketcan_canfd.py # Select slave id
+STARK_SOCKETCAN_IFACE=can0 python socketcan_canfd_touch_pressure.py # Touch pressure example
+STARK_SOCKETCAN_IFACE=can0 python socketcan_canfd_dfu.py # Firmware OTA
 ```

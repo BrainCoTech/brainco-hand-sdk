@@ -13,14 +13,18 @@
 cd python
 
 # Install dependencies
-(py310) ➜  python git:(main) ✗ pip3 install -r requirements.txt
+# Option 1: Conda / pip
+pip install -e .
+
+# Option 2: uv
+uv sync
 
 ## CAN Communication Protocol
-(py310) ➜  python git:(main) ✗ cd revo2_can
+cd revo2_can
 
 # ZLG CAN device, supports Windows and Linux
-(py310) ➜  revo2_can git:(main) ✗ python zlg_can.py # Read device info, control device
+python zlg_can.py # Read device info, control device
 
 # SocketCAN (Linux)
-(py310) ➜  revo2_can git:(main) ✗ STARK_SOCKETCAN_IFACE=can0 python socketcan_can.py # Read device info, control device
+STARK_SOCKETCAN_IFACE=can0 python socketcan_can.py # Read device info, control device
 ```
