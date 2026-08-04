@@ -84,11 +84,13 @@ async def init_zqwl(port: str, baudrate: int, slave_id: int, is_canfd: bool = Fa
     check_sdk()
     try:
         if is_canfd:
-            ctx = await sdk.init_zqwl(port, baudrate, data_baudrate)
+            sdk.init_zqwl_canfd(port, baudrate, data_baudrate)
             protocol = sdk.StarkProtocolType.CanFd
         else:
-            ctx = await sdk.init_zqwl(port, baudrate, 0)  # 0 = CAN 2.0
+            sdk.init_zqwl_can(port, baudrate)
             protocol = sdk.StarkProtocolType.Can
+
+        ctx = sdk.init_device_handler(protocol, master_id=1)
         
         # Get device info
         info = await ctx.get_device_info(slave_id)
