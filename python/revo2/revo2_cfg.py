@@ -162,9 +162,6 @@ async def main():
     serialport_cfg: libstark.SerialPortCfg = await client.get_serialport_cfg(slave_id)
     logger.info(f"Serial Port Config: {serialport_cfg.description}")
     
-    await client.factory_set_key(slave_id, "stark-level1")
-    await client.factory_set_device_sn(slave_id, "BCMTR2027J2500001")
-
     # Choose one of the following configuration operations as needed:
 
     # 1. Modify slave ID (uncomment to use)
