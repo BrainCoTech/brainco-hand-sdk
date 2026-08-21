@@ -74,19 +74,28 @@ def baudrate_to_int(baudrate) -> int:
     """
     if sdk is None:
         return 0
-    _baudrate_bps_map = {
-        sdk.Baudrate.Baud115200: 115200,
-        sdk.Baudrate.Baud57600: 57600,
-        sdk.Baudrate.Baud19200: 19200,
-        sdk.Baudrate.Baud460800: 460800,
-        sdk.Baudrate.Baud1Mbps: 1000000,
-        sdk.Baudrate.Baud2Mbps: 2000000,
-        sdk.Baudrate.Baud3Mbps: 3000000,
-        sdk.Baudrate.Baud5Mbps: 5000000,
-        sdk.Baudrate.Baud6Mbps: 6000000,
-        sdk.Baudrate.Baud4Mbps: 4000000,
+    # PyO3 enum instances are not guaranteed to be hashable. Read their integer
+    # discriminants at runtime instead of duplicating those values in Python.
+    baudrate_bps_by_index = {
+        int(sdk.Baudrate.Baud115200): 115200,
+        int(sdk.Baudrate.Baud57600): 57600,
+        int(sdk.Baudrate.Baud19200): 19200,
+        int(sdk.Baudrate.Baud460800): 460800,
+        int(sdk.Baudrate.Baud1Mbps): 1000000,
+        int(sdk.Baudrate.Baud2Mbps): 2000000,
+        int(sdk.Baudrate.Baud3Mbps): 3000000,
+        int(sdk.Baudrate.Baud4Mbps): 4000000,
+        int(sdk.Baudrate.Baud5Mbps): 5000000,
+        int(sdk.Baudrate.Baud6Mbps): 6000000,
     }
-    return _baudrate_bps_map.get(baudrate, 0)
+    known_bps = set(baudrate_bps_by_index.values())
+    if isinstance(baudrate, int):
+        return baudrate if baudrate in known_bps else 0
+    try:
+        index = int(baudrate)
+    except (TypeError, ValueError):
+        return 0
+    return baudrate_bps_by_index.get(index, 0)
 
 
 async def modbus_open(port_name: str, baudrate):

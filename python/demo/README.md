@@ -11,7 +11,7 @@ Supports: Modbus (RS485), Protobuf, CAN 2.0, CANFD, SocketCAN, ZLG
 | `hand_monitor.py` | High-performance data monitor |
 | `hand_dfu.py` | Firmware upgrade |
 | `auto_detect.py` | Device detection |
-| `comm_frequency_test.py` | Communication frequency test (auto-detect) |
+| `comm_frequency_test.py` | Communication frequency, latency, and stability benchmark (auto-detect) |
 | `comm_frequency_test_zlg.py` | Communication frequency test (ZLG CANFD, Linux) |
 
 ## Quick Start
@@ -36,10 +36,12 @@ python hand_dfu.py firmware.bin
 # Device detection
 python auto_detect.py
 
-# Communication frequency test (auto-detect)
+# Communication benchmark (auto-detect)
 python comm_frequency_test.py        # Auto-detect, interactive menu
 python comm_frequency_test.py 1      # Run specific test (1-4)
 python comm_frequency_test.py 0      # Run all tests
+python comm_frequency_test.py 1 --duration 10 --target-hz 100 --output report.json
+python comm_frequency_test.py 1 --target-hz 0  # Maximum-throughput mode
 
 # Communication frequency test (ZLG CANFD, Linux only)
 python comm_frequency_test_zlg.py              # Interactive menu
@@ -47,6 +49,21 @@ python comm_frequency_test_zlg.py 1            # Run specific test (1-4)
 python comm_frequency_test_zlg.py 0            # Run all tests
 python comm_frequency_test_zlg.py -s 0x7F      # Custom slave_id (right hand)
 ```
+
+The benchmark reports attempted and successful request rates, success rate,
+average/minimum/maximum latency, standard deviation, P50/P95/P99 latency, and
+error categories. JSON output includes the connection, runtime, configuration,
+and result metadata for comparing test runs.
+
+Tests `2` (write), `3` (mixed), and `0` (all) move the fingers and require an
+interactive confirmation. Pass `--yes` only after confirming that the hand can
+move safely. The benchmark captures and restores the initial finger positions
+around motion tests. Test `1` is read-only.
+
+`get_motor_status` is a request/response API. Calls on one `DeviceContext` are
+serialized, so setting `--target-hz` above the measured round-trip limit does
+not create parallel in-flight requests. Use `--target-hz 0` to measure the
+maximum safe sequential throughput.
 
 ## Initialization Options
 

@@ -9,6 +9,8 @@ Run:
     python comm_frequency_test.py              # Auto-detect, interactive menu
     python comm_frequency_test.py 1            # Run specific test (1-4)
     python comm_frequency_test.py 0            # Run all tests
+    python comm_frequency_test.py 1 --duration 10 --target-hz 100 --output report.json
+    python comm_frequency_test.py 2 --write-target-hz 50 --yes
     python comm_frequency_test.py -h           # Show help
 
 Test modes:
@@ -16,14 +18,22 @@ Test modes:
     2. set_finger_positions write frequency
     3. Mixed function frequency (read + control)
     4. Long-term stability test
+
+Write, mixed, and all-tests modes move the fingers and require confirmation unless
+--yes is supplied. They restore the captured initial finger positions after the
+test. Read-only mode is safe to run without motion confirmation.
 """
 
 import asyncio
+import json
 import sys
 import os
 import time
 import statistics
-from dataclasses import dataclass
+import platform
+from collections import Counter
+from dataclasses import asdict, dataclass, fields
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 # Setup path and imports
@@ -38,10 +48,13 @@ class TestConfig:
     """Test configuration"""
     test_duration: float = 5.0       # Single test duration (seconds)
     max_test_count: int = 10000      # Maximum test count
-    min_interval_ms: float = 0.0     # Minimum interval (milliseconds)
-    target_frequency: float = 1000.0 # Target frequency (Hz)
-    stability_duration: float = 5.0  # Stability test duration (seconds)
+    target_frequency: float = 1000.0 # Read/mixed target frequency (Hz); 0 means maximum throughput
+    write_target_frequency: float = 50.0
+    stability_frequency: float = 100.0
+    warmup_duration: float = 1.0
+    stability_duration: float = 60.0
     sample_interval: float = 1.0     # Sample interval (seconds)
+    progress_every: int = 0          # Disable measured-loop logging by default
 
 
 @dataclass
@@ -50,7 +63,9 @@ class TestResult:
     success: bool
     elapsed_ms: float
     timestamp: float
+    operation: str
     error_msg: Optional[str] = None
+    error_type: Optional[str] = None
 
 
 @dataclass
@@ -97,12 +112,17 @@ class FrequencyTestReport:
     max_latency_ms: float
     min_latency_ms: float
     std_dev_ms: float
+    p50_latency_ms: float
+    p95_latency_ms: float
+    p99_latency_ms: float
+    attempt_frequency_hz: float
     actual_frequency_hz: float
     target_frequency_hz: float
     total_duration_secs: float
+    error_types: Dict[str, int]
+    operation_stats: Dict[str, Dict[str, Any]]
 
     def print_report(self):
-        import platform
         print(f"\n{'=' * 60}")
         print(f"📊 {self.function_name} frequency test report")
         print("=" * 60)
@@ -119,11 +139,37 @@ class FrequencyTestReport:
         print(f"Minimum latency:  {self.min_latency_ms:.2f} ms")
         print(f"Maximum latency:  {self.max_latency_ms:.2f} ms")
         print(f"Std deviation:    {self.std_dev_ms:.2f} ms")
+        print(f"P50/P95/P99:      {self.p50_latency_ms:.2f} / {self.p95_latency_ms:.2f} / {self.p99_latency_ms:.2f} ms")
         print()
-        print(f"Actual frequency: {self.actual_frequency_hz:.1f} Hz")
+        print(f"Attempt rate:     {self.attempt_frequency_hz:.1f} Hz")
+        print(f"Successful rate:  {self.actual_frequency_hz:.1f} Hz")
         print(f"Target frequency: {self.target_frequency_hz:.1f} Hz")
-        print(f"Achievement rate: {self.actual_frequency_hz / self.target_frequency_hz * 100:.1f}%")
+        if self.target_frequency_hz > 0:
+            print(f"Achievement rate: {self.actual_frequency_hz / self.target_frequency_hz * 100:.1f}%")
+        else:
+            print("Achievement rate: N/A (maximum-throughput mode)")
         print(f"Test duration:    {self.total_duration_secs:.1f} s")
+        if self.error_types:
+            print(f"Errors:           {self.error_types}")
+        if len(self.operation_stats) > 1:
+            print("Operation breakdown:")
+            for operation, stats in sorted(self.operation_stats.items()):
+                print(
+                    f"  {operation:<8} count={int(stats['successful_count'])}, "
+                    f"avg={stats['avg_latency_ms']:.2f}ms, p95={stats['p95_latency_ms']:.2f}ms"
+                )
+
+
+def percentile(values: List[float], percent: float) -> float:
+    """Calculate an interpolated percentile without third-party dependencies."""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    rank = (len(ordered) - 1) * percent / 100.0
+    lower = int(rank)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = rank - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
 
 
 def detect_adapter_type(port_name: str, protocol_type) -> str:
@@ -151,12 +197,63 @@ class CommFrequencyTester:
         self.connection_info = connection_info
         self.config = config
 
+    async def _pace(self, next_deadline: float, target_frequency: float) -> float:
+        """Pace calls against an absolute deadline to avoid cumulative sleep drift."""
+        if target_frequency <= 0:
+            return time.perf_counter()
+
+        period = 1.0 / target_frequency
+        next_deadline += period
+        now = time.perf_counter()
+        if next_deadline > now:
+            await asyncio.sleep(next_deadline - now)
+        elif now - next_deadline > period:
+            # Do not issue a burst of catch-up requests after a long stall.
+            next_deadline = now
+        return next_deadline
+
+    async def warm_up(self):
+        """Warm up the connection with read-only requests excluded from results."""
+        if self.config.warmup_duration <= 0:
+            return
+
+        print(f"\nWarming up connection ({self.config.warmup_duration:.1f}s, read-only)...")
+        start_time = time.perf_counter()
+        next_deadline = start_time
+        while time.perf_counter() - start_time < self.config.warmup_duration:
+            try:
+                await self.ctx.get_motor_status(self.slave_id)
+            except Exception:
+                pass
+            next_deadline = await self._pace(next_deadline, self.config.target_frequency)
+
+    async def _capture_positions(self) -> Optional[List[int]]:
+        """Capture the current hand position before a motion benchmark."""
+        try:
+            status = await self.ctx.get_motor_status(self.slave_id)
+            positions = list(status.positions)
+            return positions if len(positions) == 6 else None
+        except Exception as exc:
+            logger.error(f"Failed to capture initial positions: {exc}")
+            return None
+
+    async def _restore_positions(self, positions: Optional[List[int]]):
+        """Best-effort restoration of the hand position after motion tests."""
+        if positions is None:
+            return
+        try:
+            await self.ctx.set_finger_positions(self.slave_id, positions)
+            logger.info(f"Restored initial finger positions: {positions}")
+        except Exception as exc:
+            logger.error(f"Failed to restore initial positions: {exc}")
+
     async def test_get_motor_status_frequency(self) -> FrequencyTestReport:
         """Test 1: get_motor_status read frequency"""
         print("\n📊 Starting get_motor_status read frequency test...")
 
         results = []
         start_time = time.perf_counter()
+        next_deadline = start_time
         test_count = 0
 
         while (time.perf_counter() - start_time) < self.config.test_duration and test_count < self.config.max_test_count:
@@ -165,18 +262,17 @@ class CommFrequencyTester:
             try:
                 await self.ctx.get_motor_status(self.slave_id)
                 elapsed_ms = (time.perf_counter() - test_start) * 1000
-                results.append(TestResult(True, elapsed_ms, time.perf_counter() - start_time))
+                results.append(TestResult(True, elapsed_ms, time.perf_counter() - start_time, "read"))
             except Exception as e:
                 elapsed_ms = (time.perf_counter() - test_start) * 1000
-                results.append(TestResult(False, elapsed_ms, time.perf_counter() - start_time, str(e)))
+                results.append(TestResult(False, elapsed_ms, time.perf_counter() - start_time, "read", str(e), type(e).__name__))
 
-            if test_count % 100 == 0:
+            if self.config.progress_every > 0 and (test_count + 1) % self.config.progress_every == 0:
                 logger.info(f"  Test {test_count}, latency: {results[-1].elapsed_ms:.2f}ms")
 
             test_count += 1
 
-            if self.config.min_interval_ms > 0:
-                await asyncio.sleep(self.config.min_interval_ms / 1000)
+            next_deadline = await self._pace(next_deadline, self.config.target_frequency)
 
         total_duration = time.perf_counter() - start_time
         return self._generate_report("get_motor_status", results, total_duration, self.config.target_frequency)
@@ -188,6 +284,7 @@ class CommFrequencyTester:
 
         results = []
         start_time = time.perf_counter()
+        next_deadline = start_time
         test_count = 0
 
         position_sequences = [
@@ -204,21 +301,20 @@ class CommFrequencyTester:
             try:
                 await self.ctx.set_finger_positions(self.slave_id, positions)
                 elapsed_ms = (time.perf_counter() - test_start) * 1000
-                results.append(TestResult(True, elapsed_ms, time.perf_counter() - start_time))
+                results.append(TestResult(True, elapsed_ms, time.perf_counter() - start_time, "write"))
             except Exception as e:
                 elapsed_ms = (time.perf_counter() - test_start) * 1000
-                results.append(TestResult(False, elapsed_ms, time.perf_counter() - start_time, str(e)))
+                results.append(TestResult(False, elapsed_ms, time.perf_counter() - start_time, "write", str(e), type(e).__name__))
 
-            if test_count % 50 == 0:
+            if self.config.progress_every > 0 and (test_count + 1) % self.config.progress_every == 0:
                 logger.info(f"  Test {test_count}, latency: {results[-1].elapsed_ms:.2f}ms")
 
             test_count += 1
 
-            interval = max(self.config.min_interval_ms, 5.0)
-            await asyncio.sleep(interval / 1000)
+            next_deadline = await self._pace(next_deadline, self.config.write_target_frequency)
 
         total_duration = time.perf_counter() - start_time
-        return self._generate_report("set_finger_positions", results, total_duration, 50.0)
+        return self._generate_report("set_finger_positions", results, total_duration, self.config.write_target_frequency)
 
     async def test_mixed_frequency(self) -> FrequencyTestReport:
         """Test 3: Mixed function frequency (read + control)"""
@@ -226,6 +322,7 @@ class CommFrequencyTester:
 
         results = []
         start_time = time.perf_counter()
+        next_deadline = start_time
         test_count = 0
 
         position_sequences = [
@@ -240,23 +337,26 @@ class CommFrequencyTester:
 
             try:
                 if test_count % 5 == 0:
+                    operation = "write"
                     positions = position_sequences[(test_count // 5) % len(position_sequences)]
                     await self.ctx.set_finger_positions(self.slave_id, positions)
                 else:
+                    operation = "read"
                     await self.ctx.get_motor_status(self.slave_id)
 
                 elapsed_ms = (time.perf_counter() - test_start) * 1000
-                results.append(TestResult(True, elapsed_ms, time.perf_counter() - start_time))
+                results.append(TestResult(True, elapsed_ms, time.perf_counter() - start_time, operation))
             except Exception as e:
                 elapsed_ms = (time.perf_counter() - test_start) * 1000
-                results.append(TestResult(False, elapsed_ms, time.perf_counter() - start_time, str(e)))
+                operation = "write" if test_count % 5 == 0 else "read"
+                results.append(TestResult(False, elapsed_ms, time.perf_counter() - start_time, operation, str(e), type(e).__name__))
 
-            if test_count % 100 == 0:
+            if self.config.progress_every > 0 and (test_count + 1) % self.config.progress_every == 0:
                 action = "position" if test_count % 5 == 0 else "status"
                 logger.info(f"  Test {test_count}, latency: {results[-1].elapsed_ms:.2f}ms, action: {action}")
 
             test_count += 1
-            await asyncio.sleep(self.config.min_interval_ms / 1000)
+            next_deadline = await self._pace(next_deadline, self.config.target_frequency)
 
         total_duration = time.perf_counter() - start_time
         return self._generate_report("mixed_functions", results, total_duration, self.config.target_frequency)
@@ -268,19 +368,23 @@ class CommFrequencyTester:
 
         stability_results = {
             'samples': [],
+            'successful_samples': [],
             'avg_latencies': [],
             'error_rates': [],
             'timestamps': []
         }
 
         start_time = time.perf_counter()
+        end_time = start_time + self.config.stability_duration
+        next_deadline = start_time
         sample_count = 0
 
-        while (time.perf_counter() - start_time) < self.config.stability_duration:
+        while time.perf_counter() < end_time:
             sample_start = time.perf_counter()
+            sample_end = min(sample_start + self.config.sample_interval, end_time)
             sample_results = []
 
-            while (time.perf_counter() - sample_start) < self.config.sample_interval:
+            while time.perf_counter() < sample_end:
                 test_start = time.perf_counter()
 
                 try:
@@ -291,7 +395,7 @@ class CommFrequencyTester:
                     elapsed_ms = (time.perf_counter() - test_start) * 1000
                     sample_results.append((False, elapsed_ms))
 
-                await asyncio.sleep(0.01)
+                next_deadline = await self._pace(next_deadline, self.config.stability_frequency)
 
             successful = [e for s, e in sample_results if s]
             total_count = len(sample_results)
@@ -301,6 +405,7 @@ class CommFrequencyTester:
             error_rate = (total_count - success_count) / total_count * 100 if total_count > 0 else 0
 
             stability_results['samples'].append(total_count)
+            stability_results['successful_samples'].append(success_count)
             stability_results['avg_latencies'].append(avg_latency)
             stability_results['error_rates'].append(error_rate)
             stability_results['timestamps'].append(time.perf_counter() - start_time)
@@ -329,7 +434,17 @@ class CommFrequencyTester:
         else:
             avg_latency = max_latency = min_latency = std_dev = 0
 
-        actual_frequency = total_tests / total_duration if total_duration > 0 else 0
+        attempt_frequency = total_tests / total_duration if total_duration > 0 else 0
+        successful_frequency = successful_tests / total_duration if total_duration > 0 else 0
+        error_types = dict(Counter(r.error_type or "UnknownError" for r in results if not r.success))
+        operation_stats = {}
+        for operation in sorted({r.operation for r in successful}):
+            operation_latencies = [r.elapsed_ms for r in successful if r.operation == operation]
+            operation_stats[operation] = {
+                "successful_count": len(operation_latencies),
+                "avg_latency_ms": statistics.mean(operation_latencies),
+                "p95_latency_ms": percentile(operation_latencies, 95),
+            }
 
         return FrequencyTestReport(
             function_name=function_name,
@@ -342,27 +457,44 @@ class CommFrequencyTester:
             max_latency_ms=max_latency,
             min_latency_ms=min_latency,
             std_dev_ms=std_dev,
-            actual_frequency_hz=actual_frequency,
+            p50_latency_ms=percentile(latencies, 50) if successful else 0,
+            p95_latency_ms=percentile(latencies, 95) if successful else 0,
+            p99_latency_ms=percentile(latencies, 99) if successful else 0,
+            attempt_frequency_hz=attempt_frequency,
+            actual_frequency_hz=successful_frequency,
             target_frequency_hz=target_frequency,
             total_duration_secs=total_duration,
+            error_types=error_types,
+            operation_stats=operation_stats,
         )
 
     async def run_test(self, test_num: int):
         """Run specific test"""
-        if test_num == 1:
-            report = await self.test_get_motor_status_frequency()
-            report.print_report()
-        elif test_num == 2:
-            report = await self.test_set_finger_positions_frequency()
-            report.print_report()
-        elif test_num == 3:
-            report = await self.test_mixed_frequency()
-            report.print_report()
-        elif test_num == 4:
-            stability = await self.test_stability()
-            self._print_stability_results(stability)
-        else:
-            print(f"Invalid test number: {test_num}")
+        initial_positions = await self._capture_positions() if test_num in (2, 3) else None
+        if test_num in (2, 3) and initial_positions is None:
+            raise RuntimeError("Unable to capture initial positions; motion test aborted")
+        try:
+            if test_num == 1:
+                report = await self.test_get_motor_status_frequency()
+                report.print_report()
+                return {"reports": [report], "stability": None}
+            elif test_num == 2:
+                report = await self.test_set_finger_positions_frequency()
+                report.print_report()
+                return {"reports": [report], "stability": None}
+            elif test_num == 3:
+                report = await self.test_mixed_frequency()
+                report.print_report()
+                return {"reports": [report], "stability": None}
+            elif test_num == 4:
+                stability = await self.test_stability()
+                self._print_stability_results(stability)
+                return {"reports": [], "stability": stability}
+            else:
+                print(f"Invalid test number: {test_num}")
+                return {"reports": [], "stability": None}
+        finally:
+            await self._restore_positions(initial_positions)
 
     async def run_all_tests(self):
         """Run all tests"""
@@ -372,13 +504,19 @@ class CommFrequencyTester:
         report1.print_report()
         reports.append(report1)
 
-        report2 = await self.test_set_finger_positions_frequency()
-        report2.print_report()
-        reports.append(report2)
+        initial_positions = await self._capture_positions()
+        if initial_positions is None:
+            raise RuntimeError("Unable to capture initial positions; motion tests aborted")
+        try:
+            report2 = await self.test_set_finger_positions_frequency()
+            report2.print_report()
+            reports.append(report2)
 
-        report3 = await self.test_mixed_frequency()
-        report3.print_report()
-        reports.append(report3)
+            report3 = await self.test_mixed_frequency()
+            report3.print_report()
+            reports.append(report3)
+        finally:
+            await self._restore_positions(initial_positions)
 
         stability = await self.test_stability()
         self._print_stability_results(stability)
@@ -388,6 +526,7 @@ class CommFrequencyTester:
         print("=" * 60)
         for report in reports:
             print(f"{report.function_name}: {report.actual_frequency_hz:.1f} Hz ({report.success_rate:.1f}% success)")
+        return {"reports": reports, "stability": stability}
 
     def _print_stability_results(self, stability: Dict[str, Any]):
         """Print stability test results"""
@@ -398,8 +537,17 @@ class CommFrequencyTester:
         print()
 
         if stability['avg_latencies']:
-            overall_avg = statistics.mean(stability['avg_latencies'])
-            overall_error = statistics.mean(stability['error_rates'])
+            total_attempts = sum(stability['samples'])
+            total_successes = sum(stability['successful_samples'])
+            weighted_latency = sum(
+                latency * count
+                for latency, count in zip(stability['avg_latencies'], stability['successful_samples'])
+            )
+            overall_avg = weighted_latency / total_successes if total_successes else 0
+            overall_error = (
+                (total_attempts - total_successes) / total_attempts * 100
+                if total_attempts else 0
+            )
             max_error = max(stability['error_rates'])
             print(f"Average latency:    {overall_avg:.2f} ms")
             print(f"Average error rate: {overall_error:.2f}%")
@@ -407,6 +555,56 @@ class CommFrequencyTester:
             print(f"Sample count:       {len(stability['samples'])}")
         else:
             print("No stability data collected")
+
+
+def requires_motion_confirmation(test_num: int) -> bool:
+    """Return whether a test sends finger position commands."""
+    return test_num in (0, 2, 3)
+
+
+def confirm_motion_test(test_num: int, assume_yes: bool) -> bool:
+    """Require explicit consent before running tests that move the hand."""
+    if not requires_motion_confirmation(test_num) or assume_yes:
+        return True
+    print("\nWARNING: This test sends position commands and will move the fingers.")
+    answer = input("Ensure the hand can move safely, then type 'yes' to continue: ").strip().lower()
+    return answer == "yes"
+
+
+def save_results(output_path: str, config: TestConfig, result_data: Dict[str, Any]):
+    """Save machine-readable benchmark results for later comparison."""
+    reports = []
+    for report in result_data.get("reports", []):
+        report_data = {
+            field.name: getattr(report, field.name)
+            for field in fields(report)
+            if field.name != "connection"
+        }
+        report_data["connection"] = {
+            "adapter_type": report.connection.adapter_type,
+            "protocol": report.connection.protocol,
+            "port_name": report.connection.port_name,
+            "slave_id": report.connection.slave_id,
+            "baudrate": baudrate_to_int(report.connection.baudrate),
+            "data_baudrate": int(report.connection.data_baudrate or 0),
+        }
+        reports.append(report_data)
+
+    payload = {
+        "schema_version": 1,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "system": {
+            "platform": platform.platform(),
+            "python": platform.python_version(),
+        },
+        "config": asdict(config),
+        "reports": reports,
+        "stability": result_data.get("stability"),
+    }
+    path = Path(output_path).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Results saved to: {path.resolve()}")
 
 
 def show_menu() -> Optional[int]:
@@ -481,8 +679,29 @@ async def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Communication Frequency Test")
-    parser.add_argument("test_num", nargs="?", type=int, help="Test number (0=all, 1-4=specific)")
+    parser.add_argument("test_num", nargs="?", type=int, choices=range(0, 5), help="Test number (0=all, 1-4=specific)")
+    parser.add_argument("--duration", type=float, default=5.0, help="Read/write/mixed test duration in seconds")
+    parser.add_argument("--target-hz", type=float, default=1000.0, help="Read/mixed target rate; 0 runs at maximum throughput")
+    parser.add_argument("--write-target-hz", type=float, default=50.0, help="Write target rate; 0 runs at maximum throughput")
+    parser.add_argument("--stability-hz", type=float, default=100.0, help="Stability-test read rate")
+    parser.add_argument("--stability-duration", type=float, default=60.0, help="Stability-test duration in seconds")
+    parser.add_argument("--sample-interval", type=float, default=1.0, help="Stability aggregation interval in seconds")
+    parser.add_argument("--warmup", type=float, default=1.0, help="Read-only warm-up duration in seconds")
+    parser.add_argument("--max-count", type=int, default=10000, help="Maximum requests per frequency test")
+    parser.add_argument("--progress-every", type=int, default=0, help="Log every N measured requests; 0 disables progress logging")
+    parser.add_argument("--output", help="Write JSON results to this path")
+    parser.add_argument("--yes", action="store_true", help="Acknowledge finger movement without an interactive prompt")
     args = parser.parse_args()
+
+    if min(args.duration, args.target_hz, args.write_target_hz, args.stability_hz,
+           args.stability_duration, args.warmup) < 0:
+        parser.error("duration and frequency values must be non-negative")
+    if args.sample_interval <= 0:
+        parser.error("--sample-interval must be greater than zero")
+    if args.max_count <= 0:
+        parser.error("--max-count must be greater than zero")
+    if args.progress_every < 0:
+        parser.error("--progress-every must be non-negative")
 
     print("=== Communication Frequency Test ===\n")
 
@@ -490,15 +709,32 @@ async def main():
     if ctx is None:
         return
 
-    config = TestConfig()
+    config = TestConfig(
+        test_duration=args.duration,
+        max_test_count=args.max_count,
+        target_frequency=args.target_hz,
+        write_target_frequency=args.write_target_hz,
+        stability_frequency=args.stability_hz,
+        warmup_duration=args.warmup,
+        stability_duration=args.stability_duration,
+        sample_interval=args.sample_interval,
+        progress_every=args.progress_every,
+    )
     tester = CommFrequencyTester(ctx, slave_id, connection_info, config)
+    collected = {"reports": [], "stability": None}
 
     try:
+        await tester.warm_up()
         if args.test_num is not None:
+            if not confirm_motion_test(args.test_num, args.yes):
+                print("Test cancelled")
+                return
             if args.test_num == 0:
-                await tester.run_all_tests()
+                result_data = await tester.run_all_tests()
             else:
-                await tester.run_test(args.test_num)
+                result_data = await tester.run_test(args.test_num)
+            collected["reports"].extend(result_data["reports"])
+            collected["stability"] = result_data["stability"]
         else:
             # Interactive menu
             while True:
@@ -506,14 +742,27 @@ async def main():
                 if choice is None:
                     break
                 elif choice == 0:
-                    await tester.run_all_tests()
+                    if not confirm_motion_test(choice, args.yes):
+                        print("Test cancelled")
+                        continue
+                    result_data = await tester.run_all_tests()
                 elif 1 <= choice <= 4:
-                    await tester.run_test(choice)
+                    if not confirm_motion_test(choice, args.yes):
+                        print("Test cancelled")
+                        continue
+                    result_data = await tester.run_test(choice)
                 else:
                     print("Invalid choice")
+                    continue
+                collected["reports"].extend(result_data["reports"])
+                if result_data["stability"] is not None:
+                    collected["stability"] = result_data["stability"]
     finally:
         await sdk.close_device_handler(ctx)
         logger.info("Device connection closed")
+
+    if args.output:
+        save_results(args.output, config, collected)
 
     print("\n=== Test completed ===")
 
