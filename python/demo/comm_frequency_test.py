@@ -22,6 +22,9 @@ Test modes:
 Write, mixed, and all-tests modes move the fingers and require confirmation unless
 --yes is supplied. They restore the captured initial finger positions after the
 test. Read-only mode is safe to run without motion confirmation.
+
+The benchmark automatically initializes the first detected CANFD, CAN 2.0,
+SocketCAN, or Modbus device. No protocol-specific setup is required.
 """
 
 import asyncio
@@ -626,9 +629,9 @@ def show_menu() -> Optional[int]:
         return -1
 
 
-async def auto_detect_and_init():
-    """Auto-detect device and initialize"""
-    logger.info("Auto-detecting devices...")
+async def auto_detect_first_and_init():
+    """Auto-detect and initialize the first available device."""
+    logger.info("Auto-detecting the first available device...")
 
     devices = await sdk.auto_detect(scan_all=False)
 
@@ -644,19 +647,8 @@ async def auto_detect_and_init():
         print(f"    Port: {dev.port_name}")
         print(f"    Slave ID: 0x{dev.slave_id:02X} ({dev.slave_id})")
 
-    # Select device
-    if len(devices) > 1:
-        try:
-            choice = int(input(f"\nSelect device [1-{len(devices)}]: ").strip())
-            if choice < 1 or choice > len(devices):
-                logger.error("Invalid selection")
-                return None, None, None
-            device = devices[choice - 1]
-        except ValueError:
-            device = devices[0]
-    else:
-        logger.info("Using the only available device")
-        device = devices[0]
+    device = devices[0]
+    logger.info("Using the first detected device")
 
     # Initialize context
     ctx = await sdk.init_from_detected(device)
@@ -705,7 +697,7 @@ async def main():
 
     print("=== Communication Frequency Test ===\n")
 
-    ctx, slave_id, connection_info = await auto_detect_and_init()
+    ctx, slave_id, connection_info = await auto_detect_first_and_init()
     if ctx is None:
         return
 
