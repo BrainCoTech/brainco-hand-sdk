@@ -46,7 +46,7 @@ void test_finger_control(DeviceHandler *handle, uint8_t slave_id) {
 int main(int argc, char const *argv[]) {
     printf("=== Stark Auto-Detect Example ===\n\n");
 
-    init_logging(LOG_LEVEL_INFO);
+    init_logging_with_options(LOG_LEVEL_INFO, true);
 
     // Auto-detect and initialize device
     DeviceContext ctx;

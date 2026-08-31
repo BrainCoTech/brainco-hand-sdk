@@ -335,7 +335,7 @@ static bool probe_protobuf(const char *port, uint32_t baudrate) {
 int main(int argc, char const *argv[]) {
   printf("=== Stark Auto-Detect (Modbus + Protobuf) ===\n\n");
 
-  init_logging(LOG_LEVEL_INFO);
+  init_logging_with_options(LOG_LEVEL_INFO, true);
 
 #ifdef _WIN32
   const char *port = "COM3";

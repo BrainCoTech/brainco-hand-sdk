@@ -46,7 +46,7 @@ int main(int argc, char const *argv[]) {
   printf("main\n");
   setup_signal_handlers();
 
-  init_logging(LOG_LEVEL_INFO);
+  init_logging_with_options(LOG_LEVEL_INFO, true);
   printf("ethercat_open_master...\n");
   device_handle = init_device_handler(STARK_PROTOCOL_TYPE_ETHER_CAT, 0);
   ethercat_setup_sdo(device_handle, slave_pos);

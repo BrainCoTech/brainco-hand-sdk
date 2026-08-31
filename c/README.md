@@ -4,6 +4,19 @@ Cross-platform examples for Revo1 and Revo2 devices.
 
 ## Quick Start
 
+C/C++ examples enable timestamped file logs under `logs/` explicitly. Select
+the log level and whether a file is created when initializing logging:
+
+```cpp
+init_logging_with_options(LOG_LEVEL_INFO, true);   // Terminal and log file
+init_logging_with_options(LOG_LEVEL_DEBUG, false); // Terminal only
+```
+
+`false` disables only file output; the selected level still controls terminal
+logs. Existing applications can continue to call `init_logging(level)`, which
+enables file logging in debug builds and disables it in release builds. Call
+one logging initialization function once near the beginning of `main`.
+
 ```bash
 cd c
 make

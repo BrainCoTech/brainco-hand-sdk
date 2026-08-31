@@ -1,5 +1,25 @@
 # BrainCo RevoHand SDK Examples Changelog
 
+## v2.0.5 (2026/08/31)
+
+### Logging compatibility
+
+- Restored the source- and binary-compatible C `init_logging(log_level)` entry point.
+- Added `init_logging_with_options(log_level, enable_file_logging)` for explicit file-output control.
+- Existing applications can upgrade without changing their logging call; applications using the temporary `2.0.4` two-argument form must rename it to `init_logging_with_options` when recompiling.
+- Updated the native library download scripts and Python dependency to `2.0.5`.
+
+## v2.0.4 (2026/08/31)
+
+### SDK and Logging
+
+- Updated the `bc-stark-sdk` dependency and native library download scripts to `2.0.4`.
+- Added explicit file-logging selection to active C/C++ examples. Pass `true` for terminal-plus-file logging or `false` for terminal-only logging.
+- Updated communication benchmark helpers to use the SDK's current baudrate conversion and BrainCo CAN lifecycle APIs.
+- Recompile C/C++ applications against the `2.0.4` header because the C `init_logging` signature now includes `enable_file_logging`.
+
+---
+
 ## v2.0.1 (2026/05/19)
 
 ### 🐛 Bug Fixes

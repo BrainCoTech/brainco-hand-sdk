@@ -81,7 +81,7 @@ int main(int argc, char const *argv[]) {
     printf("=== Universal DFU ===\n\n");
 
     // Initialize logging
-    init_logging(LOG_LEVEL_INFO);
+    init_logging_with_options(LOG_LEVEL_INFO, true);
 
     // Parse arguments and initialize device
     DeviceContext ctx;

@@ -472,8 +472,8 @@ int main(int argc, char const *argv[]) {
     printf("=== Hand Data Monitor ===\n\n");
 
     // Initialize logging
-    // init_logging(LOG_LEVEL_DEBUG);
-    init_logging(LOG_LEVEL_INFO);
+    // init_logging_with_options(LOG_LEVEL_DEBUG, true);
+    init_logging_with_options(LOG_LEVEL_INFO, true);
 
     DeviceContext ctx;
     memset(&ctx, 0, sizeof(ctx));
