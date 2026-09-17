@@ -549,6 +549,10 @@ async def parse_args_and_init(argv: List[str], extra_parser: Optional[argparse.A
     if ctx is None:
         return None, None, None
     
+    # 强制设置硬件类型为 Revo1 触觉版 (Revo1Touch) 示例（如需手动覆盖硬件类型，取消以下注释即可）：
+    # await ctx.ctx.set_hardware_type(ctx.slave_id, sdk.StarkHardwareType.Revo1Touch)
+    # ctx.hw_type = sdk.StarkHardwareType.Revo1Touch
+    
     # Print device info
     print(f"\n[Init] {get_hw_type_name(ctx.hw_type)}")
     print(f"  Protocol: {ctx.protocol_type}")

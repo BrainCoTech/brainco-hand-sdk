@@ -68,34 +68,22 @@ def _int_to_baudrate_fallback(value: int):
 
 def baudrate_to_int(baudrate) -> int:
     """Convert Baudrate enum to actual bps value.
-    
+
     int(Baudrate.Baud1Mbps) returns the enum index (4), not the bps value.
     This function returns the actual bps value (e.g. 1000000).
     """
     if sdk is None:
         return 0
-    # PyO3 enum instances are not guaranteed to be hashable. Read their integer
-    # discriminants at runtime instead of duplicating those values in Python.
-    baudrate_bps_by_index = {
-        int(sdk.Baudrate.Baud115200): 115200,
-        int(sdk.Baudrate.Baud57600): 57600,
-        int(sdk.Baudrate.Baud19200): 19200,
-        int(sdk.Baudrate.Baud460800): 460800,
-        int(sdk.Baudrate.Baud1Mbps): 1000000,
-        int(sdk.Baudrate.Baud2Mbps): 2000000,
-        int(sdk.Baudrate.Baud3Mbps): 3000000,
-        int(sdk.Baudrate.Baud4Mbps): 4000000,
-        int(sdk.Baudrate.Baud5Mbps): 5000000,
-        int(sdk.Baudrate.Baud6Mbps): 6000000,
+    known_bps = {
+        19200, 57600, 115200, 460800, 1000000,
+        2000000, 3000000, 4000000, 5000000, 6000000,
     }
-    known_bps = set(baudrate_bps_by_index.values())
     if isinstance(baudrate, int):
         return baudrate if baudrate in known_bps else 0
     try:
-        index = int(baudrate)
-    except (TypeError, ValueError):
+        return int(baudrate.to_bps())
+    except (AttributeError, TypeError, ValueError):
         return 0
-    return baudrate_bps_by_index.get(index, 0)
 
 
 async def modbus_open(port_name: str, baudrate):
