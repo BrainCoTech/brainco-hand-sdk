@@ -6,7 +6,7 @@
 
 - Updated the Python dependency to `2.0.7`, which retains all supported FTDI RS485 ports even when channels share a USB serial number. Earlier versions could skip a usable channel during automatic discovery.
 - Explicit `port` selection remains available. Close other serial applications before probing; `scan_all=False` still stops after finding the first device.
-- Linux x86_64 and ARM64 Python wheels are available for glibc 2.31 (Ubuntu 20.04+) and later. This release does not provide a macOS Python wheel. C/C++ download defaults remain on the published `2.0.6` packages.
+- Linux x86_64 and ARM64 Python wheels are available for glibc 2.31 (Ubuntu 20.04+) and later. This release does not provide a macOS Python wheel. C/C++ download defaults use `2.0.7` for Linux ARM64/x86_64, macOS ARM64/x86_64 universal, and Windows x64, including the same discovery fix.
 
 ## v2.0.6 (2026/10/12)
 

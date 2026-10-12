@@ -7,7 +7,7 @@ DIST_DIR="${SCRIPT_DIR}/dist"
 VERSION_FILE="${SCRIPT_DIR}/VERSION"
 
 # Configuration
-LIB_VERSION="v2.0.6"
+LIB_VERSION="v2.0.7"
 BASE_URL="https://app.brainco.cn/universal/bc-stark-sdk/libs/${LIB_VERSION}"
 
 # Colorful echo functions
@@ -49,7 +49,7 @@ case "$OS_TYPE" in
   LIB_NAME="mac"
   ;;
 "msys" | "MINGW"*)
-  LIB_NAME="win"
+  LIB_NAME="win-cpp"
   ;;
 *)
   echo_r "Error: This script does not support your platform ($OS_TYPE)"

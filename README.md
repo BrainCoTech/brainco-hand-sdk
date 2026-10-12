@@ -34,7 +34,7 @@ cd python
 pip3 install -r requirements.txt
 ```
 
-Python uses SDK `2.0.7`. The C/C++ download script still retrieves the published `2.0.6` libraries; the RS485 discovery fix is included in Python `2.0.7`.
+Python and C/C++ use SDK `2.0.7`, including the RS485 automatic discovery fix.
 
 3. For C++ development on Linux:
 ```bash

@@ -34,7 +34,7 @@ cd python
 pip3 install -r requirements.txt
 ```
 
-Python 使用 SDK `2.0.7`。C/C++ 下载脚本仍使用已发布的 `2.0.6` 库；本次 RS485 自动发现修复包含在 Python `2.0.7` 中。
+Python 和 C/C++ 均使用 SDK `2.0.7`，包含 RS485 自动发现修复。
 
 3. Linux C++ 开发环境配置：
 ```bash
