@@ -1,5 +1,15 @@
 # BrainCo RevoHand SDK Examples Changelog
 
+## v2.0.6 (2026/10/12)
+
+### Revo2 Touch compatibility
+
+- Use `STARK_HARDWARE_TYPE_REVO2_TOUCH` (`11`) for Revo2 Touch. Hardware value `4` selects Revo1 Advanced Touch; update older integrations that used `4` for Revo2 Touch.
+- Added C APIs `stark_enable_touch_sensor_with_status` and `stark_calibrate_touch_sensor_with_status`: `0` indicates transport success; `-1` indicates a null handle or operation failure. Native Modbus RTU waits for the write response; custom callbacks must report transport failures. Success does not confirm physical calibration completion. Keep the handle alive and do not close it concurrently or call these blocking APIs from an SDK transport callback holding the same device lock. The existing asynchronous `void` APIs remain compatible.
+- Custom Modbus writes now propagate transport errors and reject incorrect FC06/FC16 response echoes.
+- Updated native download defaults and the Python minimum dependency to `2.0.6`. The Linux ARM64 wheel uses `manylinux_2_31` for Ubuntu 20.04 and later; this change does not establish the same compatibility for other wheel platforms.
+- C SDK packages include matching headers and the MIT `LICENSE`. Upgrade the library and header together. Windows x64 packages include MinGW and MSVC-format import libraries; Windows runtime and full ROS2/G1 hardware integration remain unverified.
+
 ## v2.0.5 (2026/08/31)
 
 ### Logging compatibility

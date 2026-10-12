@@ -3,7 +3,7 @@ set -e
 
 # BrainCo Stark SDK - Install .whl from OSS
 # Usage: bash install_whl.sh [version]
-# Example: bash install_whl.sh 2.0.5
+# Example: bash install_whl.sh 2.0.6
 
 OSS_BASE="https://app.brainco.cn/universal/bc-stark-sdk/libs"
 
@@ -13,7 +13,7 @@ if [ -n "$1" ]; then
 elif [ -f "Cargo.toml" ]; then
   VERSION=$(grep '^version =' Cargo.toml | head -1 | awk -F'"' '{print $2}')
 else
-  VERSION="2.0.5"
+  VERSION="2.0.6"
 fi
 
 echo "Installing bc-stark-sdk v${VERSION}..."
@@ -33,7 +33,7 @@ case "$OS" in
   Linux)
     case "$ARCH" in
       x86_64) PLATFORM="manylinux_2_34_x86_64" ;;
-      aarch64) PLATFORM="manylinux_2_34_aarch64" ;;
+      aarch64) PLATFORM="manylinux_2_31_aarch64" ;;
       *) echo "Unsupported Linux arch: $ARCH"; exit 1 ;;
     esac
     ;;

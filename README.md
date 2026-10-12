@@ -1,7 +1,7 @@
 # BrainCo RevoHand SDK Examples
 
-[![Version](https://img.shields.io/badge/version-v2.0.5-blue.svg)](VERSION)
-[![License](https://img.shields.io/badge/license-Proprietary-red.svg)]()
+[![Version](https://img.shields.io/badge/version-v2.0.6-blue.svg)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 [English](README.md) | [中文](README.zh.md)
 
