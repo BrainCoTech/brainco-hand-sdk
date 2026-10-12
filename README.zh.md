@@ -1,6 +1,6 @@
 # BrainCo 灵巧手 SDK 开发示例
 
-[![版本](https://img.shields.io/badge/版本-v2.0.6-blue.svg)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/版本-v2.0.7-blue.svg)](CHANGELOG.md)
 [![许可证](https://img.shields.io/badge/许可证-MIT-green.svg)](LICENSE)
 
 [English](README.md) | [中文](README.zh.md)
@@ -15,9 +15,9 @@
 
 ### 系统要求
 
-- **Python**：3.8 ~ 3.12
-- **Linux**：Ubuntu 20.04/22.04 LTS (x86_64/aarch64), glibc ≥ 2.31
-- **macOS**：10.15+
+- **Python**：3.9 ~ 3.12
+- **Linux Python wheel**：x86_64/aarch64，glibc ≥ 2.31（Ubuntu 20.04+）。
+- **macOS C/C++**：10.15+；本次未提供 macOS Python wheel。
 - **Windows**：10/11
 
 ### 安装步骤
@@ -33,6 +33,8 @@ cd brainco-hand-sdk
 cd python
 pip3 install -r requirements.txt
 ```
+
+Python 使用 SDK `2.0.7`。C/C++ 下载脚本仍使用已发布的 `2.0.6` 库；本次 RS485 自动发现修复包含在 Python `2.0.7` 中。
 
 3. Linux C++ 开发环境配置：
 ```bash

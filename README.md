@@ -1,6 +1,6 @@
 # BrainCo RevoHand SDK Examples
 
-[![Version](https://img.shields.io/badge/version-v2.0.6-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v2.0.7-blue.svg)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 [English](README.md) | [中文](README.zh.md)
@@ -15,9 +15,9 @@ For detailed technical specifications and API references, visit: [BrainCo RevoHa
 
 ### System Requirements
 
-- **Python**: 3.8 ~ 3.12
-- **Linux**: Ubuntu 20.04/22.04 LTS (x86_64/aarch64), glibc ≥ 2.31
-- **macOS**: 10.15+
+- **Python**: 3.9 ~ 3.12
+- **Linux Python wheels**: x86_64/aarch64, glibc ≥ 2.31 (Ubuntu 20.04+).
+- **macOS C/C++**: 10.15+; this release does not provide a macOS Python wheel.
 - **Windows**: 10/11
 
 ### Installation
@@ -33,6 +33,8 @@ cd brainco-hand-sdk
 cd python
 pip3 install -r requirements.txt
 ```
+
+Python uses SDK `2.0.7`. The C/C++ download script still retrieves the published `2.0.6` libraries; the RS485 discovery fix is included in Python `2.0.7`.
 
 3. For C++ development on Linux:
 ```bash

@@ -3,7 +3,7 @@ set -e
 
 # BrainCo Stark SDK - Install .whl from OSS
 # Usage: bash install_whl.sh [version]
-# Example: bash install_whl.sh 2.0.6
+# Example: bash install_whl.sh 2.0.7
 
 OSS_BASE="https://app.brainco.cn/universal/bc-stark-sdk/libs"
 
@@ -13,7 +13,7 @@ if [ -n "$1" ]; then
 elif [ -f "Cargo.toml" ]; then
   VERSION=$(grep '^version =' Cargo.toml | head -1 | awk -F'"' '{print $2}')
 else
-  VERSION="2.0.6"
+  VERSION="2.0.7"
 fi
 
 echo "Installing bc-stark-sdk v${VERSION}..."
@@ -32,7 +32,7 @@ case "$OS" in
     ;;
   Linux)
     case "$ARCH" in
-      x86_64) PLATFORM="manylinux_2_34_x86_64" ;;
+      x86_64) PLATFORM="manylinux_2_31_x86_64" ;;
       aarch64) PLATFORM="manylinux_2_31_aarch64" ;;
       *) echo "Unsupported Linux arch: $ARCH"; exit 1 ;;
     esac
@@ -52,6 +52,13 @@ WHL_URL="${OSS_BASE}/v${VERSION}/${WHL_NAME}"
 
 # Check if file exists before downloading
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --head "$WHL_URL" 2>/dev/null || echo "000")
+if [ "$HTTP_CODE" != "200" ] && [[ "$PLATFORM" == manylinux_2_31_* ]]; then
+  # Prefer Ubuntu 20.04-compatible wheels, then try the glibc 2.34 builds.
+  FALLBACK_PLATFORM="${PLATFORM/manylinux_2_31/manylinux_2_34}"
+  WHL_NAME="bc_stark_sdk-${VERSION}-cp39-abi3-${FALLBACK_PLATFORM}.whl"
+  WHL_URL="${OSS_BASE}/v${VERSION}/${WHL_NAME}"
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --head "$WHL_URL" 2>/dev/null || echo "000")
+fi
 if [ "$HTTP_CODE" != "200" ]; then
   echo "Error: v${VERSION} not found on OSS (HTTP $HTTP_CODE)"
   echo "URL: $WHL_URL"
