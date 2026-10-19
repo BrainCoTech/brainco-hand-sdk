@@ -1,5 +1,10 @@
 # BrainCo RevoHand SDK Examples Changelog
 
+## v2.0.8 (2026/10/19)
+
+- Fixed `stark_get_finger_max_position` (C/C++) and `get_finger_max_position` (Python) reading the setting register instead of the readback register. The getter now reads `952 + finger_id - 1` for the six fingers.
+- Updated native library downloads and the Python minimum dependency to `2.0.8`. Public API signatures are unchanged.
+
 ## v2.0.7 (2026/10/12)
 
 ### RS485 discovery

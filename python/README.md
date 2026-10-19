@@ -12,7 +12,7 @@ Python examples for Revo1/Revo2 devices. New-generation Python examples live in 
 
 ## Install and discover devices
 
-Use Python 3.9 or later on Windows x64 or Linux x86_64/ARM64. The `2.0.7`
+Use Python 3.9 or later on Windows x64 or Linux x86_64/ARM64. The `2.0.8`
 Linux wheels require glibc 2.31 or later (Ubuntu 20.04+). No macOS Python wheel
 is provided for this release.
 
@@ -22,10 +22,10 @@ From this directory, install the SDK and example dependencies:
 python -m pip install -r requirements.txt
 ```
 
-To install SDK `2.0.7` from the OSS mirror instead:
+To install SDK `2.0.8` from the OSS mirror instead:
 
 ```bash
-bash install_whl.sh 2.0.7
+bash install_whl.sh 2.0.8
 ```
 
 Close other programs using the serial port, then run read-only discovery:
