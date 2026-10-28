@@ -9,16 +9,16 @@ Compare raw Python serial I/O, raw C++ serial I/O, and SDK C++ queries on the sa
 - Read motor status with function `04`, starting input register `2000 / 0x07D0`, count `24`.
 - Use 460800 baud, 8N1, no software or hardware flow control. Supported address arguments are `126`, `127`, and `126,127`.
 - Confirm the device model, register map, current baud rate, and addresses before running. Stop other users of the port; run these programs sequentially.
-- Python requires PySerial. C++ uses Linux POSIX serial APIs and must be compiled on the target architecture. Linux x86_64 has been validated; Linux ARM requires target testing. No SDK library or precompiled binary is included.
+- Python requires PySerial. C++ uses Linux POSIX serial APIs and must be compiled on the target architecture. Linux x86_64 has been validated; Linux ARM requires target testing. This directory provides source code; supply the SDK library separately for the optional comparison.
 - Queries are read-only. The optional `--low-latency` flag changes the host serial driver's setting and does not restore it on exit.
 
 ## Run the raw benchmarks
 
-Run from this directory. Select the actual port, for example `/dev/ttyAMA10` or `/dev/ttyUSB0`.
+Run from this directory. Select the actual port, for example `/dev/ttyAMA0` or `/dev/ttyUSB0`.
 
 ```bash
 python3 -m pip install -r requirements.txt
-serial_port=/dev/ttyAMA10
+serial_port=/dev/ttyUSB0
 python3 serial_test_read_speed.py "$serial_port" 460800 126 5 python-126.csv --low-latency
 python3 serial_test_read_speed.py "$serial_port" 460800 127 5 python-127.csv --low-latency
 python3 serial_test_read_speed.py "$serial_port" 460800 126,127 5 python-dual.csv --low-latency
@@ -28,7 +28,7 @@ Keep `bench_common.hpp` next to `serial_test_read_speed.cpp`. The raw C++ progra
 
 ```bash
 g++ -std=c++17 -O2 -Wall -Wextra -Werror serial_test_read_speed.cpp -o serial_test_read_speed
-serial_port=/dev/ttyAMA10
+serial_port=/dev/ttyUSB0
 ./serial_test_read_speed "$serial_port" 460800 126 5 cpp-126.csv --low-latency
 ./serial_test_read_speed "$serial_port" 460800 127 5 cpp-127.csv --low-latency
 ./serial_test_read_speed "$serial_port" 460800 126,127 5 cpp-dual.csv --low-latency
@@ -45,11 +45,11 @@ LOW_LATENCY requested=1 result=flag_set flags_before=... flags_after=... timer_b
 ```
 
 - `flag_set` means the readback flag is set, either by this run or previously.
-- `get_failed`, `set_failed`, `readback_failed`, or `flag_clear` produce a `WARN`. Queries continue, but the run must not be labeled as successfully enabling low latency.
+- `get_failed`, `set_failed`, `readback_failed`, or `flag_clear` produce a `WARN`. Queries continue; retain the warning and record the setup result with the measurements.
 - The timer fields read the USB serial driver's `latency_timer`. FTDI may change it to 1 ms; check the actual readback.
-- `unavailable` means that sysfs value could not be read. Hardware UARTs normally do not expose FTDI's timer; its absence does not establish ioctl failure.
+- `unavailable` means that sysfs value could not be read. Hardware UARTs normally do not expose FTDI's timer; use the `result` field to check driver setup.
 
-A set flag does not guarantee the same latency across UART drivers. If SDK initialization changes a setting, repeat the raw test with the same effective setting.
+The effect of low-latency setup depends on the driver. If SDK initialization changes a setting, repeat the raw test with the same effective setting.
 
 ## Optional SDK C++ comparison
 
@@ -61,7 +61,7 @@ g++ -std=c++17 -O2 -Wall -Wextra -Werror sdk_read_speed.cpp \
   -I "$sdk_dist/include" -L "$sdk_dist/shared/linux" \
   -Wl,-rpath,"$sdk_dist/shared/linux" -lbc_stark_sdk -o sdk_read_speed
 ldd ./sdk_read_speed
-serial_port=/dev/ttyAMA10
+serial_port=/dev/ttyUSB0
 ./sdk_read_speed "$serial_port" 460800 126 5 sdk-126.csv
 ./sdk_read_speed "$serial_port" 460800 127 5 sdk-127.csv
 ./sdk_read_speed "$serial_port" 460800 126,127 5 sdk-dual.csv

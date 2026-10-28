@@ -7,7 +7,7 @@
 - 查询电机状态：功能码 `04`、起始寄存器 `2000 / 0x07D0`、24 个寄存器。
 - 固定 460800 baud、8N1、无软硬件流控；地址支持 `126`、`127` 或 `126,127`。
 - 使用前确认设备型号、寄存器含义、当前波特率及地址与上述条件一致。串口应由当前测试程序单独使用；先结束其他占用该端口的程序。
-- Python 需要 PySerial；C++ 使用 Linux POSIX 串口接口，需要在目标主机上编译。已验证 Linux x86_64，Linux ARM 仍需在目标主机上验证。包内不包含预编译二进制或 SDK 库。
+- Python 需要 PySerial；C++ 使用 Linux POSIX 串口接口，需要在目标主机上编译。已验证 Linux x86_64，Linux ARM 仍需在目标主机上验证。该目录提供源码，SDK 库需另行准备。
 - 该工具发送只读查询。`--low-latency` 会尝试修改主机串口驱动的低延迟标志，成功后退出程序不自动回退该标志。
 
 ## 文件
@@ -22,11 +22,11 @@
 
 ## Python 原始串口
 
-在准备好的 Python 环境中安装依赖，然后顺序运行。将端口改为实际设备路径，例如 `/dev/ttyAMA10` 或 `/dev/ttyUSB0`。
+在本目录中，使用准备好的 Python 环境安装依赖，然后顺序运行。将端口改为实际设备路径，例如 `/dev/ttyAMA0` 或 `/dev/ttyUSB0`。
 
 ```bash
 python3 -m pip install -r requirements.txt
-serial_port=/dev/ttyAMA10
+serial_port=/dev/ttyUSB0
 python3 serial_test_read_speed.py "$serial_port" 460800 126 5 python-126.csv --low-latency
 python3 serial_test_read_speed.py "$serial_port" 460800 127 5 python-127.csv --low-latency
 python3 serial_test_read_speed.py "$serial_port" 460800 126,127 5 python-dual.csv --low-latency
@@ -40,7 +40,7 @@ python3 serial_test_read_speed.py "$serial_port" 460800 126,127 5 python-dual.cs
 
 ```bash
 g++ -std=c++17 -O2 -Wall -Wextra -Werror serial_test_read_speed.cpp -o serial_test_read_speed
-serial_port=/dev/ttyAMA10
+serial_port=/dev/ttyUSB0
 ./serial_test_read_speed "$serial_port" 460800 126 5 cpp-126.csv --low-latency
 ./serial_test_read_speed "$serial_port" 460800 127 5 cpp-127.csv --low-latency
 ./serial_test_read_speed "$serial_port" 460800 126,127 5 cpp-dual.csv --low-latency
@@ -59,11 +59,11 @@ LOW_LATENCY requested=1 result=flag_set flags_before=... flags_after=... timer_b
 ```
 
 - `flag_set`：读回的低延迟标志已置位，可能是本次设置，也可能原本就已开启。
-- `get_failed`、`set_failed`、`readback_failed`、`flag_clear`：状态读取、设置或验证未成功，程序打印 `WARN` 后继续尝试读取。应保留告警，不能把该组数据标记为“已开启低延迟”。
+- `get_failed`、`set_failed`、`readback_failed`、`flag_clear`：状态读取、设置或验证未成功，程序打印 `WARN` 后继续尝试读取。请保留告警，并在结果中记录设置状态。
 - `timer_before_ms` / `timer_after_ms`：读取 USB 串口驱动提供的 `latency_timer`。FTDI 驱动可能将其切到 1 ms，但以实际读回值为准。
-- `unavailable`：没有读到该 sysfs 参数。硬件 UART 通常没有 FTDI 的这个文件；缺少文件不等于 ioctl 失败。
+- `unavailable`：没有读到该 sysfs 参数。硬件 UART 通常没有 FTDI 的这个文件，驱动设置结果请查看 `result` 字段。
 
-低延迟 flags 读回成功不保证所有 UART 都获得相同响应时间。对比时记录有效设置；若 SDK 打开串口后改变了设置，应在相同设置下重新测原始版本。
+低延迟设置的效果取决于具体驱动。对比时记录有效设置；若 SDK 打开串口后改变了设置，应在相同设置下重新测原始版本。
 
 ## SDK C++ 对照
 
@@ -75,7 +75,7 @@ g++ -std=c++17 -O2 -Wall -Wextra -Werror sdk_read_speed.cpp \
   -I "$sdk_dist/include" -L "$sdk_dist/shared/linux" \
   -Wl,-rpath,"$sdk_dist/shared/linux" -lbc_stark_sdk -o sdk_read_speed
 ldd ./sdk_read_speed
-serial_port=/dev/ttyAMA10
+serial_port=/dev/ttyUSB0
 ./sdk_read_speed "$serial_port" 460800 126 5 sdk-126.csv
 ./sdk_read_speed "$serial_port" 460800 127 5 sdk-127.csv
 ./sdk_read_speed "$serial_port" 460800 126,127 5 sdk-dual.csv
@@ -108,6 +108,6 @@ serial_port=/dev/ttyAMA10
 
 原始实现计时包括请求构造、发送、接收和校验；SDK 对照计时包括状态 API 调用和释放返回数据。它们测的是主机调用耗时，不是单独的设备内部处理时间。统计不含启动同步和预热，启动耗时需另看 `startup_ms`；预热或打开串口失败时程序直接报错，可能不会生成统计 JSON。
 
-若原始两版明显快于 SDK，应核对实际库版本、初始化、读取与调度路径；若三者均慢，应检查共同的驱动、链路和设备条件。若 Python 与 C++ 原始版之间也有明显差异，应先比较串口配置与读取方式。结论需要同机、同设备、同参数的重复对照，不能仅根据语言或 UART 名称判断。
+若原始两版明显快于 SDK，应核对实际库版本、初始化、读取与调度路径；若三者均慢，应检查共同的驱动、链路和设备条件。若 Python 与 C++ 原始版之间也有明显差异，应先比较串口配置与读取方式。在同机、同设备、同参数下重复运行，确认差异是否稳定。
 
 复测时保留完整终端输出和 CSV，并记录串口、波特率、地址、设备固件、SDK 版本及有效低延迟设置。可用 `2>&1 | tee run.log` 保存输出，确保同时保留 `WARN`。
