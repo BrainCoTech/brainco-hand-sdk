@@ -1,5 +1,27 @@
 # Revo 2 - EtherCAT Examples (Standalone)
 
+## Firmware upgrade (FoE)
+
+Build the standalone C++ upgrader with `make ec_dfu`. It uses the IgH `ethercat`
+command-line tool and does not link the Stark SDK. Run it with an account that
+can access the EtherCAT master device:
+
+```bash
+ethercat slaves
+./ec_dfu.exe wrist /path/to/wrist-firmware.bin 0 0
+./ec_dfu.exe control /path/to/control-firmware.bin 0 0
+```
+
+The last two arguments are the slave position and master ID; both default to
+`0`. Get the FoE authorization code from technical support; the program prompts
+for it without echoing the input. It writes the module type and code through SDO,
+then uploads the file through FoE. Use firmware for the selected module and
+hardware revision. Confirm the new version after the device restarts; a
+successful FoE transfer alone does not prove that the firmware booted.
+
+This procedure follows the Revo2 EtherCAT implementation. Revo1.8 and Revo1
+Advanced wrist-board compatibility has not been verified.
+
 **Note:** This library does NOT depend on Stark SDK. It uses IgH EtherCAT Master directly for low-level PDO/SDO operations. For SDK-based EtherCAT examples, see `../revo2/`.
 
 ```shell

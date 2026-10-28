@@ -108,6 +108,9 @@ ec_demo_helpers.o: ec_control.h ec_feedback.h ec_utils.h
 # Main Targets
 ################################################################################
 
+ec_dfu: ec_dfu.cpp
+	$(CXX) $(CXXFLAGS) -o ec_dfu.exe $<
+
 all: $(BINARIES)
 
 clean:
