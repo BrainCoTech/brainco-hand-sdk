@@ -3,7 +3,7 @@ set -e
 
 # BrainCo Stark SDK - Install .whl from OSS
 # Usage: bash install_whl.sh [version]
-# Example: bash install_whl.sh 2.0.8
+# Example: bash install_whl.sh 2.0.9
 
 OSS_BASE="https://app.brainco.cn/universal/bc-stark-sdk/libs"
 
@@ -13,7 +13,7 @@ if [ -n "$1" ]; then
 elif [ -f "Cargo.toml" ]; then
   VERSION=$(grep '^version =' Cargo.toml | head -1 | awk -F'"' '{print $2}')
 else
-  VERSION="2.0.8"
+  VERSION="2.0.9"
 fi
 
 echo "Installing bc-stark-sdk v${VERSION}..."
@@ -60,10 +60,14 @@ if [ "$HTTP_CODE" != "200" ] && [[ "$PLATFORM" == manylinux_2_31_* ]]; then
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --head "$WHL_URL" 2>/dev/null || echo "000")
 fi
 if [ "$HTTP_CODE" != "200" ]; then
-  echo "Error: v${VERSION} not found on OSS (HTTP $HTTP_CODE)"
+  echo "Error: wheel not found on OSS (HTTP $HTTP_CODE)"
   echo "URL: $WHL_URL"
   echo ""
-  echo "Try: pip3 install bc-stark-sdk==${VERSION}  (from PyPI)"
+  if [ "$OS" = "Darwin" ]; then
+    echo "No macOS Python wheel was found for this version. The C/C++ package is available at ${OSS_BASE}/v${VERSION}/mac.zip"
+  else
+    echo "Try: pip3 install bc-stark-sdk==${VERSION}  (from PyPI)"
+  fi
   exit 1
 fi
 

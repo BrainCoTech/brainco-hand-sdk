@@ -1,5 +1,11 @@
 # BrainCo RevoHand SDK Examples Changelog
 
+## v2.0.9 (2026/10/28)
+
+- Updated the Python dependency and C/C++ download defaults to SDK `2.0.9`.
+- On Linux, Modbus requests no longer wait for each serial write to drain. Set `STARK_MODBUS_DRAIN_ON_FLUSH=1` before opening the port to restore the previous behavior. CAN FD, macOS, and Windows transports are unchanged.
+- The serial change does not establish a guaranteed control and feedback rate for two hands sharing one RS485 bus.
+
 ## v2.0.8 (2026/10/19)
 
 - Fixed `stark_get_finger_max_position` (C/C++) and `get_finger_max_position` (Python) reading the setting register instead of the readback register. The getter now reads `952 + finger_id - 1` for the six fingers.

@@ -1,6 +1,6 @@
 # BrainCo RevoHand SDK Examples
 
-[![Version](https://img.shields.io/badge/version-v2.0.8-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v2.0.9-blue.svg)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 [English](README.md) | [中文](README.zh.md)
@@ -34,7 +34,7 @@ cd python
 pip3 install -r requirements.txt
 ```
 
-Python and C/C++ use SDK `2.0.8`, including the maximum-position readback fix and the earlier RS485 discovery fix.
+Python and C/C++ use SDK `2.0.9`. On Linux, Modbus requests no longer wait for each serial write to drain; set `STARK_MODBUS_DRAIN_ON_FLUSH=1` before opening the port to restore that behavior. CAN FD, macOS, and Windows transports are unchanged.
 
 3. For C++ development on Linux:
 ```bash

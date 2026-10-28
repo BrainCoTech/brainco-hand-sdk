@@ -1,6 +1,6 @@
 # BrainCo 灵巧手 SDK 开发示例
 
-[![版本](https://img.shields.io/badge/版本-v2.0.8-blue.svg)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/版本-v2.0.9-blue.svg)](CHANGELOG.md)
 [![许可证](https://img.shields.io/badge/许可证-MIT-green.svg)](LICENSE)
 
 [English](README.md) | [中文](README.zh.md)
@@ -34,7 +34,7 @@ cd python
 pip3 install -r requirements.txt
 ```
 
-Python 和 C/C++ 均使用 SDK `2.0.8`，包含最大位置读取修复及此前的 RS485 自动发现修复。
+Python 和 C/C++ 均使用 SDK `2.0.9`。Linux Modbus 请求写入后不再逐次等待串口发送完成；如需恢复原行为，请在打开串口前设置 `STARK_MODBUS_DRAIN_ON_FLUSH=1`。CAN FD、macOS 和 Windows 通信逻辑未变。
 
 3. Linux C++ 开发环境配置：
 ```bash
