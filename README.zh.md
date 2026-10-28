@@ -44,6 +44,8 @@ Python 和 C/C++ 均使用 SDK `2.0.8`，包含最大位置读取修复及此前
 
 ## 📚 平台示例
 
+Linux RS485 耗时排查可使用[原始 Python/C++ 串口测速工具](tools/serial-benchmark/README.zh.md)：不依赖 SDK 查询 Revo2，提供可选的 SDK 对照和低延迟设置。
+
 ### Python 示例
 
 Python 开发示例支持多种通信协议：

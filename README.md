@@ -44,6 +44,8 @@ Python and C/C++ use SDK `2.0.8`, including the maximum-position readback fix an
 
 ## 📚 Examples by Platform
 
+For Linux RS485 timing diagnostics, use the [raw Python/C++ serial benchmarks](tools/serial-benchmark/README.md). They query Revo2 without the SDK and include an optional SDK comparison and low-latency setup.
+
 ### Python Examples
 
 Python development examples support multiple communication protocols:
