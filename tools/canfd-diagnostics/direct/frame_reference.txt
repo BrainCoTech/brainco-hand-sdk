@@ -1,0 +1,101 @@
+Revo2 CAN FD raw frame reference
+
+Extended 29-bit CAN IDs; CAN FD with BRS enabled; master ID=1.
+Register words: big endian. Modbus CRC16: low byte first.
+TX data includes physical CAN FD padding. Padding is excluded from CRC16.
+All RX examples below are protocol-derived examples, NOT captured traffic.
+EXAMPLE-SN is a placeholder; actual data and checksums depend on the device.
+
+slave=126 operation=sn
+  TX ID=007E0108 logical=8 physical=8
+  TX data=7E 04 0B C2 00 0A D8 1A
+  RX example ID=007E0119 logical=25 physical=32
+  RX example data=7E 04 14 45 58 41 4D 50 4C 45 2D 53 4E 00 00 00 00 00 00 00 00 00 00 1A C3 00 00 00 00 00 00 00
+
+slave=126 operation=firmware
+  TX ID=007E0108 logical=8 physical=8
+  TX data=7E 04 0B B8 00 0A F9 C3
+  RX example ID=007E0119 logical=25 physical=32
+  RX example data=7E 04 14 31 2E 30 2E 32 32 2E 55 00 00 00 00 00 00 00 00 00 00 00 00 D9 A1 00 00 00 00 00 00 00
+
+slave=126 operation=sku
+  TX ID=007E0108 logical=8 physical=8
+  TX data=7E 03 03 85 00 01 9E 68
+  RX example ID=007E0107 logical=7 physical=7
+  RX example data=7E 03 02 00 02 2C 4F
+
+slave=126 operation=status_2000
+  TX ID=007E0108 logical=8 physical=8
+  TX data=7E 04 07 D0 00 0C FB 4D
+  RX example ID=007E011D logical=29 physical=32
+  RX example data=7E 04 18 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 7D 1F 00 00 00
+
+slave=126 operation=status_2012
+  TX ID=007E0108 logical=8 physical=8
+  TX data=7E 04 07 DC 00 0C 3B 4E
+  RX example ID=007E011D logical=29 physical=32
+  RX example data=7E 04 18 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 7D 1F 00 00 00
+
+slave=127 operation=sn
+  TX ID=007F0108 logical=8 physical=8
+  TX data=7F 04 0B C2 00 0A D9 CB
+  RX example ID=007F0119 logical=25 physical=32
+  RX example data=7F 04 14 45 58 41 4D 50 4C 45 2D 53 4E 00 00 00 00 00 00 00 00 00 00 D7 5F 00 00 00 00 00 00 00
+
+slave=127 operation=firmware
+  TX ID=007F0108 logical=8 physical=8
+  TX data=7F 04 0B B8 00 0A F8 12
+  RX example ID=007F0119 logical=25 physical=32
+  RX example data=7F 04 14 31 2E 30 2E 32 32 2E 55 00 00 00 00 00 00 00 00 00 00 00 00 14 3D 00 00 00 00 00 00 00
+
+slave=127 operation=sku
+  TX ID=007F0108 logical=8 physical=8
+  TX data=7F 03 03 85 00 01 9F B9
+  RX example ID=007F0107 logical=7 physical=7
+  RX example data=7F 03 02 00 01 51 8E
+
+slave=127 operation=status_2000
+  TX ID=007F0108 logical=8 physical=8
+  TX data=7F 04 07 D0 00 0C FA 9C
+  RX example ID=007F011D logical=29 physical=32
+  RX example data=7F 04 18 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 83 9D 00 00 00
+
+slave=127 operation=status_2012
+  TX ID=007F0108 logical=8 physical=8
+  TX data=7F 04 07 DC 00 0C 3A 9F
+  RX example ID=007F011D logical=29 physical=32
+  RX example data=7F 04 18 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 83 9D 00 00 00
+
+slave=126 action=open positions_percent=[0, 0, 0, 0, 0, 0]
+  TX ID=007E010F logical=15 physical=16
+  TX data=7E 10 04 2E 00 03 06 00 00 00 00 00 00 38 10 00
+  Expected ACK ID=007E0108 data=7E 10 04 2E 00 03 EA FE
+  A valid ACK is not confirmation that the target position was reached.
+
+slave=126 action=close positions_percent=[50, 50, 100, 100, 100, 100]
+  TX ID=007E010F logical=15 physical=16
+  TX data=7E 10 04 2E 00 03 06 32 32 64 64 64 64 70 02 00
+  Expected ACK ID=007E0108 data=7E 10 04 2E 00 03 EA FE
+  A valid ACK is not confirmation that the target position was reached.
+
+slave=127 action=open positions_percent=[0, 0, 0, 0, 0, 0]
+  TX ID=007F010F logical=15 physical=16
+  TX data=7F 10 04 2E 00 03 06 00 00 00 00 00 00 3A 91 00
+  Expected ACK ID=007F0108 data=7F 10 04 2E 00 03 EB 2F
+  A valid ACK is not confirmation that the target position was reached.
+
+slave=127 action=close positions_percent=[50, 50, 100, 100, 100, 100]
+  TX ID=007F010F logical=15 physical=16
+  TX data=7F 10 04 2E 00 03 06 32 32 64 64 64 64 72 83 00
+  Expected ACK ID=007F0108 data=7F 10 04 2E 00 03 EB 2F
+  A valid ACK is not confirmation that the target position was reached.
+
+24-register motor status request (optional --status-count 24):
+
+  slave=126 TX ID=007E0108 data=7E 04 07 D0 00 18 FB 42
+  Expected RX ID=007E0135, logical=53, physical=64.
+  CRC16 input: bytes 1..51. Stored CRC16: bytes 52..53. Bytes 54..64 are padding.
+
+  slave=127 TX ID=007F0108 data=7F 04 07 D0 00 18 FA 93
+  Expected RX ID=007F0135, logical=53, physical=64.
+  CRC16 input: bytes 1..51. Stored CRC16: bytes 52..53. Bytes 54..64 are padding.

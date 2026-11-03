@@ -46,6 +46,8 @@ Python 和 C/C++ 均使用 SDK `2.0.9`。Linux Modbus 请求写入后不再逐�
 
 Linux RS485 耗时排查可使用[原始 Python/C++ 串口测速工具](tools/serial-benchmark/README.zh.md)：不依赖 SDK 查询 Revo2，提供可选的 SDK 对照和低延迟设置。
 
+Linux CAN FD CRC 排查可使用[直接收发与 Python SDK 对照工具](tools/canfd-diagnostics/README.zh.md)，包含协议解析、离线测试和 `candump` 抓包步骤。默认只读。
+
 ### Python 示例
 
 Python 开发示例支持多种通信协议：

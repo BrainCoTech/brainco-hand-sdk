@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.zip
+*.log
+canfd-direct-*/
+canfd-sdk-*/
+direct-run-*/
+sdk-run-*/

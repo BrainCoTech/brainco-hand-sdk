@@ -46,6 +46,8 @@ Python and C/C++ use SDK `2.0.9`. On Linux, Modbus requests no longer wait for e
 
 For Linux RS485 timing diagnostics, use the [raw Python/C++ serial benchmarks](tools/serial-benchmark/README.md). They query Revo2 without the SDK and include an optional SDK comparison and low-latency setup.
 
+For Linux CAN FD CRC diagnostics, use the [raw-frame and Python SDK comparison tools (Chinese guide)](tools/canfd-diagnostics/README.zh.md). They include protocol definitions, offline tests, and `candump` commands, and default to read-only monitoring.
+
 ### Python Examples
 
 Python development examples support multiple communication protocols:
