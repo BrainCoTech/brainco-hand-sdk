@@ -61,6 +61,38 @@ class WindowsCanFdReceiveTests(unittest.TestCase):
         self.assertEqual(self.module.zlgcan_receive_canfd_filtered(0x007e0108),
                          (0x007e0107, [1, 2, 3], 1))
 
+    def test_transient_error_can_recover_with_matching_frame(self):
+        self.driver.GetReceiveNum.side_effect = [OSError("busy"), 1]
+        self.driver.ReceiveFD.return_value = ([self.message(0x807e0107)], 1)
+        self.assertEqual(self.module.zlgcan_receive_canfd_filtered(0x007e0108),
+                         (0x007e0107, [1, 2, 3], 1))
+
+    def test_invalid_counts_are_driver_errors(self):
+        for queued, received in [(-1, 0), (0xffffffff, 0), (1, -1), (1, 2)]:
+            with self.subTest(queued=queued, received=received):
+                self.driver.GetReceiveNum.return_value = queued
+                self.driver.ReceiveFD.return_value = ([], received)
+                with self.assertRaises(OSError):
+                    self.module.zlgcan_receive_canfd_filtered(0x007e0108, timeout_ms=2)
+
+    def test_send_preserves_maximum_payload_and_rejects_oversize(self):
+        class Frame(ctypes.Structure):
+            _fields_ = [("can_id", ctypes.c_uint32), ("len", ctypes.c_uint8),
+                        ("flags", ctypes.c_uint8), ("_res0", ctypes.c_uint8),
+                        ("data", ctypes.c_uint8 * 64)]
+
+        class Tx(ctypes.Structure):
+            _fields_ = [("frame", Frame), ("transmit_type", ctypes.c_uint8)]
+
+        self.module.ZCAN_TransmitFD_Data = Tx
+        self.driver.TransmitFD.return_value = 1
+        payload = bytes(range(64))
+        self.assertTrue(self.module.zlgcan_send_message(0x123, payload))
+        frame = self.driver.TransmitFD.call_args.args[1][0].frame
+        self.assertEqual((frame.len, bytes(frame.data)), (64, payload))
+        self.assertFalse(self.module.zlgcan_send_message(0x123, payload + b"x"))
+        self.driver.TransmitFD.assert_called_once()
+
     def test_empty_queue_times_out_with_backoff(self):
         self.driver.GetReceiveNum.return_value = 0
         self.assertIsNone(self.module.zlgcan_receive_canfd_filtered(
@@ -76,13 +108,14 @@ class WindowsCanFdReceiveTests(unittest.TestCase):
                 self.module.time = self.clock
                 self.driver.GetReceiveNum.return_value = 1
                 getattr(self.driver, method).side_effect = RuntimeError("disconnected")
-                self.assertIsNone(self.module.zlgcan_receive_canfd_filtered(
-                    0x007e0108, timeout_ms=3))
+                with self.assertRaisesRegex(RuntimeError, "disconnected"):
+                    self.module.zlgcan_receive_canfd_filtered(0x007e0108, timeout_ms=3)
                 self.assertEqual(self.clock.sleeps, [0.001] * 3)
 
     def test_missing_channel_does_not_call_driver(self):
         self.module.chn_handles = []
-        self.assertIsNone(self.module.zlgcan_receive_canfd_filtered(0x007e0108))
+        with self.assertRaisesRegex(RuntimeError, "channel is not open"):
+            self.module.zlgcan_receive_canfd_filtered(0x007e0108)
         self.driver.GetReceiveNum.assert_not_called()
 
     def test_windows_example_callbacks_read_filtered_frames(self):

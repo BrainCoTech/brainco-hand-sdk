@@ -97,6 +97,10 @@ def zlgcan_send_message(can_id: int, data: bytes) -> bool:
         logger.error("Channel handle list is empty")
         return False
 
+    if len(data) > 64:
+        logger.error("CAN FD payload exceeds 64 bytes")
+        return False
+
     channel_handle = chn_handles[0]
 
     logger.debug(f"CAN ID: 0x{can_id:02X}")
@@ -110,7 +114,7 @@ def zlgcan_send_message(can_id: int, data: bytes) -> bool:
         canfd_msgs[i].frame.can_id = can_id     # ID
         canfd_msgs[i].frame.can_id |= 1 << 31   # Extended frame flag (bit 31)
         # CANFD maximum data length is 64 bytes
-        data_len = min(len(data), 64)
+        data_len = len(data)
         canfd_msgs[i].frame.len = data_len     # Data length
         canfd_msgs[i].frame.flags = 0         # Clear first
         # canfd_msgs[i].frame.flags |= 0x20    # bit 5: Send echo flag
@@ -191,8 +195,7 @@ def zlgcan_receive_canfd_filtered(
         (can_id, data, frame_count) tuple or None if timeout
     """
     if len(chn_handles) == 0:
-        logger.error("Channel handle list is empty")
-        return None
+        raise RuntimeError("ZLG CAN FD channel is not open")
 
     channel_handle = chn_handles[0]
     expected_slave_id = (expected_can_id >> 16) & 0xFF
@@ -200,14 +203,20 @@ def zlgcan_receive_canfd_filtered(
 
     # Use a deadline instead of a retry count: Windows sleep granularity varies.
     deadline = time.monotonic() + timeout_ms / 1000.0
+    last_error = None
     while time.monotonic() < deadline:
         try:
             rcv_num = zcanlib.GetReceiveNum(channel_handle, ZCAN_TYPE_CANFD)
+            if rcv_num < 0 or rcv_num == 0xffffffff:
+                raise OSError(f"ZLG GetReceiveNum returned {rcv_num}")
             if not rcv_num:
                 time.sleep(0.001)
                 continue
 
-            rcv_msgs, rcv_num = zcanlib.ReceiveFD(channel_handle, min(rcv_num, 100), c_int(100))
+            capacity = min(rcv_num, 100)
+            rcv_msgs, rcv_num = zcanlib.ReceiveFD(channel_handle, capacity, c_int(100))
+            if not 0 <= rcv_num <= capacity:
+                raise OSError(f"ZLG ReceiveFD returned invalid frame count {rcv_num}")
             for msg in rcv_msgs[:rcv_num]:
                 frame = msg.frame
                 if frame.flags & 0x20:  # Skip TX echo
@@ -219,9 +228,11 @@ def zlgcan_receive_canfd_filtered(
                     data = [frame.data[i] for i in range(frame.len)]
                     return (can_id, data, 1)
         except Exception as e:
-            logger.error(f"CANFD receive filtered exception: {e}")
+            last_error = e
             time.sleep(0.001)
 
+    if last_error is not None:
+        raise last_error
     logger.debug(f"CANFD receive timeout after {timeout_ms} ms")
     return None
 

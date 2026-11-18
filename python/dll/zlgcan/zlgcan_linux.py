@@ -412,9 +412,14 @@ def can_receive(DevType: int, DevIdx: int, ChIdx: int):
 def canfd_receive(DevType: int, DevIdx: int, ChIdx: int):
     count = lib.VCI_GetReceiveNum(DevType, DevIdx, (0x80000000 + ChIdx))  # CANFD 报文数量
     # print("CANFD Receive count: %d" % count)
+    if count < 0 or count == 0xffffffff:
+        raise OSError(f"ZLG VCI_GetReceiveNum returned {count}")
     if count > 0:
         canfd_data = (ZCAN_FD_MSG * count)()
         rcount = lib.VCI_ReceiveFD(DevType, DevIdx, ChIdx, byref(canfd_data), count, 100)  # 读报文
+
+        if not 0 <= rcount <= count:
+            raise OSError(f"ZLG VCI_ReceiveFD returned invalid frame count {rcount}")
 
         # 打印所有接收到的消息（包括TX回显）
         # for i in range(rcount):

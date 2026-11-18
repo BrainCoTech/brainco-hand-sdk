@@ -109,6 +109,7 @@ def zlgcan_receive_canfd_filtered(
     logger.debug(f"CANFD RX: waiting, expected_can_id=0x{expected_can_id:08X}, "
                  f"slave=0x{expected_slave_id:02X}, master=0x{expected_master_id:02X}")
     
+    last_error = None
     for attempt in range(max_retries):
         try:
             can_msgs = canfd_receive(DEVICE_TYPE, DEVICE_INDEX, 0)
@@ -132,8 +133,11 @@ def zlgcan_receive_canfd_filtered(
                     return (can_id, data, 1)
                     
         except Exception as e:
-            logger.error(f"CANFD receive filtered exception: {e}")
+            last_error = e
+            time.sleep(0.0001)
     
+    if last_error is not None:
+        raise last_error
     logger.debug(f"CANFD receive timeout after {max_retries} attempts")
     return None
 

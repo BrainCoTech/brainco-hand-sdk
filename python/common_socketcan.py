@@ -78,20 +78,23 @@ def socketcan_send_message(can_id: int, data: bytes) -> bool:
         logger.error("SocketCAN not initialized")
         return False
 
+    capacity = 64 if _is_canfd else 8
+    if len(data) > capacity:
+        logger.error(f"SocketCAN payload exceeds {capacity} bytes")
+        return False
+
     try:
         if _is_canfd:
-            payload = data[:64]
             can_id_flag = (can_id & CAN_EFF_MASK) | CAN_EFF_FLAG
             frame = struct.pack(
                 CANFD_FRAME_FMT,
                 can_id_flag,
-                len(payload),
+                len(data),
                 1,  # CANFD_BRS
                 0,
-                payload.ljust(64, b"\x00"),
+                data.ljust(64, b"\x00"),
             )
         else:
-            payload = data[:8]
             if can_id > CAN_SFF_MASK:
                 can_id_flag = (can_id & CAN_EFF_MASK) | CAN_EFF_FLAG
             else:
@@ -99,8 +102,8 @@ def socketcan_send_message(can_id: int, data: bytes) -> bool:
             frame = struct.pack(
                 CAN_FRAME_FMT,
                 can_id_flag,
-                len(payload),
-                payload.ljust(8, b"\x00"),
+                len(data),
+                data.ljust(8, b"\x00"),
             )
         _sock.send(frame)
         return True
@@ -264,9 +267,11 @@ def socketcan_receive_filtered(
     return None
 
 
-def _socketcan_read_message() -> Optional[Tuple[int, bytes]]:
+def _socketcan_read_message(*, raise_on_error: bool = False) -> Optional[Tuple[int, bytes]]:
     """Read single CAN/CANFD frame from socket"""
     if _sock is None:
+        if raise_on_error:
+            raise RuntimeError("SocketCAN is not open")
         return None
     try:
         if _is_canfd:
@@ -299,6 +304,8 @@ def _socketcan_read_message() -> Optional[Tuple[int, bytes]]:
     except socket.timeout:
         return None
     except OSError as exc:
+        if raise_on_error:
+            raise
         logger.error(f"SocketCAN recv failed: {exc}")
         return None
 
@@ -324,8 +331,7 @@ def socketcan_receive_canfd_filtered(
         (can_id, data, frame_count) tuple or None if timeout
     """
     if _sock is None:
-        logger.error("SocketCAN not initialized")
-        return None
+        raise RuntimeError("SocketCAN is not open")
     
     # CANFD CAN ID format: (slave_id << 16) | (master_id << 8) | payload_len
     expected_slave_id = (expected_can_id >> 16) & 0xFF
@@ -334,12 +340,13 @@ def socketcan_receive_canfd_filtered(
     logger.debug(f"CANFD RX: waiting, expected_can_id=0x{expected_can_id:08X}, "
                  f"slave=0x{expected_slave_id:02X}, master=0x{expected_master_id:02X}")
     
+    last_error = None
     for attempt in range(max_retries):
         wait_ms = 0.002 if attempt < 5 else 0.005
         time.sleep(wait_ms)
         
         try:
-            msg = _socketcan_read_message()
+            msg = _socketcan_read_message(raise_on_error=True)
             if msg is None:
                 continue
             
@@ -356,7 +363,9 @@ def socketcan_receive_canfd_filtered(
                 return (can_id, data, 1)
                 
         except Exception as e:
-            logger.error(f"SocketCAN CANFD receive exception: {e}")
+            last_error = e
     
+    if last_error is not None:
+        raise last_error
     logger.debug(f"SocketCAN CANFD receive timeout after {max_retries} attempts")
     return None
