@@ -44,8 +44,7 @@ class Revo2CanfdController:
 
     def _canfd_send(self, _slave_id: int, can_id: int, data: list) -> bool:
         if not zlgcan_send_message(can_id, bytes(data)):
-            logger.error("Failed to send CANFD message")
-            return False
+            raise RuntimeError(f"ZLG failed to send CAN FD frame 0x{can_id:X}")
         return True
 
     def _canfd_read(self, _slave_id: int, expected_can_id: int, expected_frames: int) -> tuple:
@@ -77,8 +76,7 @@ class Revo2CanfdController:
 def canfd_send(_slave_id: int, can_id: int, data: list) -> None:
     # logger.debug(f"Sending CAN ID: {can_id}, Data: {data}, type: {type(data)}")
     if not zlgcan_send_message(can_id, bytes(data)):
-        logger.error("Failed to send CANFD message")
-        return
+        raise RuntimeError(f"ZLG failed to send CAN FD frame 0x{can_id:X}")
 
 
 def canfd_read(_slave_id: int, expected_can_id: int, expected_frames: int):

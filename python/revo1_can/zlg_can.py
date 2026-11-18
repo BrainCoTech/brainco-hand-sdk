@@ -53,15 +53,9 @@ class Revo1CanController:
             return False
 
     def _can_send(self, _slave_id: int, can_id: int, data: list) -> bool:
-        """CAN message sending"""
-        try:
-            if not zlgcan_send_message(can_id, bytes(data)):
-                logger.error("CAN message sending failed")
-                return False
-            return True
-        except Exception as e:
-            logger.error(f"CAN message sending failed: {e}")
-            return False
+        if not zlgcan_send_message(can_id, bytes(data)):
+            raise RuntimeError(f"ZLG failed to send CAN frame 0x{can_id:X}")
+        return True
 
     def _can_read(self, _slave_id: int, expected_can_id: int, expected_frames: int) -> tuple:
         """

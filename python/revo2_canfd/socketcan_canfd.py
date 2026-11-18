@@ -11,7 +11,7 @@ from socketcan_linux_utils import *
 
 def canfd_send(_slave_id: int, can_id: int, data: list):
     if not socketcan_send_message(can_id, bytes(data)):
-        logger.error("Failed to send CANFD message")
+        raise RuntimeError(f"SocketCAN failed to send CAN FD frame 0x{can_id:X}")
 
 
 def canfd_read(_slave_id: int, expected_can_id: int, expected_frames: int):
