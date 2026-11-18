@@ -107,6 +107,10 @@ def zlgcan_send_message(can_id: int, data: bytes) -> bool:
         _log_error("Channel handle list is empty")
         return False
 
+    if len(data) > 8:
+        _log_error("CAN payload exceeds 8 bytes")
+        return False
+
     channel_handle = chn_handles[0]
 
     _log_debug(f"can_id: 0x{can_id:0x} 0b{can_id:029b}")
@@ -117,7 +121,7 @@ def zlgcan_send_message(can_id: int, data: bytes) -> bool:
     for i in range(transmit_can_num):
         can_msgs[i].transmit_type = 0
         can_msgs[i].frame.can_id = can_id
-        data_len = min(len(data), 8)
+        data_len = len(data)
         can_msgs[i].frame.can_dlc = data_len
         can_msgs[i].frame._res0 = 10
         can_msgs[i].frame._res1 = 0
