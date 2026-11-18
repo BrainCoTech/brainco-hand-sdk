@@ -43,6 +43,7 @@ class DataReader:
                 self.buffer.append((timestamp, _new_data))
                 # print(_new_data[:][:])
             except Exception as e:
+                self.buffer.clear()
                 print("[DataReader] Error:", e)
             await asyncio.sleep(5e-3)
 
@@ -57,31 +58,27 @@ class DataReader:
         如果 client.get_touch_sensor_status 返回的是复杂对象，解析为 normal list/tangential list。
         假设 touch_status[i] 有 normal_force1, tangential_force1 属性（和你原来一致）。
         """
-        try:
-            # initialize data matrix
-            _force_attr = ["normal_force1", "tangential_force1", "tangential_direction1", "self_proximity1"]
-            _finger_attr = ["thumb", "index", "middle", "ring", "pinky"]
-            _data = []
-            touch_data = await self.client.get_touch_sensor_status(slave_id)
+        force_fields = ("normal_force1", "tangential_force1", "tangential_direction1", "self_proximity1")
+        finger_fields = ("thumb", "index", "middle", "ring", "pinky")
+        if any(finger not in range(5) for finger in self.finger_list):
+            raise ValueError("Finger indices must be in 0..4.")
+        if any(channel not in range(10) for channel in self.force_list):
+            raise ValueError("Channel indices must be in 0..9.")
+
+        touch_data = await self.client.get_touch_sensor_status(slave_id)
+        touch_data_raw = None
+        if any(channel >= len(force_fields) for channel in self.force_list):
             touch_data_raw = await self.client.get_touch_sensor_raw_data(slave_id)
 
-            # record data
-            for finger in self.finger_list:
-                if finger not in range(5):
-                    raise ValueError(f"Invalid finger number {finger}.")
-                _data.append([])
-                for channel in self.force_list:
-                    if channel in range(4):
-                        _data[finger].append(getattr(touch_data[finger], _force_attr[channel]))
-                    elif channel in range(4, 10):
-                        _data[finger].append(getattr(touch_data_raw, _finger_attr[finger])[channel - 4])
-                    else:
-                        raise ValueError(f"Invalid channel number {channel}.")
-            # _data = np.array(_data, dtype=np.int32)
-            await asyncio.sleep(self.sleep_time)
-
-        except Exception as e:
-            _data = [[0.0] * len(self.force_list)] * len(self.finger_list)
-            print(f"Error: {e}")
-
-        return _data  # 5x4 list
+        data = []
+        for finger in self.finger_list:
+            row = []
+            for channel in self.force_list:
+                if channel < len(force_fields):
+                    row.append(getattr(touch_data[finger], force_fields[channel]))
+                else:
+                    raw_finger = getattr(touch_data_raw, finger_fields[finger])
+                    row.append(raw_finger[channel - len(force_fields)])
+            data.append(row)
+        await asyncio.sleep(self.sleep_time)
+        return data

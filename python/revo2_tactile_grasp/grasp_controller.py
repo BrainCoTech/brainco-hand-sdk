@@ -210,7 +210,7 @@ class TactileGraspController:
             result = self.algorithm.get_result()  # 可以一直读取
             # print("Controller read data from algorithm")
             # print(result)
-            if result and self.control_mode == "AUTO":
+            if result and result.get("status") != "Collecting" and self.control_mode == "AUTO":
                 contact_info = result.get("contact", {})
                 sliding_info = result.get("sliding", {})
                 stiffness_level = result["stiffness"]
@@ -219,6 +219,8 @@ class TactileGraspController:
                 # ---- 松手检测 ----
                 if hand_released:
                     await asyncio.sleep(1)  # 防止误判
+                    if self.algorithm.get_result().get("status") != "NO_CONTACT":
+                        continue
                     if not self.current_set:  # 如果当前已经是松手状态，无需重复操作
                         await asyncio.sleep(0.01)
                         continue
