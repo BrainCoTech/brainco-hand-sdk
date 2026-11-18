@@ -171,6 +171,60 @@ def zlgcan_receive_message(quick_retries: int = 2, dely_retries: int = 0) -> Opt
         logger.error("Slow receive attempt also timeout!")
     return None
 
+def zlgcan_receive_canfd_filtered(
+    expected_can_id: int, expected_frames: int = 1, timeout_ms: int = 200
+) -> Optional[tuple[int, list[int], int]]:
+    """
+    Receive CANFD message filtered by slave_id and master_id (Windows).
+
+    CANFD CAN ID format: (slave_id << 16) | (master_id << 8) | payload_len
+
+    Mirrors zlg_linux.zlgcan_receive_canfd_filtered so that example scripts can
+    use the same read callback on both platforms.
+
+    Args:
+        expected_can_id: Expected CAN ID containing slave_id and master_id
+        expected_frames: Expected frame count (hint from SDK, unused for CANFD single frame)
+        timeout_ms: Overall receive timeout in milliseconds
+
+    Returns:
+        (can_id, data, frame_count) tuple or None if timeout
+    """
+    if len(chn_handles) == 0:
+        logger.error("Channel handle list is empty")
+        return None
+
+    channel_handle = chn_handles[0]
+    expected_slave_id = (expected_can_id >> 16) & 0xFF
+    expected_master_id = (expected_can_id >> 8) & 0xFF
+
+    # Use a deadline instead of a retry count: Windows sleep granularity varies.
+    deadline = time.monotonic() + timeout_ms / 1000.0
+    while time.monotonic() < deadline:
+        try:
+            rcv_num = zcanlib.GetReceiveNum(channel_handle, ZCAN_TYPE_CANFD)
+            if not rcv_num:
+                time.sleep(0.001)
+                continue
+
+            rcv_msgs, rcv_num = zcanlib.ReceiveFD(channel_handle, min(rcv_num, 100), c_int(100))
+            for msg in rcv_msgs[:rcv_num]:
+                frame = msg.frame
+                if frame.flags & 0x20:  # Skip TX echo
+                    continue
+                can_id = frame.can_id & 0x1FFFFFFF  # Strip extended/remote flags
+                resp_slave_id = (can_id >> 16) & 0xFF
+                resp_master_id = (can_id >> 8) & 0xFF
+                if resp_slave_id == expected_slave_id and resp_master_id == expected_master_id:
+                    data = [frame.data[i] for i in range(frame.len)]
+                    return (can_id, data, 1)
+        except Exception as e:
+            logger.error(f"CANFD receive filtered exception: {e}")
+            time.sleep(0.001)
+
+    logger.debug(f"CANFD receive timeout after {timeout_ms} ms")
+    return None
+
 def _zlgcan_read_messages(channel_handle: int) -> Optional[ZCAN_ReceiveFD_Data]:
     """
     Read message from ZLG CANFD device, skip TX echo

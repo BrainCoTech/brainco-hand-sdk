@@ -20,7 +20,7 @@ from canfd_utils import (
 
 # Import ZLG driver based on OS
 if platform.system() == "Windows":
-    from zlg_win import zlgcan_open, zlgcan_close, zlgcan_send_message, zlgcan_receive_message
+    from zlg_win import zlgcan_open, zlgcan_close, zlgcan_send_message, zlgcan_receive_canfd_filtered
 elif platform.system() == "Linux":
     from zlg_linux import zlgcan_open, zlgcan_close, zlgcan_send_message, zlgcan_receive_canfd_filtered
 else:

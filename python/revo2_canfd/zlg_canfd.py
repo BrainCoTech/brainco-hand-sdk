@@ -10,9 +10,10 @@ zlgcan_open: Callable[[], None]
 zlgcan_close: Callable[[], None]
 zlgcan_send_message: Callable[[int, bytes], bool]
 zlgcan_receive_message: Callable[..., Optional[Tuple[int, bytes]]]
+zlgcan_receive_canfd_filtered: Callable[..., Optional[Tuple[int, list[int], int]]]
 
 if platform.system() == "Windows":
-    from zlg_win import zlgcan_open, zlgcan_close, zlgcan_send_message, zlgcan_receive_message  # type: ignore
+    from zlg_win import zlgcan_open, zlgcan_close, zlgcan_send_message, zlgcan_receive_message, zlgcan_receive_canfd_filtered  # type: ignore
 elif platform.system() == "Linux":
     from zlg_linux import zlgcan_open, zlgcan_close, zlgcan_send_message, zlgcan_receive_message, zlgcan_receive_canfd_filtered  # type: ignore
 else:
